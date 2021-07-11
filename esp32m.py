@@ -33,7 +33,7 @@ class Idf:
     def __init__(self, dir):
         self.dir = dir
         self.valid = False
-        td=os.path.join(dir, "tools")
+        td = os.path.join(dir, "tools")
         tp = os.path.join(td, "idf_tools.py")
         if not os.path.exists(tp):
             return
@@ -58,7 +58,7 @@ class Idf:
         self.idf_version = subprocess.check_output([self.idf, "--version"])
         self.valid = self.idf_version is not None
         if self.valid:
-            self.idf_version=self.idf_version.decode('ascii').rstrip()
+            self.idf_version = self.idf_version.decode('ascii').rstrip()
             logging.info(f"using ESP-IDF v.{self.idf_version} at {self.idf}")
 
     def run(self, args):
@@ -140,7 +140,7 @@ class Project:
         if self.init:
             return
         if self.build and self.useUi and self.yarn:
-            if not os.path.exists(os.path.join(self.uidir, "yarn.lock")):
+            if not os.path.exists(os.path.join(self.uidir, "yarn.lock")) or not os.path.exists(os.path.join(self.uidir, "node_modules")):
                 subprocess.run([self.yarn, 'install'], cwd=self.uidir)
             subprocess.run([self.yarn, self.ui], cwd=self.uidir)
             prepareUi(os.path.join(self.uidir, "dist"))
@@ -163,10 +163,11 @@ class Project:
 
 
 def which(name):
-    p=config["path"][name]
+    p = config["path"][name]
     if p is None:
-        p=shutil.which(name)
+        p = shutil.which(name)
     return p
+
 
 def bin2asm(source, dest, name):
     with open(source, 'rb') as sf, open(dest, 'w', newline='\n') as df:
@@ -265,6 +266,7 @@ def deep_update(source, overrides):
             source[key] = overrides[key]
     return source
 
+
 def configure():
     paths = [os.path.dirname(sys.argv[0]), '.']
     for p in paths:
@@ -354,7 +356,8 @@ if __name__ == "__main__":
     logging.basicConfig(
         format='esp32m:%(levelname)s:%(message)s', level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', nargs=2, action="append", metavar=("component", "path"), help="specify path to dependencies")
+    parser.add_argument('--path', nargs=2, action="append",
+                        metavar=("component", "path"), help="specify path to dependencies")
     parser.add_argument('--project', dest='projdir', default='.')
     parser.add_argument('--ui', dest='ui', nargs=1, choices=['skip'])
     parser.add_argument('--port', '-p', dest='port', type=int)

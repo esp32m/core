@@ -10,7 +10,7 @@ jobs:
       - name: Install
         run: sudo apt-get install -y clang-format
       - name: Checkout
-        uses: actions/checkout
+        uses: actions/checkout@v2
       - name: Format
         run: find esp32m/ examples/ template/ -name '*.[ch]pp' | xargs clang-format -i --verbose --style=file
       - name: Diff
