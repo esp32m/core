@@ -1,0 +1,8 @@
+#
+# All the relative URL paths are intended to be GitHub ones
+# For Espressif's public projects please use '../../espressif/proj', not a '../proj'
+#
+
+[submodule "esp32m/deps/ArduinoJson"]
+	path = esp32m/deps/ArduinoJson
+	url = https://github.com/bblanchon/ArduinoJson.git

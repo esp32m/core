@@ -1,0 +1,14 @@
+{
+  "presets": [
+    ["@babel/env", { modules: false, loose: true }],
+    "@babel/react",
+    "@babel/typescript"
+  ],
+  "plugins": [
+     "lodash",
+    ["@babel/plugin-transform-runtime", { "regenerator": true }],
+    ['@babel/plugin-proposal-class-properties', { loose: true }],
+    ['@babel/plugin-proposal-object-rest-spread', { loose: true }],
+    "@babel/plugin-proposal-optional-chaining"
+  ]
+}

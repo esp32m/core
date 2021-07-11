@@ -1,0 +1,19 @@
+{
+  "exclude": ["./tests", "./coverage", "./dist"],
+  "include": ["./src"],
+  "compilerOptions": {
+    "module": "esnext",
+    "target": "esnext",                       
+    "lib": ["dom", "es2015", "es2017"],       
+    "jsx": "react",                           
+    "strict": true,                           
+    "allowSyntheticDefaultImports": true,     
+    "esModuleInterop": true,                  
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "skipLibCheck": true,
+    "outDir": "dist"
+  }
+}
