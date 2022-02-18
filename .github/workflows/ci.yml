@@ -32,10 +32,13 @@ jobs:
           path: esp-idf
           submodules: true
       - name: Install ESP-IDF
-        run: ./esp-idf/install.sh
+        run: |
+         ./esp-idf/install.sh
+          source ./esp-idf/export.sh
+      - name: Checkout
+        uses: actions/checkout@v2
       - name: Build
         run: |
           ls -la
-          source ./esp-idf/export.sh
-          cd ./core/examples/basic
+          cd ./examples/basic
           python ../../esp32m.py build
