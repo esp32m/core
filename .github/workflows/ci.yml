@@ -15,7 +15,7 @@ jobs:
         run: find esp32m/ examples/ template/ -name '*.[ch]pp' | xargs clang-format -i --verbose --style=file
       - name: Diff
         run: git diff --exit-code
-  
+
   build-basic-example:
     name: Build example
     runs-on: ubuntu-latest
@@ -37,6 +37,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Build
         run: |
+          ls -la
           source ./esp-idf/export.sh
           cd core/examples/basic
           python ../../esp32m.py build
