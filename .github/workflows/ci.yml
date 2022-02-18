@@ -16,3 +16,32 @@ jobs:
       - name: Diff
         run: git diff --exit-code
 
+  esp-idf:
+    name: ESP-IDF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.espressif
+          key: ${{ runner.os }}-esp-idf
+      - name: Checkout ESP-IDF
+        uses: actions/checkout@v2
+        with:
+          repository: espressif/esp-idf
+          path: esp-idf
+          submodules: true
+      - name: Install ESP-IDF
+        run: ./esp-idf/install.sh
+  
+  build-basic-example:
+    name: Build example
+    needs: esp-idf
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Build
+        run: |
+          source esp-idf/export.sh
+          cd core/examples/basic
+          python ../../esp32m.py build
