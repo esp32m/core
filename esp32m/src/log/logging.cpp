@@ -1,3 +1,6 @@
+#include "esp32m/base.hpp"
+#include "esp32m/logging.hpp"
+
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -7,9 +10,8 @@
 #include <malloc.h>
 #include <string.h>
 #include <time.h>
+#include <esp32/rom/ets_sys.h>
 
-#include "esp32m/base.hpp"
-#include "esp32m/logging.hpp"
 
 namespace esp32m {
   namespace log {
@@ -175,7 +177,7 @@ namespace esp32m {
       struct tm timeinfo;
       localtime_r(&now, &timeinfo);
       if (timeinfo.tm_year > (2016 - 1900))
-        return -(int64_t)now * 1000 + (millis() % 1000);
+        return -((int64_t)now * 1000 + (millis() % 1000));
       return esp_timer_get_time() / 1000;
     }
 

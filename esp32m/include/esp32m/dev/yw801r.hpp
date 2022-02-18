@@ -9,12 +9,12 @@
 namespace esp32m {
   namespace dev {
 
-    class Sdm230 : public Device {
+    class Yw801r: public Device {
      public:
-      Sdm230(uint8_t addr = 1);
-      Sdm230(const Sdm230 &) = delete;
+      Yw801r(uint8_t addr = 192);
+      Yw801r(const Yw801r &) = delete;
       const char *name() const override {
-        return "SDM230";
+        return "YW801R";
       }
 
      protected:
@@ -24,9 +24,10 @@ namespace esp32m {
 
      private:
       uint8_t _addr;
-      float _te = 0, _ee = 0, _ie = 0, _v = 0, _i = 0, _ap = 0, _rap = 0,
-            _pf = 0, _f = 0;
-      unsigned long _stamp;
+      uint16_t _pv = 0, _ad = 0;
+      unsigned long _stamp = 0;
     };
+
+    Yw801r* useYw801r(uint8_t addr = 192);
   }  // namespace dev
 }  // namespace esp32m

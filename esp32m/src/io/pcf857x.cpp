@@ -6,7 +6,12 @@ namespace esp32m {
   namespace io {
     class PcfPin : public IPin {
      public:
-      PcfPin(Pcf857x *owner, int id) : IPin(id), _owner(owner){};
+      PcfPin(Pcf857x *owner, int id) : IPin(id), _owner(owner) {
+        snprintf(_name, sizeof(_name), "PCF857x-%02u", id - owner->pinBase());
+      };
+      const char *name() const override {
+        return _name;
+      }
       Features features() override {
         return Features::DigitalInput | Features::DigitalOutput |
                Features::PullUp;
@@ -40,25 +45,21 @@ namespace esp32m {
 
      private:
       Pcf857x *_owner;
+      char _name[11];
     };
 
-    Pcf857x::Pcf857x(Flavor f, I2C *i2c)
-        : IPins(_flavor == Flavor::PCF8574 ? 8 : 16), _flavor(f), _i2c(i2c) {
-      _i2c->setErrSnooze(10000);
+    Pcf857x::Pcf857x(Flavor f, I2C *i2c) : _flavor(f), _i2c(i2c) {
+      init();
     }
 
-    IPin *Pcf857x::pin(int num) {
-      if (num < 0 || num >= (_flavor == Flavor::PCF8574 ? 8 : 16))
-        return nullptr;
-      auto id = num + _pinBase;
-      std::lock_guard guard(_pinsMutex);
-      auto pin = _pins.find(id);
-      if (pin == _pins.end()) {
-        auto gpio = new PcfPin(this, id);
-        _pins[id] = gpio;
-        return gpio;
-      }
-      return pin->second;
+    esp_err_t Pcf857x::init() {
+      IPins::init(_flavor == Flavor::PCF8574 ? 8 : 16);
+      _i2c->setErrSnooze(10000);
+      return ESP_OK;
+    }
+
+    IPin *Pcf857x::newPin(int id) {
+      return new PcfPin(this, id);
     }
 
     esp_err_t Pcf857x::read(uint16_t &port) {
@@ -77,16 +78,8 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Pcf857x::id2Pin(int &pin) {
-      auto p = pin - _pinBase;
-      if (p < 0 || p >= (_flavor == Flavor::PCF8574 ? 8 : 16))
-        return ESP_ERR_INVALID_ARG;
-      pin = p;
-      return ESP_OK;
-    }
-
     esp_err_t Pcf857x::readPin(int pin, bool &value) {
-      ESP_CHECK_RETURN(id2Pin(pin));
+      ESP_CHECK_RETURN(id2num(pin));
       auto tx = pin::Tx::current();
       if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
                   !tx->getReadPerformed())) {
@@ -99,7 +92,7 @@ namespace esp32m {
       return ESP_OK;
     }
     esp_err_t Pcf857x::writePin(int pin, bool value) {
-      ESP_CHECK_RETURN(id2Pin(pin));
+      ESP_CHECK_RETURN(id2num(pin));
       auto tx = pin::Tx::current();
       if (tx && (tx->type() & pin::Tx::Type::Read) != 0 &&
           !tx->getReadPerformed()) {
@@ -118,7 +111,7 @@ namespace esp32m {
       return ESP_OK;
     }
     esp_err_t Pcf857x::setPinMode(int pin, bool input) {
-      ESP_CHECK_RETURN(id2Pin(pin));
+      ESP_CHECK_RETURN(id2num(pin));
       if (input)
         _inputMap |= (1 << pin);
       else

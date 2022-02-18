@@ -1,7 +1,9 @@
 #pragma once
 
-#include <esp32m/defs.hpp>
+#include "esp32m/defs.hpp"
+#include "esp32m/logging.hpp"
 
+#include <driver/ledc.h>
 #include <driver/pcnt.h>
 #include <esp_bit_defs.h>
 #include <esp_err.h>
@@ -12,12 +14,14 @@
 
 namespace esp32m {
   namespace io {
+    class IPin;
+
     namespace pin {
-      enum class Type { ADC, Pcnt };
+      enum class Type { ADC, DAC, Pcnt, LEDC };
 
       class Impl {
        public:
-        virtual ~Impl(){};
+        virtual ~Impl() {}
         virtual Type type() = 0;
         virtual bool valid() {
           return true;
@@ -38,6 +42,13 @@ namespace esp32m {
         virtual adc_bits_width_t getWidth() = 0;
         virtual esp_err_t setWidth(adc_bits_width_t width) = 0;
       };
+      class IDAC : public Impl {
+       public:
+        Type type() override {
+          return Type::DAC;
+        };
+        virtual esp_err_t write(float value) = 0;
+      };
 
       class IPcnt : public Impl {
        public:
@@ -51,27 +62,41 @@ namespace esp32m {
         virtual esp_err_t setFilter(uint16_t filter) = 0;
       };
 
-    }  // namespace pin
+      class ILEDC : public Impl {
+       public:
+        Type type() override {
+          return Type::LEDC;
+        };
+        virtual esp_err_t config(
+            uint32_t freq_hz, ledc_mode_t mode = LEDC_HIGH_SPEED_MODE,
+            ledc_timer_bit_t duty_resolution = LEDC_TIMER_10_BIT,
+            ledc_clk_cfg_t clk_cfg = LEDC_AUTO_CLK) = 0;
+        virtual esp_err_t setDuty(uint32_t duty) = 0;
+      };
 
-    class IPin;
+      typedef std::function<void(void)> ISR;
+    }  // namespace pin
 
     class IPins {
      public:
-      IPins(int pinCount);
-      virtual IPin *pin(int num) = 0;
+      IPin *pin(int num);
       int pinBase() const {
         return _pinBase;
       }
+      int id2num(int id);
 
      protected:
-      int _pinBase;
+      int _pinBase=0, _pinCount=0;
       static int _reservedIds;
       static std::map<int, IPin *> _pins;
       static std::mutex _pinsMutex;
+      IPins(){};
+      void init(int pinCount);
+      virtual IPin *newPin(int id)=0;
       static esp_err_t add(IPin *pin);
     };
 
-    class IPin {
+    class IPin : public virtual log::Loggable {
      public:
       enum class Features {
         None = 0,
@@ -88,30 +113,41 @@ namespace esp32m {
       int id() const {
         return _id;
       }
-
       std::mutex &mutex() {
         return _mutex;
       }
-      void reset();
+      virtual void reset();
       virtual Features features() = 0;
       virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
       virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
       virtual esp_err_t digitalRead(bool &value) = 0;
       virtual esp_err_t digitalWrite(bool value) = 0;
+      virtual esp_err_t attach(pin::ISR handler, gpio_int_type_t type) {
+        return ESP_ERR_NOT_SUPPORTED;
+      }
+      virtual esp_err_t detach() {
+        return ESP_ERR_NOT_SUPPORTED;
+      }
 
       pin::IADC *adc() {
         return (pin::IADC *)impl(pin::Type::ADC);
       }
+      pin::IDAC *dac() {
+        return (pin::IDAC *)impl(pin::Type::DAC);
+      }
       pin::IPcnt *pcnt() {
         return (pin::IPcnt *)impl(pin::Type::Pcnt);
       }
+      pin::ILEDC *ledc() {
+        return (pin::ILEDC *)impl(pin::Type::LEDC);
+      }
 
      protected:
+      int _id;
+      std::mutex _mutex;
       virtual pin::Impl *createImpl(pin::Type type) {
         return nullptr;
       };
-      int _id;
-      std::mutex _mutex;
 
      private:
       pin::Impl *_impl = nullptr;

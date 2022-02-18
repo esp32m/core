@@ -1,9 +1,12 @@
 #include "esp32m/bus/owb.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/io/rmt.hpp"
 
 #include <driver/gpio.h>
 #include <driver/rmt.h>
+#include <soc/gpio_struct.h>
+#include <soc/gpio_periph.h>
 #include <string.h>
 
 namespace esp32m {
@@ -56,15 +59,16 @@ namespace esp32m {
 
     class Driver {
      public:
-      Driver(gpio_num_t pin, int index) : _gpio(pin), _index(index) {
-        int co = RMT_CHANNEL_0 + index * 2;
+      Driver(gpio_num_t pin, int index, io::RmtRx *rx, io::RmtTx *tx)
+          : _gpio(pin), _index(index), _rxCh(rx), _txCh(tx) {
+        /*int co = RMT_CHANNEL_0 + index * 2;
         _txCh = (rmt_channel_t)(co + 1);
-        _rxCh = (rmt_channel_t)co;
+        _rxCh = (rmt_channel_t)co;*/
         ESP_ERROR_CHECK_WITHOUT_ABORT(init());
       }
       ~Driver() {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_driver_uninstall(_txCh));
-        ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_driver_uninstall(_rxCh));
+        delete _rxCh;
+        delete _txCh;
       }
       esp_err_t reset(bool &present);
       esp_err_t readBits(uint8_t *in, int number_of_bits_to_read);
@@ -73,12 +77,14 @@ namespace esp32m {
 
      private:
       gpio_num_t _gpio;
-      int _index, _refs = 0;
+      int _index;
+      io::RmtRx *_rxCh;
+      io::RmtTx *_txCh;
 
+      int _refs = 0;
       bool _useCrc = true;
       bool _useParasiticPower;
       gpio_num_t _pullupGpio = GPIO_NUM_NC;
-      rmt_channel_t _txCh, _rxCh;
       RingbufHandle_t _rb = nullptr;
 
       esp_err_t init();
@@ -104,8 +110,17 @@ namespace esp32m {
       if (!found)
         for (i = 0; i < MaxDrivers; i++)
           if (!_drivers[i]) {
-            _drivers[i] = new Driver(pin, i);
-            found = _drivers[i];
+            auto rx = io::useRmtRx(pin);
+            auto tx = io::useRmtTx(pin);
+            if (rx && tx) {
+              _drivers[i] = new Driver(pin, i, rx, tx);
+              found = _drivers[i];
+            } else {
+              if (rx)
+                delete rx;
+              if (tx)
+                delete tx;
+            }
             break;
           }
       if (found)
@@ -135,7 +150,7 @@ namespace esp32m {
       // RX idle threshold
       // needs to be larger than any duration occurring during write slots
       const int DurationRxIdle = DurationSlot + 2;
-      rmt_config_t rmt_tx = {};
+      /*rmt_config_t rmt_tx = {};
       rmt_tx.rmt_mode = RMT_MODE_TX;
       rmt_tx.channel = _txCh;
       rmt_tx.gpio_num = _gpio;
@@ -146,10 +161,14 @@ namespace esp32m {
       rmt_tx.tx_config.idle_level = RMT_IDLE_LEVEL_HIGH;
       rmt_tx.tx_config.idle_output_en = true;
       ESP_CHECK_RETURN(rmt_config(&rmt_tx));
-      ESP_CHECK_RETURN(rmt_driver_install(
+ESP_CHECK_RETURN(rmt_driver_install(
           rmt_tx.channel, 0,
-          ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED));
-      rmt_config_t rmt_rx = {};
+          ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED)); */
+      _txCh->disableCarrier();
+      _txCh->enableIdle(RMT_IDLE_LEVEL_HIGH);
+      ESP_CHECK_RETURN(_txCh->configure());
+      ESP_CHECK_RETURN(_txCh->install());
+      /*rmt_config_t rmt_rx = {};
       rmt_rx.rmt_mode = RMT_MODE_RX;
       rmt_rx.channel = _rxCh;
       rmt_rx.gpio_num = _gpio;
@@ -158,14 +177,17 @@ namespace esp32m {
       rmt_rx.rx_config.filter_en = true;
       rmt_rx.rx_config.filter_ticks_thresh = 30;
       rmt_rx.rx_config.idle_threshold = DurationRxIdle;
-      esp_err_t result = ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_config(&rmt_rx));
+      esp_err_t result = ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_config(&rmt_rx));*/
+      _rxCh->enableFilter(30);
+      _rxCh->setIdleThreshold(DurationRxIdle);
+      esp_err_t result = ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->configure());
       if (result == ESP_OK) {
-        ESP_CHECK_RETURN(rmt_driver_install(
+        ESP_CHECK_RETURN(_rxCh->install()/*rmt_driver_install(
             rmt_rx.channel, 512,
-            ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED));
-        ESP_CHECK_RETURN(rmt_get_ringbuf_handle(_rxCh, &_rb));
+            ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED)*/);
+        ESP_CHECK_RETURN(_rxCh->getRingbufHandle(&_rb));
       } else
-        ESP_CHECK_RETURN(rmt_driver_uninstall(rmt_tx.channel));
+        ESP_CHECK_RETURN(_txCh->uninstall());
 
       // attach GPIO to previous pin
       if (_gpio < 32)
@@ -176,8 +198,12 @@ namespace esp32m {
       // attach RMT channels to new gpio pin
       // ATTENTION: set pin for rx first since gpio_output_disable() will
       //            remove rmt output signal in matrix!
-      ESP_CHECK_RETURN(rmt_set_gpio(_rxCh, RMT_MODE_RX, _gpio, false));
-      ESP_CHECK_RETURN(rmt_set_gpio(_txCh, RMT_MODE_TX, _gpio, false));
+      ESP_CHECK_RETURN(_rxCh->setGpio(false));
+      ESP_CHECK_RETURN(_txCh->setGpio(false));
+      /*ESP_CHECK_RETURN(
+          rmt_set_gpio(_rxCh->channel(), RMT_MODE_RX, _gpio, false));
+      ESP_CHECK_RETURN(
+          rmt_set_gpio(_txCh->channel(), RMT_MODE_TX, _gpio, false));*/
 
       // force pin direction to input to enable path to RX channel
       PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[_gpio]);
@@ -188,6 +214,8 @@ namespace esp32m {
     }
 
     esp_err_t Driver::reset(bool &present) {
+      if (!_rb)
+        return ESP_FAIL;
       // bus reset: duration of low phase [us]
       const int DurationReset = 480;
       rmt_item32_t tx_items[1] = {};
@@ -199,15 +227,14 @@ namespace esp32m {
       tx_items[0].level1 = 1;
 
       uint16_t old_rx_thresh = 0;
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->getIdleThreshold(old_rx_thresh));
       ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_get_rx_idle_thresh(_rxCh, &old_rx_thresh));
-      ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_set_rx_idle_thresh(_rxCh, DurationReset + 60));
+          _rxCh->setIdleThreshold(DurationReset + 60));
 
       flushRx();
-      ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_rx_start(_rxCh, true));
-      esp_err_t res = ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_write_items(_txCh, tx_items, 1, true));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->start(true));
+      esp_err_t res =
+          ESP_ERROR_CHECK_WITHOUT_ABORT(_txCh->write(tx_items, 1, true));
       if (res == ESP_OK) {
         size_t rx_size = 0;
         rmt_item32_t *rx_items = (rmt_item32_t *)xRingbufferReceive(
@@ -228,13 +255,14 @@ namespace esp32m {
           res = ESP_ERROR_CHECK_WITHOUT_ABORT(ESP_ERR_TIMEOUT);
       }
 
-      ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_rx_stop(_rxCh));
-      ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_set_rx_idle_thresh(_rxCh, old_rx_thresh));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->stop());
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->setIdleThreshold(old_rx_thresh));
       return res;
     }
 
     void Driver::flushRx() {
+      if (!_rb)
+        return;
       void *p = nullptr;
       size_t s = 0;
       while ((p = xRingbufferReceive(_rb, &s, 0)))
@@ -250,6 +278,8 @@ namespace esp32m {
     }
 
     esp_err_t Driver::readBits(uint8_t *in, int number_of_bits_to_read) {
+      if (!_rb)
+        return ESP_FAIL;
       // sample time for read slot
       const int DurationSample = 15 - 2;
 
@@ -268,9 +298,9 @@ namespace esp32m {
       tx_items[number_of_bits_to_read].duration0 = 0;
 
       flushRx();
-      ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_rx_start(_rxCh, true));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->start(true));
       esp_err_t res = ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_write_items(_txCh, tx_items, number_of_bits_to_read + 1, true));
+          _txCh->write(tx_items, number_of_bits_to_read + 1, true));
       if (res == ESP_OK) {
         size_t rx_size = 0;
         rmt_item32_t *rx_items =
@@ -295,7 +325,7 @@ namespace esp32m {
           res = ESP_ERROR_CHECK_WITHOUT_ABORT(ESP_ERR_TIMEOUT);
       }
 
-      ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_rx_stop(_rxCh));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_rxCh->stop());
 
       *in = read_data;
       return res;
@@ -332,7 +362,7 @@ namespace esp32m {
       tx_items[number_of_bits_to_write].duration0 = 0;
 
       return ESP_ERROR_CHECK_WITHOUT_ABORT(
-          rmt_write_items(_txCh, tx_items, number_of_bits_to_write + 1, true));
+          _txCh->write(tx_items, number_of_bits_to_write + 1, true));
     }
 
     esp_err_t Driver::search(Search *state, bool *is_found) {

@@ -4,6 +4,7 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <string.h>
 #include <map>
 
 #define NOP() asm volatile("nop")
@@ -20,10 +21,10 @@ namespace esp32m {
   }
 
   void delay(uint32_t ms) {
-    vTaskDelay(ms / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(ms));
   }
 
-  void IRAM_ATTR delayMicroseconds(uint32_t us) {
+  void IRAM_ATTR delayUs(uint32_t us) {
     uint32_t m = micros();
     if (us) {
       uint32_t e = (m + us);
@@ -38,7 +39,26 @@ namespace esp32m {
     }
   }
 
+  long map(long x, long in_min, long in_max, long out_min, long out_max) {
+    const long dividend = out_max - out_min;
+    const long divisor = in_max - in_min;
+    const long delta = x - in_min;
+    if (divisor == 0)
+      return -1;  // AVR returns -1, SAM returns 0
+    return (delta * dividend + (divisor / 2)) / divisor + out_min;
+  }
+
 #endif
+  const char *makeTaskName(const char *name) {
+    if (!name)
+      return "m/generic";
+    size_t l = strlen(name) + 3;
+    if (l > CONFIG_FREERTOS_MAX_TASK_NAME_LEN)
+      l = CONFIG_FREERTOS_MAX_TASK_NAME_LEN;
+    char *buf = (char *)calloc(l, 1);
+    snprintf(buf, l, "m/%s", name);
+    return buf;
+  }
 
   namespace locks {
 

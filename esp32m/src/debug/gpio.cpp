@@ -175,18 +175,16 @@ namespace esp32m {
                   int c1, c2;
                   if (!io::gpio2Adc(pin, c1, c2))
                     break;
-                  err = adc_gpio_init(c1 >= 0 ? ADC_UNIT_1 : ADC_UNIT_2,
-                                      (adc_channel_t)(c1 >= 0 ? c1 : c2));
-                  if (!err && changeConfigValue(c.adc.atten, a[1], changed)) {
-                    if (c1 >= 0)
-                      err = ESP_ERROR_CHECK_WITHOUT_ABORT(
-                          adc1_config_channel_atten((adc1_channel_t)c1,
-                                                    c.adc.atten));
-                    else
-                      err = ESP_ERROR_CHECK_WITHOUT_ABORT(
-                          adc2_config_channel_atten((adc2_channel_t)c2,
-                                                    c.adc.atten));
-                  }
+                  /*err = adc_gpio_init(c1 >= 0 ? ADC_UNIT_1 : ADC_UNIT_2,
+                                      (adc_channel_t)(c1 >= 0 ? c1 : c2));*/
+                  if (c1 >= 0)
+                    err =
+                        ESP_ERROR_CHECK_WITHOUT_ABORT(adc1_config_channel_atten(
+                            (adc1_channel_t)c1, c.adc.atten));
+                  else
+                    err =
+                        ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_config_channel_atten(
+                            (adc2_channel_t)c2, c.adc.atten));
                 } break;
                 case PinMode::Dac: {
                   dac_channel_t ch;

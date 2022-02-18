@@ -18,7 +18,25 @@ namespace esp32m {
   }
 
   void EventManager::publish(Event &event) {
-    for (size_t i = 0; i < _subscriptions.size(); i++) {
+    for (auto i = 0; i < _subscriptions.size(); i++) {
+      Subscription *sub;
+      {
+        std::lock_guard<std::mutex> guard(_mutex);
+        sub = _subscriptions[i];
+        if (!sub)
+          continue;
+        sub->ref();
+      }
+      sub->_cb(event);
+      {
+        std::lock_guard<std::mutex> guard(_mutex);
+        sub->unref();
+      }
+    }
+  }
+
+  void EventManager::publishBackwards(Event &event) {
+    for (int i = _subscriptions.size() - 1; i >= 0; i--) {
       Subscription *sub;
       {
         std::lock_guard<std::mutex> guard(_mutex);

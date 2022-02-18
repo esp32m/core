@@ -6,8 +6,10 @@ namespace esp32m {
   namespace io {
     class Gpio : public IPins {
      public:
-      io::IPin *pin(int num) override;
       static Gpio &instance();
+
+     protected:
+      io::IPin *newPin(int id) override;
 
      private:
       Gpio();

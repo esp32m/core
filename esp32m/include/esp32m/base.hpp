@@ -14,13 +14,26 @@ namespace esp32m {
   unsigned long micros();
   unsigned long millis();
   void delay(uint32_t ms);
-  void delayMicroseconds(uint32_t us);
+  void delayUs(uint32_t us);
+  long map(long x, long in_min, long in_max, long out_min, long out_max);
 #endif
+  
+  const char *makeTaskName(const char *name);
 
   class INamed {
    public:
     virtual const char *name() const = 0;
   };
+
+  template <typename F>
+  bool waitState(F state, int ms) {
+    for (int i = 0; i < ms; i++)
+      if (state())
+        return true;
+      else
+        delay(1);
+    return false;
+  }
 
   namespace locks {
     class Guard {

@@ -19,10 +19,17 @@
 namespace esp32m {
 
   const char *EventInit::NAME = "init";
+  const char *EventInited::NAME = "inited";
+  const char *EventDone::NAME = "done";
   App *_appInstance = nullptr;
 
   const char *Stateful::KeyStateSet = "state-set";
   const char *Stateful::KeyStateGet = "state-get";
+
+  void EventDone::publish(DoneReason reason) {
+    EventDone ev(reason);
+    EventManager::instance().publishBackwards(ev);
+  }
 
   bool Stateful::handleStateRequest(Request &req) {
     const char *name = req.name();
@@ -38,7 +45,7 @@ namespace esp32m {
       DynamicJsonDocument *result = nullptr;
       JsonVariantConst data =
           req.isBroadcast() ? req.data()[stateName()] : req.data();
-      if (data.isUndefined())
+      if (data.isUnbound())
         return true;
       setState(data, &result);
       if (result) {
@@ -139,6 +146,11 @@ namespace esp32m {
            _appInstance->_curInitLevel > _appInstance->_maxInitLevel;
   }
 
+  void App::restart() {
+    EventDone::publish(DoneReason::Restart);
+    esp_restart();
+  }
+
   App &App::instance() {
     if (!_appInstance)
       abort();
@@ -157,9 +169,11 @@ namespace esp32m {
       evt.publish();
       _curInitLevel++;
     }
-    logI("initialization complete");
     xTaskCreate([](void *self) { ((App *)self)->run(); }, "m/app", 5120, this,
                 tskIDLE_PRIORITY, &_task);
+    EventInited inited;
+    inited.publish();
+    logI("initialization complete");
   }
 
   bool App::handleEvent(Event &ev) {
@@ -179,7 +193,7 @@ namespace esp32m {
       return true;
     if (req.is("restart")) {
       req.respond();
-      esp_restart();
+      restart();
       return true;
     }
     if (req.is("reset")) {

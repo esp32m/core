@@ -78,11 +78,8 @@ namespace esp32m {
       temp.mode = I2C_MODE_MASTER;
       if (p.installed)
         i2c_driver_delete(_port);
-      esp_err_t res;
-      if ((res = i2c_param_config(_port, &temp)) != ESP_OK)
-        return res;
-      if ((res = i2c_driver_install(_port, temp.mode, 0, 0, 0)) != ESP_OK)
-        return res;
+      ESP_CHECK_RETURN(i2c_param_config(_port, &temp));
+      ESP_CHECK_RETURN(i2c_driver_install(_port, temp.mode, 0, 0, 0));
       p.installed = true;
       p.cfg = temp;
     }
@@ -109,7 +106,7 @@ namespace esp32m {
       i2c_master_read(cmd, (uint8_t *)in_data, in_size, I2C_MASTER_LAST_NACK);
       i2c_master_stop(cmd);
       res =
-          i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_RATE_MS);
+          ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
     }
     _err = res;
@@ -134,7 +131,7 @@ namespace esp32m {
         i2c_master_write(cmd, (uint8_t *)out_data, out_size, true);
       i2c_master_stop(cmd);
       res =
-          i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_RATE_MS);
+          ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
     }
     _err = res;

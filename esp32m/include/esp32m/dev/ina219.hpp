@@ -117,7 +117,7 @@ namespace esp32m {
       bool initSensors() override;
     };
 
-    void UseIna219(uint8_t addr = ina219::DefaultAddress);
+    void useIna219(uint8_t addr = ina219::DefaultAddress);
 
   }  // namespace dev
 }  // namespace esp32m

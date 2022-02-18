@@ -1,19 +1,9 @@
 {
-  "exclude": ["./tests", "./coverage", "./dist"],
+  "extends": "@esp32m/ui/config/tsconfig.shared.json",
+  "exclude": ["./tests", "./coverage", "./dist", "./node_modules"],
   "include": ["./src"],
   "compilerOptions": {
-    "module": "esnext",
-    "target": "esnext",                       
-    "lib": ["dom", "es2015", "es2017"],       
-    "jsx": "react",                           
-    "strict": true,                           
-    "allowSyntheticDefaultImports": true,     
-    "esModuleInterop": true,                  
-    "noImplicitAny": true,
-    "moduleResolution": "node",
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "skipLibCheck": true,
-    "outDir": "dist"
+    "outDir": "dist",
   }
 }
+

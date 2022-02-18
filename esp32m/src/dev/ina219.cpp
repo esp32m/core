@@ -213,7 +213,7 @@ namespace esp32m {
       return doc;
     }
 
-    void UseIna219(uint8_t addr) {
+    void useIna219(uint8_t addr) {
       new Ina219(addr);
     }
   }  // namespace dev

@@ -10,10 +10,18 @@ namespace esp32m {
     std::mutex IPins::_pinsMutex;
     int IPins::_reservedIds = 0;
 
-    IPins::IPins(int pinCount) {
+    void IPins::init(int pinCount) {
+      _pinCount = pinCount;
       std::lock_guard guard(_pinsMutex);
       _pinBase = _reservedIds + 1;
       _reservedIds += pinCount;
+    }
+
+    int IPins::id2num(int id) {
+      auto p = id - _pinBase;
+      if (p < 0 || p >= _pinCount)
+        return -1;
+      return p;
     }
 
     esp_err_t IPins::add(IPin *pin) {
@@ -26,6 +34,20 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    IPin *IPins::pin(int num) {
+      if (num < 0 || num >= _pinCount)
+        return nullptr;
+      auto id = num + _pinBase;
+      std::lock_guard guard(_pinsMutex);
+      auto pin = _pins.find(id);
+      if (pin == _pins.end()) {
+        auto p = newPin(id);
+        _pins[id] = p;
+        return p;
+      }
+      return pin->second;
+    }
+
     void IPin::reset() {
       std::lock_guard guard(_mutex);
       if (!_impl)
@@ -35,6 +57,10 @@ namespace esp32m {
     }
     pin::Impl *IPin::impl(pin::Type type) {
       std::lock_guard guard(_mutex);
+      if (_impl && _impl->type() != type) {
+        delete _impl;
+        _impl = nullptr;
+      }
       if (!_impl) {
         _impl = createImpl(type);
         if (_impl && !_impl->valid()) {

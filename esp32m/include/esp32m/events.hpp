@@ -80,6 +80,7 @@ namespace esp32m {
      * @param event Event to publish
      */
     void publish(Event &event);
+    void publishBackwards(Event &event);
     /**
      * @brief Subscribe for events
      * @param cb Callback function to be invoked when any event is fired

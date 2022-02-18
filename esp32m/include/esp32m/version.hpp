@@ -1,3 +1,3 @@
 #pragma once
 
-#define ESP32M_VERSION "0.0.1"
+#define ESP32M_VERSION "0.2.0"

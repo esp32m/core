@@ -13,7 +13,6 @@ namespace esp32m {
       };
       Pcf857x(Flavor f, I2C *i2c);
       Pcf857x(const Pcf857x &) = delete;
-      IPin *pin(int num) override;
       Flavor flavor() const {
         return _flavor;
       }
@@ -25,12 +24,14 @@ namespace esp32m {
       esp_err_t write(uint16_t port);
       esp_err_t commit() override;
 
+     protected:
+      IPin *newPin(int id) override;
+
      private:
       Flavor _flavor;
       std::unique_ptr<I2C> _i2c;
       uint16_t _port = 0xFFFF, _inputMap = 0xFFFF;
-      esp_err_t id2Pin(int &pin);
-      void init();
+      esp_err_t init();
     };
 
     Pcf857x *usePcf8574(uint8_t addr = 0x21);

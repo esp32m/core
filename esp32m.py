@@ -360,7 +360,7 @@ if __name__ == "__main__":
                         metavar=("component", "path"), help="specify path to dependencies")
     parser.add_argument('--project', dest='projdir', default='.')
     parser.add_argument('--ui', dest='ui', nargs=1, choices=['skip'])
-    parser.add_argument('--port', '-p', dest='port', type=int)
+    parser.add_argument('--port', '-p', dest='port', type=str)
     parser.add_argument('command', nargs='+', help="idf.py command")
     args = parser.parse_args()
     configure()

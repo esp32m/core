@@ -132,8 +132,8 @@ namespace esp32m {
           free(u);
           if (err == ESP_OK) {
             logI("OTA update was successful, rebooting...");
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            esp_restart();
+            delay(1000);
+            App::restart();
           }
         }
         esp_task_wdt_reset();

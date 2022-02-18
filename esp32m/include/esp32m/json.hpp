@@ -26,9 +26,12 @@ namespace esp32m {
     }
 
     template <typename T>
-    void set(T &target, JsonVariantConst v) {
-      if (!v.isUndefined())
-        target = v.as<T>();
+    void set(T &target, JsonVariantConst v, bool *changed = nullptr) {
+      if (v.isUnbound() || v.isNull() || v.as<T>() == target)
+        return;
+      if (changed)
+        *changed = true;
+      target = v.as<T>();
     }
 
 #ifdef ARDUINO
@@ -41,7 +44,7 @@ namespace esp32m {
 
     template <typename T>
     void compareSet(T &target, JsonVariantConst v, bool &changed) {
-      if (v.isUndefined() || v == target)
+      if (v.isUnbound() || v.isNull() || v == target)
         return;
       changed = true;
       target = v.as<T>();
@@ -49,7 +52,7 @@ namespace esp32m {
 
     template <typename T>
     void set(T &target, JsonVariantConst v, T def) {
-      if (!v.isUndefined())
+      if (!v.isUnbound())
         target = v.as<T>();
       else
         target = def;
@@ -57,7 +60,7 @@ namespace esp32m {
 
     template <typename T>
     void compareSet(T &target, JsonVariantConst v, T def, bool &changed) {
-      T src = v.isNull() ? def : v.as<T>();
+      T src = (v.isUnbound() || v.isNull()) ? def : v.as<T>();
       if (src == target)
         return;
       changed = true;
@@ -70,12 +73,10 @@ namespace esp32m {
     void compareDup(char *&target, JsonVariantConst v, const char *def,
                     bool &changed);
 
-    void toJson(JsonVariant target, const ip_addr_t &value);
-    void toJson(JsonVariant target, const ip4_addr_t &value);
-    void toJson(JsonVariant target, const esp_ip4_addr_t &value);
-
-    void toJson(JsonObject target, const char *index,
-                const esp_ip4_addr_t &value);
+    void to(JsonObject target, const char *key, const ip_addr_t &value);
+    void to(JsonObject target, const char *key, const ip4_addr_t &value);
+    void to(JsonObject target, const char *key, const esp_ip4_addr_t &value);
+    void to(JsonObject target, const char *key, const float value);
 
     template <typename T>
     class Value {

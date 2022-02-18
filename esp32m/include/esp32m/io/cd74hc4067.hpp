@@ -13,10 +13,13 @@ namespace esp32m {
       CD74HC4067(IPin* pinEn, IPin* pinS0, IPin* pinS1, IPin* pinS2,
                  IPin* pinS3, IPin* pinSig);
       CD74HC4067(const CD74HC4067&) = delete;
-      IPin* pin(int num) override;
+
+     protected:
+      IPin* newPin(int id) override;
 
      private:
       IPin *_en, *_s0, *_s1, *_s2, *_s3, *_sig;
+      esp_err_t init();
       esp_err_t selectChannel(int c);
       friend class CD74HC4067Pin;
       friend class cd74hc4067::ADC;

@@ -82,8 +82,8 @@ namespace esp32m {
     Mqtt::Mqtt() {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
       bool changed;
-      setCfgStr(&_cfg.uri, "mqtt://mqtt.lan",
-                changed);  // don't assign directly - _cfg.uri may bee free()'d
+      // don't assign directly - _cfg.uri may bee free()'d
+      setCfgStr(&_cfg.uri, "mqtt://mqtt.lan", changed);
       _cfg.event_handle = [](esp_mqtt_event_handle_t event) {
         return ((Mqtt *)event->user_context)->handle(event);
       };
@@ -91,9 +91,23 @@ namespace esp32m {
       _cfg.keepalive = 120;
     }
 
+    void Mqtt::setState(State state) {
+      std::lock_guard guard(_mutex);
+      if (_state == state)
+        return;
+      /*if (state == State::Ready)
+        _sleepBlocker.unblock();
+      if (_state == State::Ready)
+        _sleepBlocker.block();*/
+      _state = state;
+      xTaskNotifyGive(_task);
+    }
+
     bool Mqtt::handleEvent(Event &ev) {
       JsonObject cr;
       JsonObjectConst ca;
+      DoneReason reason;
+      sleep::Event *slev;
       if (EventInit::is(ev, 0)) {
         xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
@@ -107,9 +121,18 @@ namespace esp32m {
           _responseTopic = nullptr;
         if (asprintf(&_broadcastTopic, "esp32m/broadcast/%s/", name) < 0)
           _responseTopic = nullptr;
+      } else if (EventDone::is(ev, &reason)) {
+        if (reason != DoneReason::LightSleep) {
+          _enabled = false;
+          disconnect();
+          waitState([this] { return _state == State::Initial; }, 500);
+        }
       } else if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
         xTaskNotifyGive(_task);
-      else if (_state == State::Ready) {
+      else if (sleep::Event::is(ev, &slev)) {
+        if (_state != State::Ready)
+          slev->block();
+      } else if (isConnected()) {
         Broadcast *b = nullptr;
         Response *r = nullptr;
         if (EventSensor::is(ev)) {
@@ -194,7 +217,7 @@ namespace esp32m {
             _timer = 0;
             if (Wifi::instance().isConnected() && _cfg.uri &&
                 strlen(_cfg.uri)) {
-              _state = State::Connecting;
+              setState(State::Connecting);
               logI("connecting to %s", _cfg.uri);
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_client_set_uri(_handle, _cfg.uri));
@@ -207,26 +230,36 @@ namespace esp32m {
           case State::Connecting:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout connecting to %s", _cfg.uri);
-              _state = State::Initial;
+              setState(State::Initial);
             }
             break;
           case State::Connected:
-            _state = State::Subscribing;
-            logI("connected, subscribing for %s : %d", _commandTopic,
-                 esp_mqtt_client_subscribe(_handle, _commandTopic, 0));
-            _timer = millis();
+            if (_listen) {
+              setState(State::Subscribing);
+              logI("connected, subscribing to %s : %d", _commandTopic,
+                   esp_mqtt_client_subscribe(_handle, _commandTopic, 0));
+              _timer = millis();
+            } else {
+              setState(State::Ready);
+              _timer = 0;
+              logI("connected");
+            }
             break;
           case State::Subscribing:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout subscribing to %s", _commandTopic);
-              _state = State::Connected;
+              setState(State::Connected);
             }
             break;
           case State::Disconnecting:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout disconnecting");
-              _state = State::Initial;
+              setState(State::Initial);
             }
+            break;
+          case State::Disconnected:
+            logI("disconnected");
+            setState(State::Initial);
             break;
           default:
             break;
@@ -278,6 +311,7 @@ namespace esp32m {
                          DynamicJsonDocument **result) {
       bool changed = false;
       json::compareSet(_enabled, ca["enabled"], changed);
+      // _sleepBlocker.enable(_enabled);
       setCfgStr(&_cfg.uri, ca["uri"].as<const char *>(), changed);
       setCfgStr(&_cfg.username, ca["username"].as<const char *>(), changed);
       setCfgStr(&_cfg.password, ca["password"].as<const char *>(), changed);
@@ -296,8 +330,9 @@ namespace esp32m {
     }
 
     bool Mqtt::publish(const char *topic, const char *message) {
-      if (_state != State::Ready || !topic || !message)
+      if (!isConnected() || !topic || !message)
         return false;
+      // logD("publish %s %s", topic, message);
       bool result =
           ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_publish(
               _handle, topic, message, strlen(message), 0, false)) == ESP_OK;
@@ -339,24 +374,20 @@ namespace esp32m {
           logE("error %i", event->error_handle->error_type);
           break;
         case MQTT_EVENT_CONNECTED:
-          _state = State::Connected;
+          setState(State::Connected);
           _timer = 0;
-          xTaskNotifyGive(_task);
           break;
         case MQTT_EVENT_DISCONNECTED:
-          _state = State::Initial;
+          setState(State::Disconnected);
           _timer = 0;
-          xTaskNotifyGive(_task);
           break;
         case MQTT_EVENT_SUBSCRIBED:
-          _state = State::Ready;
+          setState(State::Ready);
           _timer = 0;
-          xTaskNotifyGive(_task);
           break;
         case MQTT_EVENT_UNSUBSCRIBED:
-          _state = State::Connected;
+          setState(State::Connected);
           _timer = 0;
-          xTaskNotifyGive(_task);
           break;
         case MQTT_EVENT_DATA:
           if (!_commandTopic)
@@ -402,7 +433,7 @@ namespace esp32m {
     void Mqtt::disconnect() {
       if (_state == State::Disconnecting || _state == State::Initial)
         return;
-      _state = State::Disconnecting;
+      setState(State::Disconnecting);
       _timer = millis();
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_stop(_handle));
     }
@@ -412,8 +443,8 @@ namespace esp32m {
       return i;
     }
 
-    void useMqtt() {
-      Mqtt::instance();
+    Mqtt *useMqtt() {
+      return &Mqtt::instance();
     }
   }  // namespace net
 }  // namespace esp32m

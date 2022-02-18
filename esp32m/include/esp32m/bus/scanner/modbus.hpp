@@ -7,7 +7,7 @@ namespace esp32m {
   namespace bus {
     namespace scanner {
 
-      class Modbus : public AppObject {
+      class Modbus : public virtual AppObject {
        public:
         Modbus(const Modbus &) = delete;
         static Modbus &instance();
@@ -32,7 +32,7 @@ namespace esp32m {
         modbus::Command _cmd = modbus::Command::None;
         uart_parity_t _parity = UART_PARITY_DISABLE;
         bool _ascii = false;
-        uint8_t _addrs[16];
+        uint8_t _addrs[32];
         Modbus();
         void run();
       };

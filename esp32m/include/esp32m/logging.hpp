@@ -16,6 +16,17 @@
 #define logV(format, ...) \
   this->logger().logf(log::Level::Verbose, format, ##__VA_ARGS__)
 
+#define LOGE(loggable, format, ...) \
+  loggable->logger().logf(log::Level::Error, format, ##__VA_ARGS__)
+#define LOGW(loggable, format, ...) \
+  loggablehis->logger().logf(log::Level::Warning, format, ##__VA_ARGS__)
+#define LOGI(loggable, format, ...) \
+  loggable->logger().logf(log::Level::Info, format, ##__VA_ARGS__)
+#define LOGD(loggable, format, ...) \
+  loggable->logger().logf(log::Level::Debug, format, ##__VA_ARGS__)
+#define LOGV(loggable, format, ...) \
+  loggable->logger().logf(log::Level::Verbose, format, ##__VA_ARGS__)
+
 #define loge(format, ...) \
   log::system().logf(log::Level::Error, format, ##__VA_ARGS__)
 #define logw(format, ...) \
@@ -58,12 +69,18 @@ namespace esp32m {
      * @brief Base class for loggable objects with the name initialized in the
      * constructor
      */
-    class SimpleLoggable : public Loggable {
+    class SimpleLoggable : public virtual Loggable {
      public:
       SimpleLoggable(const char *name) : _name(name) {}
       virtual const char *name() const {
         return _name;
       };
+
+     protected:
+      SimpleLoggable() : _name("_") {}
+      void init(const char *name, const char *nameDef) {
+        _name = name ? name : (nameDef ? nameDef : "_");
+      }
 
      private:
       const char *_name;

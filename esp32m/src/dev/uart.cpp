@@ -44,12 +44,12 @@ namespace esp32m {
         esp_task_wdt_reset();
         uart_event_t event;
         int ret = xQueueReceive(_queue, (void *)&event,
-                                (TickType_t)10 / portTICK_RATE_MS);
+                                (TickType_t)10 / portTICK_PERIOD_MS);
         if (ret != pdPASS)
           continue;
         if (event.type == UART_DATA) {
           ret = uart_read_bytes(_num, buf, 2048,
-                                (TickType_t)10 / portTICK_RATE_MS);
+                                (TickType_t)10 / portTICK_PERIOD_MS);
           if (ret > 0) {
             std::lock_guard<std::mutex> guard(_mutex);
             if (!_pendingResponse)

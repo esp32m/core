@@ -1,9 +1,9 @@
 #pragma once
 
-#include <hal/gpio_types.h>
-
 #include "esp32m/device.hpp"
 #include "esp32m/io/pins.hpp"
+
+#include <hal/gpio_types.h>
 
 namespace esp32m {
   namespace dev {

@@ -1,12 +1,12 @@
 #pragma once
 
-#include <hal/gpio_types.h>
-#include <math.h>
-
 #include "esp32m/dev/hbridge.hpp"
 #include "esp32m/dev/relay.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/io/pins.hpp"
+
+#include <hal/gpio_types.h>
+#include <math.h>
 
 namespace esp32m {
   namespace dev {

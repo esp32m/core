@@ -8,14 +8,18 @@ namespace esp32m {
     Dds238::Dds238(uint8_t addr) : Device(Flags::HasSensors) {
       _addr = addr;
     }
+    
     float readFloat(uint16_t *ptr) {
-      return (float)((ptr[0] << 16) + ptr[1]) / 100.0;
+      return (float)((ptr[0] << 16) | ptr[1]) / 100.0;
     }
 
     bool Dds238::initSensors() {
       modbus::Master &mb = modbus::Master::instance();
-      return mb.isRunning() ||
-             ESP_ERROR_CHECK_WITHOUT_ABORT(mb.start()) == ESP_OK;
+      if (mb.isRunning())
+        ESP_ERROR_CHECK_WITHOUT_ABORT(mb.stop());
+      if (!mb.isRunning())
+        ESP_ERROR_CHECK_WITHOUT_ABORT(mb.start());
+      return mb.isRunning();
     }
 
     DynamicJsonDocument *Dds238::getState(const JsonVariantConst args) {
@@ -48,8 +52,8 @@ namespace esp32m {
       _ie = readFloat(reg + 0xA);
       _v = (float)reg[0xC] / 10;
       _i = (float)reg[0xD] / 100;
-      _ap = (float)reg[0xE] / 1000;
-      _rap = (float)reg[0xF] / 1000;
+      _ap = (float)(int16_t)reg[0xE] / 1000;
+      _rap = (float)(int16_t)reg[0xF] / 1000;
       _pf = (float)reg[0x10] / 1000;
       _f = (float)reg[0x11] / 100;
       sensor("voltage", _v);

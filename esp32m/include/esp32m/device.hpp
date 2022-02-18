@@ -59,6 +59,11 @@ namespace esp32m {
     void setReinitDelay(unsigned int delay) {
       _reinitDelay = delay;
     }
+    
+    /* these must be called only from within pollSensors() */
+    void sensor(const char *sensor, const float value);
+    void sensor(const char *sensor, const float value,
+                const JsonObjectConst props);
 
    protected:
     Device(const Flags flags = Flags::None);
@@ -73,9 +78,6 @@ namespace esp32m {
     virtual bool pollSensors() {
       return true;
     };
-    void sensor(const char *sensor, const float value);
-    void sensor(const char *sensor, const float value,
-                const JsonObjectConst props);
 
    private:
     bool _sensorsReady = false;

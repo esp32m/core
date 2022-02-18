@@ -51,6 +51,12 @@ namespace esp32m {
       return _isError;
     }
     void setError(esp_err_t err);
+    void setError(DynamicJsonDocument *data) {
+      if (_data)
+        delete (_data);
+      _data = data;
+      _isError = true;
+    }
     void setData(DynamicJsonDocument *data) {
       if (_data)
         delete (_data);

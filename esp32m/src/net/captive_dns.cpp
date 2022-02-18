@@ -1,7 +1,9 @@
+#include "esp32m/net/captive_dns.hpp"
+#include "esp32m/base.hpp"
+
 #include <esp_netif.h>
 #include <esp_task_wdt.h>
 
-#include "esp32m/net/captive_dns.hpp"
 
 namespace esp32m {
 
@@ -290,7 +292,7 @@ namespace esp32m {
       _sockFd = socket(AF_INET, SOCK_DGRAM, 0);
       if (_sockFd == -1) {
         logE("captdns_task failed to create sock!");
-        vTaskDelay(1000 / portTICK_RATE_MS);
+        delay(1000);
       }
     } while (_sockFd == -1);
 
@@ -299,7 +301,7 @@ namespace esp32m {
       ret = bind(_sockFd, (struct sockaddr *)&server_addr, sizeof(server_addr));
       if (ret != 0) {
         logE("captdns_task failed to bind sock!");
-        vTaskDelay(1000 / portTICK_RATE_MS);
+        delay(1000);
       }
     } while (ret != 0);
     fcntl(_sockFd, F_SETFL, O_NONBLOCK);
@@ -317,7 +319,7 @@ namespace esp32m {
       if (ret > 0)
         recv(&from, udp_msg, ret);
       else
-        vTaskDelay(1 / portTICK_RATE_MS);
+        delay(1);
     }
     close(_sockFd);
     vTaskDelete(NULL);

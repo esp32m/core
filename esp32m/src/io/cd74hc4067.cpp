@@ -38,7 +38,13 @@ namespace esp32m {
 
     class CD74HC4067Pin : public IPin {
      public:
-      CD74HC4067Pin(CD74HC4067 *owner, int id) : IPin(id), _owner(owner){};
+      CD74HC4067Pin(CD74HC4067 *owner, int id) : IPin(id), _owner(owner) {
+        snprintf(_name, sizeof(_name), "CD74HC4067-%02u",
+                 id - owner->pinBase());
+      };
+      const char *name() const override {
+        return _name;
+      }
       Features features() override {
         return _owner->_sig->features();
       }
@@ -67,7 +73,7 @@ namespace esp32m {
         ESP_CHECK_RETURN(select());
         return sig->digitalWrite(value);
       }
-      pin::Impl *createImpl(pin::Type type) {
+      pin::Impl *createImpl(pin::Type type) override {
         auto *sig = _owner->_sig;
         switch (type) {
           case pin::Type::ADC:
@@ -86,37 +92,33 @@ namespace esp32m {
 
      private:
       CD74HC4067 *_owner;
+      char _name[14];
       friend class cd74hc4067::ADC;
     };
 
     CD74HC4067::CD74HC4067(IPin *pinEn, IPin *pinS0, IPin *pinS1, IPin *pinS2,
                            IPin *pinS3, IPin *pinSig)
-        : IPins(16),
-          _en(pinEn),
+        : _en(pinEn),
           _s0(pinS0),
           _s1(pinS1),
           _s2(pinS2),
           _s3(pinS3),
           _sig(pinSig) {
-      _en->setDirection(GPIO_MODE_OUTPUT);
-      _s0->setDirection(GPIO_MODE_OUTPUT);
-      _s1->setDirection(GPIO_MODE_OUTPUT);
-      _s2->setDirection(GPIO_MODE_OUTPUT);
-      _s3->setDirection(GPIO_MODE_OUTPUT);
+      init();
     }
 
-    IPin *CD74HC4067::pin(int num) {
-      if (num < 0 || num > 15)
-        return nullptr;
-      auto id = num + _pinBase;
-      std::lock_guard guard(_pinsMutex);
-      auto pin = _pins.find(id);
-      if (pin == _pins.end()) {
-        auto gpio = new CD74HC4067Pin(this, id);
-        _pins[id] = gpio;
-        return gpio;
-      }
-      return pin->second;
+    esp_err_t CD74HC4067::init() {
+      ESP_CHECK_RETURN(_en->setDirection(GPIO_MODE_OUTPUT));
+      ESP_CHECK_RETURN(_s0->setDirection(GPIO_MODE_OUTPUT));
+      ESP_CHECK_RETURN(_s1->setDirection(GPIO_MODE_OUTPUT));
+      ESP_CHECK_RETURN(_s2->setDirection(GPIO_MODE_OUTPUT));
+      ESP_CHECK_RETURN(_s3->setDirection(GPIO_MODE_OUTPUT));
+      IPins::init(16);
+      return ESP_OK;
+    }
+
+    IPin *CD74HC4067::newPin(int id) {
+      return new CD74HC4067Pin(this, id);
     }
 
     esp_err_t CD74HC4067::selectChannel(int c) {

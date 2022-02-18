@@ -32,11 +32,11 @@ namespace esp32m {
         _config.parity = parity;
         changed = true;
       }
+      _mutex = &locks::uart(port);
       if (changed && _running) {
         stop();
         start();
       }
-      _mutex = &locks::uart(port);
       _configured = true;
     }
 
@@ -57,8 +57,6 @@ namespace esp32m {
           rxp = 10;
           break;
         case UART_NUM_2:
-          txp = 17;
-          rxp = 16;
           break;
       }
       ESP_CHECK_RETURN(uart_set_pin(_config.port, txp, rxp, UART_PIN_NO_CHANGE,

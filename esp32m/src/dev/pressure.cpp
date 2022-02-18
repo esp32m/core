@@ -20,10 +20,12 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *PressureSensor::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(2));
+      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(4));
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);
+      arr.add(_mv * _vdiv / 1000.0);
+      arr.add(_raw);
       return doc;
     }
 
@@ -35,20 +37,19 @@ namespace esp32m {
       auto err = ESP_ERROR_CHECK_WITHOUT_ABORT(_adc->read(raw, &mv));
       if (err == ESP_OK) {
         _value = compute(mv, (float)raw / _divisor);
+        _raw = raw;
+        _mv = mv;
         _stamp = millis();
         sensor("pressure", _value);
+        sensor("voltage", _mv * _vdiv / 1000.0);
       }
       return true;
     }
 
-    /**
-     * This algorithm is for 5V 1.2MPa pressure sensor with 10KOhm/10KOhm
-     * voltage divider https://aliexpress.com/item/1669537885.html
-     */
     float PressureSensor::compute(uint32_t mv, float r) {
       const float vcc = 5000;
-      float vout = mv * 2;  // voltage divider 2x
-      float pmpa = (vout / vcc - 0.1) * 3 / 2;
+      float vout = mv * _vdiv;
+      float pmpa = (vout / vcc - 0.1) / _slope;
       return pmpa < 0 ? 0 : pmpa / 0.101325;
     }
 

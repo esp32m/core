@@ -38,7 +38,7 @@ namespace esp32m {
     } else if (!strcmp(name, Config::KeyConfigSet)) {
       JsonVariantConst data =
           req.isBroadcast() ? req.data()[configName()] : req.data();
-      if (data.isUndefined())
+      if (data.isUnbound())
         return true;
       DynamicJsonDocument *result = nullptr;
       if (setConfig(data, &result)) {

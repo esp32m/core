@@ -1,22 +1,22 @@
-#ifdef ARDUINO
-#  include "WiFi.h"
-#endif
-
-#include <esp_task_wdt.h>
-#include <mdns.h>
-#include <algorithm>
-#include "dhcpserver/dhcpserver_options.h"
-#include "esp_netif.h"
-#include "lwip/apps/sntp.h"
-#include "lwip/dns.h"
-
+#include "esp32m/net/wifi.hpp"
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/events/diag.hpp"
 #include "esp32m/events/response.hpp"
 #include "esp32m/net/ip_event.hpp"
-#include "esp32m/net/wifi.hpp"
 #include "esp32m/net/wifi_utils.hpp"
+
+#include <dhcpserver/dhcpserver_options.h>
+#include <esp_mbo.h>
+#include <esp_netif.h>
+#include <esp_rrm.h>
+#include <esp_task_wdt.h>
+#include <esp_wnm.h>
+#include <lwip/apps/sntp.h>
+#include <lwip/dns.h>
+#include <mdns.h>
+#include <algorithm>
 
 namespace esp32m {
   namespace net {
@@ -24,7 +24,6 @@ namespace esp32m {
         PP_HTONL(LWIP_MAKEU32(255, 255, 255, 0))};
     const esp_ip4_addr_t DefaultApIp = {PP_HTONL(LWIP_MAKEU32(192, 168, 4, 1))};
     const char *DefaultNtpHost = "pool.ntp.org";
-    StaticJsonDocument<JSON_ARRAY_SIZE(3)> Errors;
 
     const char *StaStateNames[]{
         "Initial",
@@ -35,6 +34,11 @@ namespace esp32m {
     const char *ApStateNames[]{"Initial", "Starting", "Running", "Stopped"};
 
     const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
+
+    const uint8_t DiagId = 10;
+    const uint8_t DiagConnected = 1;
+    const uint8_t DiagConnecting = 2;
+    const uint8_t DiagApRunning = 3;
 
     enum WifiFlags {
       Initialized = BIT0,
@@ -164,9 +168,6 @@ namespace esp32m {
           _ntpHost((char *)DefaultNtpHost) {
       _scanConfig.scan_time.active.min = 100;
       _scanConfig.scan_time.active.max = 300;
-      Errors.add("id-required");
-      Errors.add("id-not-found");
-      Errors.add("fallback-ap");
     }
 
     bool Wifi::handleRequest(Request &req) {
@@ -194,24 +195,21 @@ namespace esp32m {
       }
       if (req.is("delete-ap")) {
         uint32_t id = req.data()["id"];
-        JsonVariantConst rd = Errors[1];
-        bool error = true;
+        esp_err_t error = ESP_OK;
         if (!id)
-          rd = Errors[0];
+          error = ESP_ERR_INVALID_ARG;
         else
           for (auto it = _aps.begin(); it != _aps.end(); ++it)
             if ((*it)->id() == id) {
-              if (!(*it)->isFallback()) {
+              if (!(*it)->isFallback())
                 it = _aps.erase(it);
-                error = false;
-                rd = json::null<JsonVariantConst>();
-              } else
-                rd = Errors[2];
+              else
+                error = ESP_ERR_INVALID_ARG;
               break;
             }
         if (!error)
           App::instance().config()->save();
-        req.respond(rd, error);
+        req.respond(error);
         return true;
       }
       return false;
@@ -227,6 +225,163 @@ namespace esp32m {
       IpEvent::publish((ip_event_t)event_id, event_data);
     }
 
+    static inline uint32_t WPA_GET_LE32(const uint8_t *a) {
+      return ((uint32_t)a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0];
+    }
+#ifndef WLAN_EID_MEASURE_REPORT
+#  define WLAN_EID_MEASURE_REPORT 39
+#endif
+#ifndef MEASURE_TYPE_LCI
+#  define MEASURE_TYPE_LCI 9
+#endif
+#ifndef MEASURE_TYPE_LOCATION_CIVIC
+#  define MEASURE_TYPE_LOCATION_CIVIC 11
+#endif
+#ifndef WLAN_EID_NEIGHBOR_REPORT
+#  define WLAN_EID_NEIGHBOR_REPORT 52
+#endif
+#ifndef ETH_ALEN
+#  define ETH_ALEN 6
+#endif
+#define MAX_NEIGHBOR_LEN 512
+    char *Wifi::btmNeighborList(uint8_t *report, size_t report_len) {
+      size_t len = 0;
+      const uint8_t *data;
+      int ret = 0;
+
+      /*
+       * Neighbor Report element (IEEE P802.11-REVmc/D5.0)
+       * BSSID[6]
+       * BSSID Information[4]
+       * Operating Class[1]
+       * Channel Number[1]
+       * PHY Type[1]
+       * Optional Subelements[variable]
+       */
+#define NR_IE_MIN_LEN (ETH_ALEN + 4 + 1 + 1 + 1)
+
+      if (!report || report_len == 0) {
+        logI("RRM neighbor report is not valid");
+        return nullptr;
+      }
+
+      char *buf = (char *)calloc(1, MAX_NEIGHBOR_LEN);
+      data = report;
+
+      while (report_len >= 2 + NR_IE_MIN_LEN) {
+        const uint8_t *nr;
+        char lci[256 * 2 + 1];
+        char civic[256 * 2 + 1];
+        uint8_t nr_len = data[1];
+        const uint8_t *pos = data, *end;
+
+        if (pos[0] != WLAN_EID_NEIGHBOR_REPORT || nr_len < NR_IE_MIN_LEN) {
+          logI("CTRL: Invalid Neighbor Report element: id=%u len=%u", data[0],
+               nr_len);
+          ret = -1;
+          goto cleanup;
+        }
+
+        if (2U + nr_len > report_len) {
+          logI("CTRL: Invalid Neighbor Report element: id=%u len=%zu nr_len=%u",
+               data[0], report_len, nr_len);
+          ret = -1;
+          goto cleanup;
+        }
+        pos += 2;
+        end = pos + nr_len;
+
+        nr = pos;
+        pos += NR_IE_MIN_LEN;
+
+        lci[0] = '\0';
+        civic[0] = '\0';
+        while (end - pos > 2) {
+          uint8_t s_id, s_len;
+
+          s_id = *pos++;
+          s_len = *pos++;
+          if (s_len > end - pos) {
+            ret = -1;
+            goto cleanup;
+          }
+          if (s_id == WLAN_EID_MEASURE_REPORT && s_len > 3) {
+            /* Measurement Token[1] */
+            /* Measurement Report Mode[1] */
+            /* Measurement Type[1] */
+            /* Measurement Report[variable] */
+            switch (pos[2]) {
+              case MEASURE_TYPE_LCI:
+                if (lci[0])
+                  break;
+                memcpy(lci, pos, s_len);
+                break;
+              case MEASURE_TYPE_LOCATION_CIVIC:
+                if (civic[0])
+                  break;
+                memcpy(civic, pos, s_len);
+                break;
+            }
+          }
+
+          pos += s_len;
+        }
+
+        logI("RMM neigbor report bssid=" MACSTR
+             " info=0x%x op_class=%u chan=%u phy_type=%u%s%s%s%s",
+             MAC2STR(nr), WPA_GET_LE32(nr + ETH_ALEN), nr[ETH_ALEN + 4],
+             nr[ETH_ALEN + 5], nr[ETH_ALEN + 6], lci[0] ? " lci=" : "", lci,
+             civic[0] ? " civic=" : "", civic);
+
+        /* neighbor start */
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, " neighbor=");
+        /* bssid */
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, MACSTR, MAC2STR(nr));
+        /* , */
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
+        /* bssid info */
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "0x%04x",
+                        WPA_GET_LE32(nr + ETH_ALEN));
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
+        /* operating class */
+        len +=
+            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 4]);
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
+        /* channel number */
+        len +=
+            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 5]);
+        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
+        /* phy type */
+        len +=
+            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 6]);
+        /* optional elements, skip */
+
+        data = end;
+        report_len -= 2 + nr_len;
+      }
+
+    cleanup:
+      if (ret < 0) {
+        free(buf);
+        buf = nullptr;
+      }
+      return buf;
+    }
+
+    void neighbor_report_recv_cb(void *ctx, const uint8_t *report,
+                                 size_t report_len) {
+      if (ctx != &Wifi::instance() || !report)
+        return;
+      uint8_t *pos = (uint8_t *)report;
+      char *neighbor_list =
+          ((Wifi *)ctx)->btmNeighborList(pos + 1, report_len - 1);
+      if (neighbor_list) {
+        esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS, neighbor_list,
+                                               0);
+        free(neighbor_list);
+      }
+    }
+
     void Wifi::init() {
       static bool inited = false;
       if (inited)
@@ -235,6 +390,7 @@ namespace esp32m {
       EventManager::instance().subscribe([this](Event &ev) {
         IpEvent *ip;
         WifiEvent *wifi;
+        sleep::Event *slev;
         if (WifiEvent::is(ev, &wifi))
           switch (wifi->event()) {
             case WIFI_EVENT_STA_START:
@@ -244,6 +400,7 @@ namespace esp32m {
               xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
               break;
             case WIFI_EVENT_STA_CONNECTED:
+              esp_wifi_set_rssi_threshold(-67);
               xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
               break;
             case WIFI_EVENT_STA_DISCONNECTED: {
@@ -253,6 +410,19 @@ namespace esp32m {
                   _eventGroup, WifiFlags::StaConnected | WifiFlags::StaGotIp);
               break;
             }
+            case WIFI_EVENT_STA_BSS_RSSI_LOW: {
+              int e = esp_rrm_send_neighbor_rep_request(neighbor_report_recv_cb,
+                                                        this);
+              if (e < 0) {
+                /* failed to send neighbor report request */
+                logW("failed to send neighbor report request: %i", e);
+                e = esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
+                                                           NULL, 0);
+                if (e < 0) {
+                  logI("failed to send btm query: %i", e);
+                }
+              }
+            } break;
             case WIFI_EVENT_SCAN_DONE:
               // logI("scan done");
               xEventGroupSetBits(_eventGroup, WifiFlags::ScanDone);
@@ -300,13 +470,13 @@ namespace esp32m {
             default:
               break;
           }
+        else if (sleep::Event::is(ev, &slev) && !isConnected())
+          slev->block();
+
         if (_task)
           xTaskNotifyGive(_task);
       });
       const char *hostname = App::instance().name();
-#ifdef ARDUINO
-      WiFi.mode(WIFI_STA);  // performs low level init
-#else
       esp_netif_init();
       //        tcpip_adapter_init();
       _eventGroup = xEventGroupCreate();
@@ -318,7 +488,6 @@ namespace esp32m {
       ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
       esp_netif_set_hostname(_ifsta, hostname);
       esp_netif_set_hostname(_ifap, hostname);
-#endif
       ESP_ERROR_CHECK(esp_event_handler_instance_register(
           WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, nullptr, nullptr));
       ESP_ERROR_CHECK(esp_event_handler_instance_register(
@@ -359,10 +528,14 @@ namespace esp32m {
     }
 
     bool Wifi::handleEvent(Event &ev) {
+      DoneReason reason;
       if (EventInit::is(ev, 0)) {
         init();
-        xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 4096,
+        xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 5120,
                     this, tskIDLE_PRIORITY + 1, &_task);
+        return true;
+      } else if (EventDone::is(ev, &reason)) {
+        stop();
         return true;
       }
       return false;
@@ -545,6 +718,8 @@ namespace esp32m {
         }
         conf.sta.rm_enabled = 1;
         conf.sta.btm_enabled = 1;
+        conf.sta.mbo_enabled = 1;
+        conf.sta.pmf_cfg.capable = 1;
 
         wifi_config_t current_conf;
         ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -575,22 +750,22 @@ namespace esp32m {
         return false;
       int i = 30;
       while (!isConnected() && --i) {
-        vTaskDelay(100 / portTICK_RATE_MS);
+        delay(100);
         esp_task_wdt_reset();
       }
       i = 100;
       _errReason = (wifi_err_reason_t)0;
       while (!isConnected() && !_errReason && --i) {
-        vTaskDelay(100 / portTICK_RATE_MS);
+        delay(100);
         esp_task_wdt_reset();
       }
       bool ok = isConnected();
       if (!ok) {
         logW("connection failed: %u", (int)_errReason);
         if (_apState == ApState::Running)
-          vTaskDelay(5000 / portTICK_RATE_MS);
+          delay(5000);
         else
-          vTaskDelay(1000 / portTICK_RATE_MS);
+          delay(1000);
       }
       if (ap) {
         if (!ok)
@@ -631,7 +806,7 @@ namespace esp32m {
         _connectFailures = 0;
         updateTimeConfig();
       } else {
-        vTaskDelay(100 / portTICK_RATE_MS);
+        delay(100);
         if (apClientsCount() == 0)
           _connectFailures++;
       }
@@ -756,14 +931,41 @@ namespace esp32m {
     }
 
     void Wifi::setState(StaState state) {
+      if (state == _staState)
+        return;
       logI("Sta%s -> Sta%s", StaStateNames[(int)_staState],
            StaStateNames[(int)state]);
+      int diagCode = -1;
+      switch (state) {
+        case StaState::Connecting:
+          diagCode = DiagConnecting;
+          break;
+        case StaState::Connected:
+          diagCode = DiagConnected;
+          break;
+        default:
+          break;
+      }
+      if (diagCode > 0)
+        event::Diag::publish(DiagId, diagCode);
       _staState = state;
     }
 
     void Wifi::setState(ApState state) {
+      if (state == _apState)
+        return;
       logI("Ap%s -> Ap%s", ApStateNames[(int)_apState],
            ApStateNames[(int)state]);
+      int diagCode = -1;
+      switch (state) {
+        case ApState::Running:
+          diagCode = DiagApRunning;
+          break;
+        default:
+          break;
+      }
+      if (diagCode > 0)
+        event::Diag::publish(DiagId, diagCode);
       _apState = state;
     }
 
@@ -848,6 +1050,8 @@ namespace esp32m {
         auto curtime = millis();
         switch (_staState) {
           case StaState::Initial:
+            if (_stopped)
+              break;
             setState(StaState::Connecting);
             _staTimer = curtime;
             break;
@@ -860,7 +1064,7 @@ namespace esp32m {
           case StaState::ConnectionFailed:
             if (_connectFailures > 10) {
               logW("too many connection failures, restarting...");
-              esp_restart();
+              App::restart();
             }
             if (_apState == ApState::Initial) {
               logW("connection failed, switching to AP+STA");
@@ -904,10 +1108,9 @@ namespace esp32m {
                 ap(false);
               } else {
                 logW("no clients connected within 60s, restarting...");
-                esp_restart();
+                App::restart();
               }
-              vTaskDelay(pdMS_TO_TICKS(
-                  100));  // allow some time for the events to fire
+              delay(100);  // allow some time for the events to fire
               break;
             }
             if (!_captivePortal)
@@ -937,6 +1140,17 @@ namespace esp32m {
       return clients.num;
     }
 
+    void Wifi::stop() {
+      _stopped = true;
+      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_stop());
+      waitState(
+          [this] {
+            return (xEventGroupGetBits(_eventGroup) & WifiFlags::StaRunning) ==
+                   0;
+          },
+          1000);
+    }
+
     void Wifi::checkScan() {
       if (!_pendingResponse)
         return;
@@ -944,7 +1158,7 @@ namespace esp32m {
         _scanStarted = 0;
         uint16_t sc = 0;
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_scan_get_ap_num(&sc));
-        // auto sc = WiFi.scanComplete();
+
         DynamicJsonDocument *doc = nullptr;
         if (sc > 0) {
           doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(sc) +

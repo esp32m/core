@@ -7,6 +7,7 @@
 #include "esp32m/defs.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/events.hpp"
+#include "esp32m/sleep.hpp"
 #include "esp32m/net/captive_dns.hpp"
 
 namespace esp32m {
@@ -128,6 +129,7 @@ namespace esp32m {
       esp_err_t sta(bool enable);
       esp_err_t ap(bool enable);
       esp_err_t disconnect();
+      void stop();
       const esp_netif_ip_info_t &apIp() const {
         return _apIp;
       }
@@ -147,6 +149,7 @@ namespace esp32m {
 
      private:
       Wifi();
+      bool _stopped=false;
       esp_netif_t *_ifsta = nullptr, *_ifap = nullptr;
       TaskHandle_t _task = nullptr;
       EventGroupHandle_t _eventGroup = nullptr;
@@ -189,6 +192,8 @@ namespace esp32m {
       void ensureId(ApInfo *ap);
       void staInfo(JsonObject);
       void apInfo(JsonObject);
+      char *btmNeighborList(uint8_t *report, size_t report_len);
+      friend void neighbor_report_recv_cb(void *ctx, const uint8_t *report, size_t report_len);
     };
 
     Wifi *useWifi();

@@ -1,9 +1,11 @@
-#include <esp_task_wdt.h>
-
+#include "esp32m/device.hpp"
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
-#include "esp32m/device.hpp"
 #include "esp32m/net/ota.hpp"
+#include "esp32m/sleep.hpp"
+
+#include <esp_task_wdt.h>
+#include <math.h>
 
 namespace esp32m {
   const char *EventSensor::NAME = "sensor";
@@ -33,28 +35,38 @@ namespace esp32m {
   }
 
   void Device::sensor(const char *sensor, const float value) {
-    EventSensor::publish(*this, sensor, value, json::null<JsonObjectConst>());
+    if (!isnan(value))
+      EventSensor::publish(*this, sensor, value, json::null<JsonObjectConst>());
   };
 
   void Device::sensor(const char *sensor, const float value,
                       const JsonObjectConst props) {
-    EventSensor::publish(*this, sensor, value, props);
+    if (!isnan(value))
+      EventSensor::publish(*this, sensor, value, props);
   };
 
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;
+    static Sleeper sleeper;
     static EventPollSensors ev;
     if (!task)
       xTaskCreate(
           [](void *) {
+            EventManager::instance().subscribe([](Event &ev) {
+              if (EventInited::is(ev) && task)
+                xTaskNotifyGive(task);
+            });
             esp_task_wdt_add(NULL);
             for (;;) {
               esp_task_wdt_reset();
               if (App::initialized()) {
-                locks::Guard guard(net::ota::Name);
-                ev.publish();
-              }
-              vTaskDelay(1000 / portTICK_PERIOD_MS);
+                {
+                  locks::Guard guard(net::ota::Name);
+                  ev.publish();
+                }
+                sleeper.sleep();
+              } else
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
             }
           },
           "m/sensors", 4096, nullptr, 1, &task);

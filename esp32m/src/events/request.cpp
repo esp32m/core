@@ -66,15 +66,25 @@ namespace esp32m {
   }
 
   void Request::respond(const char *source, esp_err_t error) {
-    json::Value v(error);
-    respondImpl(source, v.variant(), true);
-    _handled = true;
+    if (error == ESP_OK)
+      respond(source, json::null<JsonVariantConst>(), false);
+    else {
+      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1));
+      doc.set(error);
+      respondImpl(source, doc, true);
+      _handled = true;
+    }
   }
 
   void Request::respond(esp_err_t error) {
-    json::Value v(error);
-    respondImpl(target(), v.variant(), true);
-    _handled = true;
+    if (error == ESP_OK)
+      respond();
+    else {
+      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1));
+      doc.set(error);
+      respondImpl(target(), doc, true);
+      _handled = true;
+    }
   }
 
   Response *Request::makeResponse() {

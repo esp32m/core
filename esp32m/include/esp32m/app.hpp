@@ -10,10 +10,9 @@
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
-
+  class App;
   class EventInit : public Event {
    public:
-    EventInit(int level) : Event(NAME), _level(level) {}
     int level() const {
       return _level;
     }
@@ -22,11 +21,46 @@ namespace esp32m {
     }
 
    private:
+    EventInit(int level) : Event(NAME), _level(level) {}
     int _level;
+    static const char *NAME;
+    friend class App;
+  };
+
+  class EventInited : public Event {
+   public:
+    static bool is(Event &ev) {
+      return ev.is(NAME);
+    }
+
+   private:
+    EventInited() : Event(NAME) {}
+    static const char *NAME;
+    friend class App;
+  };
+
+  enum class DoneReason { Shutdown, Restart, LightSleep, DeepSleep };
+  class EventDone : public Event {
+   public:
+    static bool is(Event &ev, DoneReason *reason) {
+      if (!ev.is(NAME))
+        return false;
+      if (reason)
+        *reason = ((EventDone&)ev)._reason;
+      return true;
+    }
+    static void publish(DoneReason reason);
+    DoneReason reason() const {
+      return _reason;
+    }
+
+   private:
+    EventDone(DoneReason reason) : Event(NAME), _reason(reason) {}
+    DoneReason _reason;
     static const char *NAME;
   };
 
-  class Stateful : public virtual INamed, public virtual log::Loggable {
+  class Stateful : public virtual log::Loggable {
    public:
     Stateful(const Stateful &) = delete;
     virtual const char *stateName() const {
@@ -84,6 +118,7 @@ namespace esp32m {
     App(const App &) = delete;
     static App &instance();
     static bool initialized();
+    static void restart();
     Config *config() const {
       return _config.get();
     }

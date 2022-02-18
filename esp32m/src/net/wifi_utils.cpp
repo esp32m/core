@@ -20,9 +20,9 @@ namespace esp32m {
   }
 
   void ip2json(JsonObject json, const esp_netif_ip_info_t &source) {
-    json::toJson(json, "ip", source.ip);
-    json::toJson(json, "gw", source.gw);
-    json::toJson(json, "mask", source.netmask);
+    json::to(json, "ip", source.ip);
+    json::to(json, "gw", source.gw);
+    json::to(json, "mask", source.netmask);
   }
 
   void json2ip(JsonObjectConst json, esp_netif_ip_info_t &target,

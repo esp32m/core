@@ -1,7 +1,8 @@
-#include <esp_heap_caps.h>
-
 #include "esp32m/json.hpp"
 #include "esp32m/logging.hpp"
+
+#include <esp_heap_caps.h>
+#include <math.h>
 
 namespace esp32m {
   namespace json {
@@ -121,7 +122,7 @@ namespace esp32m {
 #endif
 
     void compareSet(ip_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isNull())
+      if (v.isUnbound() || v.isNull())
         return;
       const char *str = v.as<const char *>();
       if (!str)
@@ -134,7 +135,7 @@ namespace esp32m {
     }
 
     void compareSet(ip4_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isNull())
+      if (v.isUnbound() || v.isNull())
         return;
       const char *str = v.as<const char *>();
       if (!str)
@@ -147,7 +148,7 @@ namespace esp32m {
     }
 
     void compareSet(esp_ip4_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isNull())
+      if (v.isUnbound() || v.isNull())
         return;
       const char *str = v.as<const char *>();
       if (!str)
@@ -159,37 +160,34 @@ namespace esp32m {
       changed = true;
     }
 
-    void toJson(JsonObject target, const char *index,
-                const esp_ip4_addr_t &value) {
+    void to(JsonObject target, const char *key, const esp_ip4_addr_t &value) {
       if (!value.addr)
         return;
       char buf[16];
       esp_ip4addr_ntoa(&value, buf, sizeof(buf));
-      target[index] = buf;
+      target[key] = buf;
     }
 
-    void toJson(JsonVariant target, const ip_addr_t &value) {
+    void to(JsonObject target, const char *key, const ip_addr_t &value) {
       if (ip_addr_isany(&value))
         return;
       char buf[40];
       ipaddr_ntoa_r(&value, buf, sizeof(buf));
-      target.set(buf);
+      target[key] = buf;
     }
 
-    void toJson(JsonVariant target, const ip4_addr_t &value) {
+    void to(JsonVariant target, const char *key,const ip4_addr_t &value) {
       if (ip4_addr_isany_val(value))
         return;
       char buf[16];
       ip4addr_ntoa_r(&value, buf, sizeof(buf));
-      target.set(buf);
+      target[key]=buf;
     }
 
-    void toJson(JsonVariant target, const esp_ip4_addr_t &value) {
-      if (!value.addr)
+    void to(JsonObject target, const char *key, const float value) {
+      if (isnan(value))
         return;
-      char buf[16];
-      esp_ip4addr_ntoa(&value, buf, sizeof(buf));
-      target.set(buf);
+      target[key] = value;
     }
 
     void compareDup(char *&target, JsonVariantConst v, const char *def,
