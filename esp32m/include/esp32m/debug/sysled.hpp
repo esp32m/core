@@ -20,6 +20,6 @@ namespace esp32m {
       void run();
       void blink(int count);
     };
-    Sysled* useSysled();
+    Sysled *useSysled();
   }  // namespace debug
 }  // namespace esp32m

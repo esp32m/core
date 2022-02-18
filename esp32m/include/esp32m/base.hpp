@@ -17,7 +17,7 @@ namespace esp32m {
   void delayUs(uint32_t us);
   long map(long x, long in_min, long in_max, long out_min, long out_max);
 #endif
-  
+
   const char *makeTaskName(const char *name);
 
   class INamed {

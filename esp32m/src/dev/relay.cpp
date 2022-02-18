@@ -98,7 +98,9 @@ namespace esp32m {
       return names[si];
     }
 
-      const char* Relay::stateName(){ return toString(refreshState()); }
+    const char *Relay::stateName() {
+      return toString(refreshState());
+    }
 
     Relay::State getStateFromPins(io::IPin *on, io::IPin *off, bool levelOn,
                                   bool levelOff) {

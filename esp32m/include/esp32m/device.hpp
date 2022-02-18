@@ -59,7 +59,7 @@ namespace esp32m {
     void setReinitDelay(unsigned int delay) {
       _reinitDelay = delay;
     }
-    
+
     /* these must be called only from within pollSensors() */
     void sensor(const char *sensor, const float value);
     void sensor(const char *sensor, const float value,

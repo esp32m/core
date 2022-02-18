@@ -105,8 +105,8 @@ namespace esp32m {
       i2c_master_write_byte(cmd, (_addr << 1) | 1, true);
       i2c_master_read(cmd, (uint8_t *)in_data, in_size, I2C_MASTER_LAST_NACK);
       i2c_master_stop(cmd);
-      res =
-          ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
+      res = ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(
+          _port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
     }
     _err = res;
@@ -130,8 +130,8 @@ namespace esp32m {
       if (out_data && out_size)
         i2c_master_write(cmd, (uint8_t *)out_data, out_size, true);
       i2c_master_stop(cmd);
-      res =
-          ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(_port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
+      res = ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(
+          _port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
     }
     _err = res;

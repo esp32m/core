@@ -9,7 +9,7 @@
 namespace esp32m {
   namespace dev {
 
-    class Yw801r: public Device {
+    class Yw801r : public Device {
      public:
       Yw801r(uint8_t addr = 192);
       Yw801r(const Yw801r &) = delete;
@@ -28,6 +28,6 @@ namespace esp32m {
       unsigned long _stamp = 0;
     };
 
-    Yw801r* useYw801r(uint8_t addr = 192);
+    Yw801r *useYw801r(uint8_t addr = 192);
   }  // namespace dev
 }  // namespace esp32m

@@ -176,12 +176,12 @@ namespace esp32m {
       target[key] = buf;
     }
 
-    void to(JsonVariant target, const char *key,const ip4_addr_t &value) {
+    void to(JsonVariant target, const char *key, const ip4_addr_t &value) {
       if (ip4_addr_isany_val(value))
         return;
       char buf[16];
       ip4addr_ntoa_r(&value, buf, sizeof(buf));
-      target[key]=buf;
+      target[key] = buf;
     }
 
     void to(JsonObject target, const char *key, const float value) {

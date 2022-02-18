@@ -4,7 +4,6 @@
 #include <esp_netif.h>
 #include <esp_task_wdt.h>
 
-
 namespace esp32m {
 
 #define DNS_LEN 512

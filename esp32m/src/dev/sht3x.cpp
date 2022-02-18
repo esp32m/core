@@ -54,8 +54,7 @@ namespace esp32m {
       return err;
     }
 
-    esp_err_t Core::init(I2C *i2c, io::IPin *resetPin,
-                         const char *name) {
+    esp_err_t Core::init(I2C *i2c, io::IPin *resetPin, const char *name) {
       _i2c.reset(i2c);
       _name = name ? name : "SHT3X";
       _i2c->setEndianness(Endian::Little);
@@ -154,7 +153,8 @@ namespace esp32m {
 
   namespace dev {
 
-    Sht3x::Sht3x(I2C *i2c, io::IPin *resetPin, const char *name) : Device(Flags::HasSensors) {
+    Sht3x::Sht3x(I2C *i2c, io::IPin *resetPin, const char *name)
+        : Device(Flags::HasSensors) {
       sht3x::Core::init(i2c, resetPin, name);
     }
 

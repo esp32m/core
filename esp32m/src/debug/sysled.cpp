@@ -42,10 +42,10 @@ namespace esp32m {
         delay(2000);
       }
     }
-    
-    Sysled* useSysled() {
-        static Sysled i;
-        return &i;
+
+    Sysled *useSysled() {
+      static Sysled i;
+      return &i;
     }
 
   }  // namespace debug

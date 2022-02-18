@@ -54,14 +54,14 @@ namespace esp32m {
               read(Register::ImpActiveEnergy, em::Indicator::ImpActiveEnergy));
           ESP_CHECK_RETURN(
               read(Register::ExpActiveEnergy, em::Indicator::ExpActiveEnergy));
-          ESP_CHECK_RETURN(
-              read(Register::ImpReactiveEnergy, em::Indicator::ImpReactiveEnergy));
-          ESP_CHECK_RETURN(
-              read(Register::ExpReactiveEnergy, em::Indicator::ExpReactiveEnergy));
-          ESP_CHECK_RETURN(
-              read(Register::TotalActiveEnergy, em::Indicator::TotalActiveEnergy));
-          ESP_CHECK_RETURN(
-              read(Register::TotalReactiveEnergy, em::Indicator::TotalReactiveEnergy));
+          ESP_CHECK_RETURN(read(Register::ImpReactiveEnergy,
+                                em::Indicator::ImpReactiveEnergy));
+          ESP_CHECK_RETURN(read(Register::ExpReactiveEnergy,
+                                em::Indicator::ExpReactiveEnergy));
+          ESP_CHECK_RETURN(read(Register::TotalActiveEnergy,
+                                em::Indicator::TotalActiveEnergy));
+          ESP_CHECK_RETURN(read(Register::TotalReactiveEnergy,
+                                em::Indicator::TotalReactiveEnergy));
         }
         return ESP_OK;
       }

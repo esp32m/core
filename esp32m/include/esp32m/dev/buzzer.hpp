@@ -1,8 +1,8 @@
 #pragma once
 
 #include "esp32m/device.hpp"
-#include "esp32m/io/pins.hpp"
 #include "esp32m/events/request.hpp"
+#include "esp32m/io/pins.hpp"
 
 #include <hal/gpio_types.h>
 
@@ -25,8 +25,8 @@ namespace esp32m {
       io::pin::ILEDC *_ledc;
     };
 
-    Buzzer* useBuzzer(gpio_num_t pin);
-    Buzzer* useBuzzer(io::IPin *pin);
+    Buzzer *useBuzzer(gpio_num_t pin);
+    Buzzer *useBuzzer(io::IPin *pin);
 
   }  // namespace dev
 }  // namespace esp32m

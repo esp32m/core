@@ -39,7 +39,7 @@ namespace esp32m {
 
   class Sleeper {
    public:
-    Sleeper(int delay=1000, int light=30000, int deep=60000) {
+    Sleeper(int delay = 1000, int light = 30000, int deep = 60000) {
       configure(delay, light, deep);
     }
     void configure(int delay, int light, int deep) {

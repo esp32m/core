@@ -3,8 +3,8 @@
 #include <ArduinoJson.h>
 #include <math.h>
 #include <memory>
-#include "hal/spi_types.h"
 #include "driver/spi_master.h"
+#include "hal/spi_types.h"
 
 #include "esp32m/device.hpp"
 #include "esp32m/io/pins.hpp"
@@ -28,11 +28,12 @@ namespace esp32m {
      private:
       const char *_name;
       spi_host_device_t _host;
-      spi_device_handle_t _spi=nullptr;
+      spi_device_handle_t _spi = nullptr;
       float _value = NAN;
       unsigned long _stamp = 0;
     };
 
-    Max6675 *useMax6675(const char *name=nullptr, spi_host_device_t host=VSPI_HOST);
+    Max6675 *useMax6675(const char *name = nullptr,
+                        spi_host_device_t host = VSPI_HOST);
   }  // namespace dev
 }  // namespace esp32m

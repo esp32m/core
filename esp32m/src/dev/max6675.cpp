@@ -29,7 +29,7 @@ namespace esp32m {
         default:
           return false;
       }
-      buscfg.mosi_io_num = -1; // MAX6775 doesn't have slave input
+      buscfg.mosi_io_num = -1;  // MAX6775 doesn't have slave input
       buscfg.quadwp_io_num = -1;
       buscfg.quadhd_io_num = -1;
       buscfg.max_transfer_sz = (4 * 8);
@@ -77,7 +77,7 @@ namespace esp32m {
           res >>= 3;
           _value = res * 0.25;
           _stamp = millis();
-        } // else logW("sensor is not connected");
+        }  // else logW("sensor is not connected");
         sensor("temperature", _value);
       }
       return true;

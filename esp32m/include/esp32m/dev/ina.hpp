@@ -114,7 +114,7 @@ namespace esp32m {
 
       esp_err_t sync(bool force = false);
       esp_err_t reset();
-      
+
       bool is3221() const;
 
       Mode getMode() const;

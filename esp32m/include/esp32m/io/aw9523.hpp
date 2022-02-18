@@ -5,11 +5,7 @@
 
 namespace esp32m {
   namespace aw9523 {
-    enum class PinMode{
-      Input,
-      Output,
-      DAC
-    };
+    enum class PinMode { Input, Output, DAC };
   }
   namespace io {
     class Aw9523 : public pin::ITxFinalizer, public IPins {

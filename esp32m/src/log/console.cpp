@@ -1,7 +1,7 @@
 #include "esp32m/log/console.hpp"
 
-#include <string.h>
 #include <esp32/rom/ets_sys.h>
+#include <string.h>
 
 namespace esp32m {
 

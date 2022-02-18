@@ -1,6 +1,7 @@
-#include "esp32m/base.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/base.hpp"
 
+#include <esp32/rom/ets_sys.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -10,8 +11,6 @@
 #include <malloc.h>
 #include <string.h>
 #include <time.h>
-#include <esp32/rom/ets_sys.h>
-
 
 namespace esp32m {
   namespace log {

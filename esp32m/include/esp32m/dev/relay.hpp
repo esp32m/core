@@ -41,7 +41,7 @@ namespace esp32m {
       State state() {
         return refreshState();
       }
-      const char* stateName();
+      const char *stateName();
       esp_err_t turn(bool on);
       esp_err_t turn(const char *action);
       void setPersistent(bool p) {

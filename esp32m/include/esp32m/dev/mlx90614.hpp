@@ -45,12 +45,12 @@ namespace esp32m {
 
      protected:
       std::unique_ptr<I2C> _i2c;
-      esp_err_t readTemp(Register reg, float& temp);
+      esp_err_t readTemp(Register reg, float &temp);
 
      private:
       const char *_name;
       float _lsbI = 0, _lsbP = 0;
-      esp_err_t read(Register reg, uint16_t& value);
+      esp_err_t read(Register reg, uint16_t &value);
       esp_err_t write(Register reg, uint16_t value);
     };
 

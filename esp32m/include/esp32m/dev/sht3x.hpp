@@ -47,7 +47,8 @@ namespace esp32m {
       std::unique_ptr<I2C> _i2c;
       const char *_name;
       io::IPin *_reset = nullptr;
-      esp_err_t init(I2C *i2c, io::IPin *resetPin=nullptr, const char *name = nullptr);
+      esp_err_t init(I2C *i2c, io::IPin *resetPin = nullptr,
+                     const char *name = nullptr);
 
      private:
       Mode _mode;
@@ -64,7 +65,7 @@ namespace esp32m {
   namespace dev {
     class Sht3x : public virtual Device, public virtual sht3x::Core {
      public:
-      Sht3x(I2C *i2c, io::IPin *resetPin=nullptr, const char *name = nullptr);
+      Sht3x(I2C *i2c, io::IPin *resetPin = nullptr, const char *name = nullptr);
       Sht3x(const Sht3x &) = delete;
 
      protected:
@@ -76,7 +77,7 @@ namespace esp32m {
       uint64_t _stamp = 0;
     };
 
-    Sht3x *useSht3x(uint8_t addr = sht3x::DefaultAddress, io::IPin *resetPin=nullptr,
-                    const char *name = nullptr);
+    Sht3x *useSht3x(uint8_t addr = sht3x::DefaultAddress,
+                    io::IPin *resetPin = nullptr, const char *name = nullptr);
   }  // namespace dev
 }  // namespace esp32m

@@ -1,6 +1,6 @@
 #include "esp32m/sleep.hpp"
-#include "esp32m/base.hpp"
 #include "esp32m/app.hpp"
+#include "esp32m/base.hpp"
 
 #include <esp_sleep.h>
 

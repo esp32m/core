@@ -86,13 +86,13 @@ namespace esp32m {
       int id2num(int id);
 
      protected:
-      int _pinBase=0, _pinCount=0;
+      int _pinBase = 0, _pinCount = 0;
       static int _reservedIds;
       static std::map<int, IPin *> _pins;
       static std::mutex _pinsMutex;
       IPins(){};
       void init(int pinCount);
-      virtual IPin *newPin(int id)=0;
+      virtual IPin *newPin(int id) = 0;
       static esp_err_t add(IPin *pin);
     };
 

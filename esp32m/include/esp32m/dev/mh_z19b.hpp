@@ -1,7 +1,7 @@
 #pragma once
 
-#include <math.h>
 #include <driver/uart.h>
+#include <math.h>
 
 #include "esp32m/device.hpp"
 

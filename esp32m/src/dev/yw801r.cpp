@@ -39,12 +39,13 @@ namespace esp32m {
       sensor("pv", _pv);
       _stamp = millis();
       delay(100);
-      if (mb.request(_addr, modbus::Command::ReadHolding, 63, 1, &_ad) == ESP_OK)
+      if (mb.request(_addr, modbus::Command::ReadHolding, 63, 1, &_ad) ==
+          ESP_OK)
         sensor("ad", _ad);
       return true;
     }
 
-    Yw801r* useYw801r(uint8_t addr) {
+    Yw801r *useYw801r(uint8_t addr) {
       return new Yw801r(addr);
     }
 

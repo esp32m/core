@@ -5,8 +5,8 @@
 
 #include <driver/gpio.h>
 #include <driver/rmt.h>
-#include <soc/gpio_struct.h>
 #include <soc/gpio_periph.h>
+#include <soc/gpio_struct.h>
 #include <string.h>
 
 namespace esp32m {

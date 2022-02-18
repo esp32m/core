@@ -11,10 +11,11 @@ namespace esp32m {
   namespace dev {
 
     /**
-     * This for 5V pressure sensor like this one: https://aliexpress.com/item/1669537885.html
-     * The default settings are for 1.2MPa with 10KOhm/10KOhm voltage divider 
-     * Slope setting: 0.5MPa - 1.6, 1.2MPa - 2/3, 5MPa - 0.16
-     * Vdiv setting should match voltage drop on voltage divider
+     * This for 5V pressure sensor like this one:
+     * https://aliexpress.com/item/1669537885.html The default settings are
+     * for 1.2MPa with 10KOhm/10KOhm voltage divider Slope setting: 0.5MPa
+     * - 1.6, 1.2MPa - 2/3, 5MPa - 0.16 Vdiv setting should match voltage drop
+     * on voltage divider
      */
     class PressureSensor : public Device {
      public:
@@ -50,8 +51,8 @@ namespace esp32m {
       float _vdiv = 2;  // voltage divider 2x
       float _slope = 2.0 / 3.0;
       int _divisor = 0;
-      int _raw=0;
-      uint32_t _mv=0;
+      int _raw = 0;
+      uint32_t _mv = 0;
       unsigned long _stamp = 0;
     };
 

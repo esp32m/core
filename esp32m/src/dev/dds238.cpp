@@ -8,7 +8,7 @@ namespace esp32m {
     Dds238::Dds238(uint8_t addr) : Device(Flags::HasSensors) {
       _addr = addr;
     }
-    
+
     float readFloat(uint16_t *ptr) {
       return (float)((ptr[0] << 16) | ptr[1]) / 100.0;
     }

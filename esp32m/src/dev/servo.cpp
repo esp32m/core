@@ -109,8 +109,9 @@ namespace esp32m {
     }
 
     int Servo::ticksToUs(int duty) {
-      return (int) ((uint64_t)duty*1000000/((uint64_t)_freq*(1 << _timerRes)));
-      //return (int)((float)ticks * ((float)_freq / (1 << _timerRes)));
+      return (int)((uint64_t)duty * 1000000 /
+                   ((uint64_t)_freq * (1 << _timerRes)));
+      // return (int)((float)ticks * ((float)_freq / (1 << _timerRes)));
     }
 
     Servo *useServo(const char *name, io::IPin *pin) {

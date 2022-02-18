@@ -151,7 +151,7 @@ namespace esp32m {
                 _pendingResponse->setData(doc);
                 _pendingResponse->publish();
               } else if (_pendingResponse->is("request") && _cmd && _regc) {
-                void *buf = malloc(_regc*2);
+                void *buf = malloc(_regc * 2);
                 err = mb.request(_addr, _cmd, _regs, _regc, buf);
                 DynamicJsonDocument *doc = new DynamicJsonDocument(
                     JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(_regc));

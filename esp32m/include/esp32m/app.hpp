@@ -46,7 +46,7 @@ namespace esp32m {
       if (!ev.is(NAME))
         return false;
       if (reason)
-        *reason = ((EventDone&)ev)._reason;
+        *reason = ((EventDone &)ev)._reason;
       return true;
     }
     static void publish(DoneReason reason);

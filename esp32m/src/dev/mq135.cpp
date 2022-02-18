@@ -5,7 +5,8 @@
 namespace esp32m {
   namespace dev {
 
-    Mq135::Mq135(io::IPin *pin, const char *name) : Device(Flags::HasSensors), _name(name) {
+    Mq135::Mq135(io::IPin *pin, const char *name)
+        : Device(Flags::HasSensors), _name(name) {
       _adc = pin ? pin->adc() : nullptr;
     }
 
@@ -39,7 +40,7 @@ namespace esp32m {
       return true;
     }
 
-    Mq135 *useMq135(io::IPin *pin, const char* name) {
+    Mq135 *useMq135(io::IPin *pin, const char *name) {
       return new Mq135(pin, name);
     }
   }  // namespace dev
