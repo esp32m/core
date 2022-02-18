@@ -188,9 +188,8 @@ namespace esp32m {
       else {
         Scratchpad scratchpad;
         ESP_CHECK_RETURN(readScratchpad(probe, scratchpad));
-        Resolution resolution =
-            (Resolution)(((scratchpad.configuration >> 5) & 0x03) +
-                         Resolution::R9b);
+        Resolution resolution = (Resolution)(
+            ((scratchpad.configuration >> 5) & 0x03) + Resolution::R9b);
         if (!validate(resolution))
           return ESP_ERR_INVALID_RESPONSE;
       }
