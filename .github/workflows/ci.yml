@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   clang-format:
     name: Clang-Format
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Install
         run: sudo apt-get install -y clang-format
@@ -36,6 +36,7 @@ jobs:
   
   build-basic-example:
     name: Build example
+    runs-on: ubuntu-latest
     needs: esp-idf
     steps:
       - name: Checkout
