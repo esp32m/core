@@ -108,7 +108,8 @@ namespace esp32m {
     }
 
     esp_err_t CD74HC4067::init() {
-      ESP_CHECK_RETURN(_en->setDirection(GPIO_MODE_OUTPUT));
+      if (_en)
+        ESP_CHECK_RETURN(_en->setDirection(GPIO_MODE_OUTPUT));
       ESP_CHECK_RETURN(_s0->setDirection(GPIO_MODE_OUTPUT));
       ESP_CHECK_RETURN(_s1->setDirection(GPIO_MODE_OUTPUT));
       ESP_CHECK_RETURN(_s2->setDirection(GPIO_MODE_OUTPUT));
@@ -131,7 +132,8 @@ namespace esp32m {
       ESP_CHECK_RETURN(_s1->digitalWrite((c & 0x2) != 0));
       ESP_CHECK_RETURN(_s2->digitalWrite((c & 0x4) != 0));
       ESP_CHECK_RETURN(_s3->digitalWrite((c & 0x8) != 0));
-      ESP_CHECK_RETURN(_en->digitalWrite(false));
+      if (_en)
+        ESP_CHECK_RETURN(_en->digitalWrite(false));
       return err;
     }
 
