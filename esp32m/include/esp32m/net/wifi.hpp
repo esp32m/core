@@ -25,7 +25,7 @@ namespace esp32m {
       bool is(wifi_event_t event) const;
 
       static bool is(Event &ev, WifiEvent **r);
-      static bool is(Event &ev, wifi_event_t event, WifiEvent **r);
+      static bool is(Event &ev, wifi_event_t event, WifiEvent **r = nullptr);
 
       static void publish(wifi_event_t event, void *data);
 
@@ -136,9 +136,21 @@ namespace esp32m {
       const esp_netif_ip_info_t &staIp() const {
         return _staIp;
       }
+      void configureAp(const esp_netif_ip_info_t &ip) {
+        _apIp = ip;
+      }
+      void configureSta(const esp_netif_ip_info_t &ip) {
+        _staIp = ip;
+      }
+      void configureDns(const esp_ip4_addr_t &dns1,
+                        const esp_ip4_addr_t &dns2) {
+        _dns1.type = ESP_IPADDR_TYPE_V4;
+        _dns1.u_addr.ip4.addr = dns1.addr;
+        _dns2.type = ESP_IPADDR_TYPE_V4;
+        _dns2.u_addr.ip4.addr = dns2.addr;
+      }
 
      protected:
-      // void setState(const JsonVariantConst cfg) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;

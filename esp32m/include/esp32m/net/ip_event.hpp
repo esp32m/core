@@ -17,7 +17,7 @@ namespace esp32m {
     bool is(ip_event_t event) const;
 
     static bool is(Event &ev, IpEvent **r);
-    static bool is(Event &ev, ip_event_t event, IpEvent **r);
+    static bool is(Event &ev, ip_event_t event, IpEvent **r = nullptr);
 
     static void publish(ip_event_t event, void *data);
 

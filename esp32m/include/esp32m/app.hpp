@@ -134,6 +134,9 @@ namespace esp32m {
     uint32_t wdtTimeout() const {
       return _wdtTimeout;
     }
+    void setName(const char *name) {
+      _name = name;
+    }
 
    protected:
     DynamicJsonDocument *getState(const JsonVariantConst args) override;
