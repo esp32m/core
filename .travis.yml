@@ -1,0 +1,41 @@
+os: linux
+dist: xenial
+language: shell
+
+addons:
+  apt:
+    packages:
+    - git
+    - wget
+    - libncurses-dev
+    - flex
+    - bison
+    - gperf
+    - python
+    - python-pip
+    - python-setuptools
+    - python-serial
+    - python-click
+    - python-cryptography
+    - python-future
+    - python-pyparsing
+    - python-pyelftools
+    - cmake
+    - ninja-build
+    - ccache
+
+install:
+  - mkdir ~/esp32m
+  - cd ~/esp32m
+  - git clone --recursive https://github.com/espressif/esp-idf.git
+  - cd ~/esp32m/esp-idf
+  - ./install.sh
+  - . ~/esp32m/esp-idf/export.sh
+
+script:
+  - cd $TRAVIS_BUILD_DIR/examples/basic
+  - python ../../esp32m.py build
+
+branches:
+  only:
+  - master

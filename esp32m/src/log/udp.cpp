@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "esp32m/events.hpp"
+#include "esp32m/app.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/wifi.hpp"
@@ -116,8 +117,7 @@ namespace esp32m {
           if (!neg)
             timeinfo.tm_year = 0;
           strftime(strftime_buf, sizeof(strftime_buf), "%FT%T", &timeinfo);
-          const char *hostname = "esp32m";
-          tcpip_adapter_get_hostname(TCPIP_ADAPTER_IF_AP, &hostname);
+          const char *hostname = App::instance().name();
           const char *name = message->name();
           auto ms = 1 /* < */ + 3 /* PRIVAL */ + 1 /* > */ + 1 /* version */ +
                     1 /* SP */ + strlen(strftime_buf) + 1 /* . */ + 4 /* MS */ +

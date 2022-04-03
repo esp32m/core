@@ -4,6 +4,8 @@
 #include <esp_spi_flash.h>
 #include <esp_spiffs.h>
 #include <esp_system.h>
+#include <esp_chip_info.h>
+#include <esp_mac.h>
 #include <math.h>
 #include <soc/rtc.h>
 #include <soc/rtc_cntl_reg.h>

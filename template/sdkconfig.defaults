@@ -16,7 +16,7 @@ CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
 CONFIG_LWIP_MAX_SOCKETS=16
 
 # this must be enabled if we want OTA to function over plain HTTP
-CONFIG_OTA_ALLOW_HTTP=y
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
 # use custom partition table with 2 OTA partitions
 CONFIG_PARTITION_TABLE_CUSTOM=y
 

@@ -263,7 +263,7 @@ namespace esp32m {
                         .channel = c.sd.channel,
                         .sigmadelta_duty = c.sd.duty,
                         .sigmadelta_prescale = c.sd.prescale,
-                        .sigmadelta_gpio = (uint8_t)pin,
+                        .sigmadelta_gpio = pin,
                     };
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(sigmadelta_config(&sd));
                     if (!err)

@@ -8,11 +8,14 @@
 #include "esp32m/net/wifi_utils.hpp"
 
 #include <dhcpserver/dhcpserver_options.h>
+#include <dhcpserver/dhcpserver.h>
 #include <esp_mbo.h>
 #include <esp_netif.h>
+#include <esp_netif_types.h>
 #include <esp_rrm.h>
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
+#include <esp_mac.h>
 #include <lwip/apps/sntp.h>
 #include <lwip/dns.h>
 #include <mdns.h>
@@ -735,7 +738,7 @@ namespace esp32m {
                   esp_netif_set_ip_info(_ifsta, &_staIp)) != ESP_OK)
             return false;
         } else if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcpc_start(
-                       _ifsta)) == ESP_ERR_TCPIP_ADAPTER_DHCPC_START_FAILED)
+                       _ifsta)) == ESP_ERR_ESP_NETIF_DHCPC_START_FAILED)
           return false;
         logI("connecting to %s [%s]...", ssid, bssidStr);
       }
@@ -1233,7 +1236,7 @@ namespace esp32m {
     void Wifi::apInfo(JsonObject info) {
       auto infoAp = info.createNestedObject("ap");
       const char *hostname = NULL;
-      if (!tcpip_adapter_get_hostname(TCPIP_ADAPTER_IF_AP, &hostname))
+      if (!esp_netif_get_hostname(_ifap, &hostname))
         infoAp["ssid"] = (char *)hostname;
       uint8_t mac[6];
       char sbssid[18] = {0};
