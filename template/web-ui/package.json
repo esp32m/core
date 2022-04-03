@@ -15,7 +15,7 @@
   "dependencies": {
     "@emotion/react": "^11.8.2",
     "@emotion/styled": "^11.8.1",
-    "@esp32m/ui": "^0.2.0",
+    "@esp32m/ui": "^0.3.0",
     "@mui/material": "^5.5.3",
     "lodash": "^4.17.21",
     "react": "^18.0.0",
