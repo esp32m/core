@@ -4,7 +4,7 @@
 #include "esp32m/logging.hpp"
 
 #include <driver/ledc.h>
-#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 #include <esp_bit_defs.h>
 #include <esp_err.h>
 #include <hal/adc_types.h>
@@ -56,9 +56,9 @@ namespace esp32m {
           return Type::Pcnt;
         };
         virtual esp_err_t read(int &value, bool reset = false) = 0;
-        virtual esp_err_t setLimits(int16_t min, int16_t max) = 0;
-        virtual esp_err_t setMode(pcnt_count_mode_t pos,
-                                  pcnt_count_mode_t neg) = 0;
+        // virtual esp_err_t setLimits(int16_t min, int16_t max) = 0;
+        virtual esp_err_t setMode(pcnt_channel_edge_action_t pos,
+                                  pcnt_channel_edge_action_t neg) = 0;
         virtual esp_err_t setFilter(uint16_t filter) = 0;
       };
 

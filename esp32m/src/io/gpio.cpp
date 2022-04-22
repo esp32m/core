@@ -6,7 +6,7 @@
 #include <driver/adc.h>
 #include <driver/dac.h>
 #include <driver/gpio.h>
-#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 #include <esp_adc_cal.h>
 #include <sdkconfig.h>
 #include <soc/sens_reg.h>
@@ -264,77 +264,69 @@ namespace esp32m {
       dac_channel_t _channel;
     };
 
-    uint8_t _pcntUnits = 0;
-
     class Pcnt : public io::pin::IPcnt {
      public:
       Pcnt(Pin *pin) : _pin(pin) {
-        memset(&_config, 0, sizeof(pcnt_config_t));
-        _config.pulse_gpio_num = _pin->num();
-        _config.ctrl_gpio_num = -1;
-        _config.neg_mode = PCNT_COUNT_INC;
-        _config.counter_h_lim = 32767;
-        bool foundFree = false;
-        for (auto i = 0; i < 8; i++)
-          if ((_pcntUnits & (1 << i)) == 0) {
-            _config.unit = (pcnt_unit_t)i;
-            foundFree = true;
-            break;
-          }
-        if (!foundFree)
-          return;
-        _valid = update() == ESP_OK;
-        if (_valid)
-          _pcntUnits |= (1 << _config.unit);
+        _valid = install() == ESP_OK;
       }
       ~Pcnt() override {
-        if (_valid)
-          _pcntUnits &= ~(1 << _config.unit);
+        if (_channel && _unit)
+          pcnt_unit_stop(_unit);
+        if (_channel) {
+          pcnt_del_channel(_channel);
+          _channel = nullptr;
+        }
+        if (_unit) {
+          pcnt_del_unit(_unit);
+          _unit = nullptr;
+        }
       }
       bool valid() override {
         return _valid;
       }
       esp_err_t read(int &value, bool reset = false) override {
-        int16_t c;
-        ESP_CHECK_RETURN(pcnt_get_counter_value(_config.unit, &c));
+        int c;
+        ESP_CHECK_RETURN(pcnt_unit_get_count(_unit, &c));
         value = c;
         if (reset)
-          ESP_CHECK_RETURN(pcnt_counter_clear(_config.unit));
+          ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
         return ESP_OK;
       }
-      esp_err_t setLimits(int16_t min, int16_t max) override {
-        _config.counter_l_lim = min;
-        _config.counter_h_lim = max;
-        return update();
-      };
-      esp_err_t setMode(pcnt_count_mode_t pos, pcnt_count_mode_t neg) override {
-        _config.pos_mode = pos;
-        _config.neg_mode = neg;
-        return update();
+      /*esp_err_t setLimits(int16_t min, int16_t max) override {
+        return ESP_OK;
+      };*/
+      esp_err_t setMode(pcnt_channel_edge_action_t pos,
+                        pcnt_channel_edge_action_t neg) override {
+        return pcnt_channel_set_edge_action(_channel, pos, neg);
       };
       esp_err_t setFilter(uint16_t filter) override {
-        _filter = filter;
-        return update();
+        pcnt_glitch_filter_config_t filter_config = {
+            .max_glitch_ns = filter,
+        };
+        ESP_CHECK_RETURN(pcnt_unit_set_glitch_filter(_unit, &filter_config));
+        return ESP_OK;
       };
 
      private:
       Pin *_pin;
-      uint16_t _filter = 0;
+      pcnt_unit_handle_t _unit = nullptr;
+      pcnt_channel_handle_t _channel = nullptr;
       bool _valid = false;
-      pcnt_config_t _config;
-      esp_err_t update() {
-        ESP_CHECK_RETURN(pcnt_unit_config(&_config));
-        if (_filter > 0 && _filter < 1024) {
-          ESP_CHECK_RETURN(pcnt_filter_enable(_config.unit));
-          ESP_CHECK_RETURN(pcnt_set_filter_value(_config.unit, _filter));
-        } else {
-          ESP_CHECK_RETURN(pcnt_filter_disable(_config.unit));
-        }
-        ESP_CHECK_RETURN(pcnt_counter_pause(_config.unit));
-        ESP_CHECK_RETURN(pcnt_counter_clear(_config.unit));
-        ESP_CHECK_RETURN(pcnt_counter_resume(_config.unit));
+      esp_err_t install() {
+        pcnt_unit_config_t unit_config = {
+            .low_limit = 0,
+            .high_limit = 32767,
+        };
+        ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &_unit));
+        pcnt_chan_config_t chan_config = {
+            .edge_gpio_num = _pin->num(),
+            .level_gpio_num = -1,
+            .flags = {},
+        };
+        ESP_CHECK_RETURN(pcnt_new_channel(_unit, &chan_config, &_channel));
+        ESP_CHECK_RETURN(pcnt_unit_start(_unit));
         return ESP_OK;
-      }
+      };
     };
 
     struct LedcTimer {
