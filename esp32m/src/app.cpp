@@ -21,14 +21,21 @@ namespace esp32m {
   const char *EventInit::NAME = "init";
   const char *EventInited::NAME = "inited";
   const char *EventDone::NAME = "done";
+  const char *EventPropChanged::NAME = "prop-changed";
   App *_appInstance = nullptr;
 
   const char *Stateful::KeyStateSet = "state-set";
   const char *Stateful::KeyStateGet = "state-get";
+  const char *App::PropName = "app::name";
 
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
     EventManager::instance().publishBackwards(ev);
+  }
+
+  void EventPropChanged::publish(const char *name) {
+    EventPropChanged ev(name);
+    EventManager::instance().publish(ev);
   }
 
   bool Stateful::handleStateRequest(Request &req) {
@@ -119,14 +126,8 @@ namespace esp32m {
     _appInstance->_config.reset(new Config(store));
   }
 
-  App ::App(const char *name, const char *version)
-      : _name(name), _version(version) {
-#ifdef ARDUINO
-#  if !CONFIG_AUTOSTART_ARDUINO
-    initArduino();
-#  endif
-    Serial.begin(115200);
-#else
+  App ::App(const char *name, const char *version) : _version(version) {
+    setName(name);
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
         ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -134,7 +135,6 @@ namespace esp32m {
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(ret);
-#endif
     esp_int_wdt_init();
     esp_task_wdt_init(_wdtTimeout, true);
     logI("starting %s", _version ? _version : "");

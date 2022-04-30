@@ -304,6 +304,8 @@ namespace esp32m {
       }
     } while (ret != 0);
     fcntl(_sockFd, F_SETFL, O_NONBLOCK);
+    
+    logI("captive portal starting at " IPSTR, IP2STR(&_ip));
 
     for (;;) {
       esp_task_wdt_reset();

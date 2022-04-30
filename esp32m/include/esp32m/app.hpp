@@ -10,7 +10,9 @@
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
+
   class App;
+
   class EventInit : public Event {
    public:
     int level() const {
@@ -57,6 +59,26 @@ namespace esp32m {
    private:
     EventDone(DoneReason reason) : Event(NAME), _reason(reason) {}
     DoneReason _reason;
+    static const char *NAME;
+  };
+  class EventPropChanged : public Event {
+   public:
+    static bool is(Event &ev, const char *name) {
+      if (!ev.is(NAME))
+        return false;
+      auto &e = (EventPropChanged &)ev;
+      if (name && e._name && !strcmp(name, e._name))
+        return true;
+      return false;
+    }
+    static void publish(const char *name);
+    const char *name() const {
+      return _name;
+    }
+
+   private:
+    EventPropChanged(const char *name) : Event(NAME), _name(name) {}
+    const char *_name;
     static const char *NAME;
   };
 
@@ -135,8 +157,22 @@ namespace esp32m {
       return _wdtTimeout;
     }
     void setName(const char *name) {
-      _name = name;
+      if (!name)
+        return;
+      bool fire = false;
+      if (_name) {
+        if (!strcmp(name, _name))
+          return;
+        free(_name);
+        fire = true;
+      }
+      _name = strdup(name);
+      if (fire) {  // don't fire event the first time the name is set
+        logI("my name is now %s", _name);
+        EventPropChanged::publish(PropName);
+      }
     }
+    static const char *PropName;
 
    protected:
     DynamicJsonDocument *getState(const JsonVariantConst args) override;
@@ -144,7 +180,7 @@ namespace esp32m {
     bool handleRequest(Request &req) override;
 
    private:
-    const char *_name;
+    char *_name = nullptr;
     const char *_version;
     uint32_t _sketchSize, _wdtTimeout = 30;
     uint8_t _maxInitLevel = 0;

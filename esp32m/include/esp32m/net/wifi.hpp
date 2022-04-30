@@ -150,6 +150,12 @@ namespace esp32m {
         _dns2.u_addr.ip4.addr = dns2.addr;
       }
 
+      static const uint8_t DiagId = 10;
+      static const uint8_t DiagConnected = 1;
+      static const uint8_t DiagConnecting = 2;
+      static const uint8_t DiagApStarting = 3;
+      static const uint8_t DiagApRunning = 4;
+
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
@@ -178,6 +184,7 @@ namespace esp32m {
       unsigned long _staTimer = 0, _apTimer = 0, _scanStarted = 0;
       int _connectFailures = 0;
       int _maxAps = 5;
+      bool _appNameChanged = true;
       wifi_scan_config_t _scanConfig = {.ssid = nullptr,
                                         .bssid = nullptr,
                                         .channel = 0,
@@ -196,6 +203,7 @@ namespace esp32m {
       void setState(ApState state);
       void updateTimeConfig();
       void checkScan();
+      esp_err_t checkNameChanged();
       void run();
       bool tryConnect(ApInfo *ap, bool noBssid);
       bool tryConnect();

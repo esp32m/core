@@ -1,6 +1,7 @@
 #include "esp32m/ui/httpd.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/net/wifi.hpp"
 #include "esp32m/ui.hpp"
 #include "esp32m/ui/asset.hpp"
 #include "esp32m/version.hpp"
@@ -112,13 +113,16 @@ namespace esp32m {
       }
       if (!found) {
         if (!strcmp(req->uri, "/generate_204")) {
+          char location[32];
+          auto &info = net::Wifi::instance().apIp();
+          sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
           ESP_ERROR_CHECK_WITHOUT_ABORT(
               httpd_resp_set_status(req, "302"));  // 307 ???
           ESP_ERROR_CHECK_WITHOUT_ABORT(
-              httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/cp"));
+              httpd_resp_set_hdr(req, "Location", location));
           // httpd_resp_set_type(req, "text/plain");
           ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
-          // logI("redirecting to captive portal");
+          logI("redirecting to captive portal %s", location);
           return ESP_OK;
         }
         found = def;

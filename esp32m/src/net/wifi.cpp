@@ -7,15 +7,16 @@
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/wifi_utils.hpp"
 
-#include <dhcpserver/dhcpserver_options.h>
 #include <dhcpserver/dhcpserver.h>
+#include <dhcpserver/dhcpserver_options.h>
+#include <esp_mac.h>
 #include <esp_mbo.h>
 #include <esp_netif.h>
 #include <esp_netif_types.h>
 #include <esp_rrm.h>
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
-#include <esp_mac.h>
+#include <lwip/apps/netbiosns.h>
 #include <lwip/apps/sntp.h>
 #include <lwip/dns.h>
 #include <mdns.h>
@@ -37,11 +38,6 @@ namespace esp32m {
     const char *ApStateNames[]{"Initial", "Starting", "Running", "Stopped"};
 
     const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
-
-    const uint8_t DiagId = 10;
-    const uint8_t DiagConnected = 1;
-    const uint8_t DiagConnecting = 2;
-    const uint8_t DiagApRunning = 3;
 
     enum WifiFlags {
       Initialized = BIT0,
@@ -169,8 +165,8 @@ namespace esp32m {
         : Device(Flags::HasSensors),
           _apIp{DefaultApIp, DefaultNetmask, DefaultApIp},
           _ntpHost((char *)DefaultNtpHost) {
-      _scanConfig.scan_time.active.min = 100;
-      _scanConfig.scan_time.active.max = 300;
+      /*_scanConfig.scan_time.active.min = 100;
+      _scanConfig.scan_time.active.max = 300;*/
     }
 
     bool Wifi::handleRequest(Request &req) {
@@ -427,11 +423,13 @@ namespace esp32m {
               }
             } break;
             case WIFI_EVENT_SCAN_DONE:
-              // logI("scan done");
+              logI("scan done");
               xEventGroupSetBits(_eventGroup, WifiFlags::ScanDone);
               break;
             case WIFI_EVENT_AP_START:
               // logI("AP started");
+              // for some reason, AP_STOP/AP_START events are fired multiple
+              // times
               xEventGroupSetBits(_eventGroup, WifiFlags::ApRunning);
               break;
             case WIFI_EVENT_AP_STOP:
@@ -479,9 +477,8 @@ namespace esp32m {
         if (_task)
           xTaskNotifyGive(_task);
       });
-      const char *hostname = App::instance().name();
+      // const char *hostname = App::instance().name();
       esp_netif_init();
-      //        tcpip_adapter_init();
       _eventGroup = xEventGroupCreate();
       ESP_ERROR_CHECK(esp_event_loop_create_default());
       _ifap = esp_netif_create_default_wifi_ap();
@@ -489,8 +486,8 @@ namespace esp32m {
       wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
       ESP_ERROR_CHECK(esp_wifi_init(&cfg));
       ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-      esp_netif_set_hostname(_ifsta, hostname);
-      esp_netif_set_hostname(_ifap, hostname);
+      /*esp_netif_set_hostname(_ifsta, hostname);
+      esp_netif_set_hostname(_ifap, hostname);*/
       ESP_ERROR_CHECK(esp_event_handler_instance_register(
           WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, nullptr, nullptr));
       ESP_ERROR_CHECK(esp_event_handler_instance_register(
@@ -505,9 +502,22 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_max_tx_power(_txp));
       else
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_get_max_tx_power(&_txp));
+      if (_task)
+        xTaskNotifyGive(_task);
+      ap(false);
+    }
+
+    esp_err_t Wifi::checkNameChanged() {
+      if (!(_appNameChanged && isInitialized()))
+        return ESP_OK;
+      _appNameChanged = false;
+      const char *hostname = App::instance().name();
+      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifsta, hostname));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifap, hostname));
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_init()) == ESP_OK)
         ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_hostname_set(hostname));
-      ap(false);
+      netbiosns_set_name(hostname);
+      return ESP_OK;
     }
 
     bool Wifi::isInitialized() const {
@@ -540,6 +550,10 @@ namespace esp32m {
       } else if (EventDone::is(ev, &reason)) {
         stop();
         return true;
+      } else if (EventPropChanged::is(ev, App::PropName)) {
+        _appNameChanged = true;
+        if (_task)
+          xTaskNotifyGive(_task);
       }
       return false;
     }
@@ -782,7 +796,6 @@ namespace esp32m {
     }
 
     bool Wifi::tryConnect() {
-      // return false;
       bool connected = false;
       if (_connect) {
         connected = tryConnect(_connect.get(), false);
@@ -833,6 +846,14 @@ namespace esp32m {
     esp_err_t Wifi::ap(bool enable) {
       wifi_mode_t m = WIFI_MODE_NULL;
       ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
+      if (enable) {
+        /*if (m & WIFI_MODE_AP)
+          return ESP_OK;*/
+        _apTimer = millis();
+        // vTaskDelay(pdMS_TO_TICKS(100)); // allow some time for the
+        // events to fire
+        setState(ApState::Starting);
+      }
       esp_err_t result = mode(m, enable ? (wifi_mode_t)(m | WIFI_MODE_AP)
                                         : (wifi_mode_t)(m & ~WIFI_MODE_AP));
       if (result != ESP_OK)
@@ -874,7 +895,7 @@ namespace esp32m {
           ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_start(_ifap));
         }
         wifi_config_t current_conf;
-        ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_STA, &current_conf));
+        ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_AP, &current_conf));
 
         wifi_config_t conf;
         memset(&conf, 0, sizeof(wifi_config_t));
@@ -883,14 +904,14 @@ namespace esp32m {
         conf.ap.channel = 1;
         conf.ap.authmode = WIFI_AUTH_OPEN;
         conf.ap.ssid_len = strlen(reinterpret_cast<char *>(conf.ap.ssid));
-        conf.ap.ssid_hidden = false;
         conf.ap.max_connection = 4;
         conf.ap.beacon_interval = 100;
         if (!sta_config_equal(current_conf, conf)) {
           logI("setting AP config");
           ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_config(WIFI_IF_AP, &conf));
         }
-      }
+      } else
+        setState(ApState::Stopped);
       return ESP_OK;
     }
 
@@ -961,6 +982,9 @@ namespace esp32m {
            ApStateNames[(int)state]);
       int diagCode = -1;
       switch (state) {
+        case ApState::Starting:
+          diagCode = DiagApStarting;
+          break;
         case ApState::Running:
           diagCode = DiagApRunning;
           break;
@@ -1055,6 +1079,13 @@ namespace esp32m {
           case StaState::Initial:
             if (_stopped)
               break;
+            if (!_connect && !_aps.size()) {  // no APs to connect to
+              if (_apState == ApState::Initial) {
+                logW("no APs to connect to, switching to AP mode");
+                ap(true);
+              }
+              break;
+            }
             setState(StaState::Connecting);
             _staTimer = curtime;
             break;
@@ -1072,10 +1103,6 @@ namespace esp32m {
             if (_apState == ApState::Initial) {
               logW("connection failed, switching to AP+STA");
               ap(true);
-              _apTimer = curtime;
-              // vTaskDelay(pdMS_TO_TICKS(100)); // allow some time for the
-              // events to fire
-              setState(ApState::Starting);
             }
             if (_connect ||
                 (curtime - _staTimer > 10000 && apClientsCount() == 0))
@@ -1099,10 +1126,12 @@ namespace esp32m {
             setState(ApState::Initial);
             break;
           case ApState::Running: {
-            if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning)) {
+            /*if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning)) {
+              // we can't rely on ApRunning status because AP_STOP/AP_START
+            events may be fired multiple times during AP startup
               setState(ApState::Stopped);
               break;
-            }
+            }*/
             if (apClientsCount() > 0)
               _apTimer = curtime;
             if (curtime - _apTimer >= 60000) {
@@ -1129,6 +1158,7 @@ namespace esp32m {
             break;
         };
         checkScan();
+        checkNameChanged();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
       }
     }
@@ -1199,8 +1229,10 @@ namespace esp32m {
       auto curtime = millis();
       if (!_scanStarted || (curtime - _scanStarted > 15000)) {
         _scanStarted = curtime;
-        logI("starting scan");
-        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_scan_start(&_scanConfig, false));
+        esp_wifi_scan_stop();
+        if (ESP_ERROR_CHECK_WITHOUT_ABORT(
+                esp_wifi_scan_start(&_scanConfig, false)) == ESP_OK)
+          logI("scan started");
       }
     }
 
