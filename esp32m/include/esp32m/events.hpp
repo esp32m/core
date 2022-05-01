@@ -59,7 +59,7 @@ namespace esp32m {
    private:
     Callback _cb;
     uint8_t _refcnt;
-    Subscription(Callback cb) : _cb(cb) {}
+    Subscription(Callback cb) : _cb(cb), _refcnt(0) {}
     void ref() {
       _refcnt++;
     }

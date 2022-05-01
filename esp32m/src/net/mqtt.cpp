@@ -125,6 +125,7 @@ namespace esp32m {
         if (reason != DoneReason::LightSleep) {
           _enabled = false;
           disconnect();
+          logD("stopping...");
           waitState([this] { return _state == State::Initial; }, 500);
         }
       } else if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))

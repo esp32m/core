@@ -1176,6 +1176,7 @@ namespace esp32m {
     void Wifi::stop() {
       _stopped = true;
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_stop());
+      logD("stopping...");
       waitState(
           [this] {
             return (xEventGroupGetBits(_eventGroup) & WifiFlags::StaRunning) ==

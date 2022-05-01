@@ -1,6 +1,7 @@
 #include "esp32m/ui/httpd.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/wifi.hpp"
 #include "esp32m/ui.hpp"
 #include "esp32m/ui/asset.hpp"
@@ -68,6 +69,17 @@ namespace esp32m {
       _config.lru_purge_enable = true;
       // esp_log_level_set("httpd_ws", ESP_LOG_DEBUG);
       _httpdServers.push_back(this);
+      EventManager::instance().subscribe([this](Event &ev) {
+        if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP)) {
+          mdns_txt_item_t serviceTxtData[2] = {
+              {"esp32m", ESP32M_VERSION},
+              {"wsapi", "/ws"},
+          };
+          mdns_service_remove("_http", "_tcp");
+          ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_service_add(
+              nullptr, "_http", "_tcp", 80, serviceTxtData, 2));
+        }
+      });
     }
 
     Httpd::~Httpd() {
@@ -91,12 +103,6 @@ namespace esp32m {
         uh.is_websocket = false;
         uh.handler = httpHandler;
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
-        mdns_txt_item_t serviceTxtData[2] = {
-            {"esp32m", ESP32M_VERSION},
-            {"wsapi", "/ws"},
-        };
-        ESP_ERROR_CHECK_WITHOUT_ABORT(
-            mdns_service_add(nullptr, "_http", "_tcp", 80, serviceTxtData, 2));
       }
     }
 
