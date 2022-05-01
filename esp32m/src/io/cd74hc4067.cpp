@@ -64,14 +64,20 @@ namespace esp32m {
       esp_err_t digitalRead(bool &value) override {
         auto sig = _owner->_sig;
         std::lock_guard guard(sig->mutex());
+        ESP_CHECK_RETURN(_owner->enable(false));
         ESP_CHECK_RETURN(select());
-        return sig->digitalRead(value);
+        ESP_CHECK_RETURN(_owner->enable(true));
+        ESP_CHECK_RETURN(sig->digitalRead(value));
+        return ESP_OK;
       }
       esp_err_t digitalWrite(bool value) override {
         auto sig = _owner->_sig;
         std::lock_guard guard(sig->mutex());
+        ESP_CHECK_RETURN(_owner->enable(false));
         ESP_CHECK_RETURN(select());
-        return sig->digitalWrite(value);
+        ESP_CHECK_RETURN(sig->digitalWrite(value));
+        ESP_CHECK_RETURN(_owner->enable(true));
+        return ESP_OK;
       }
       pin::Impl *createImpl(pin::Type type) override {
         auto *sig = _owner->_sig;
@@ -118,6 +124,12 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    esp_err_t CD74HC4067::enable(bool en) {
+      if (_en)
+        ESP_CHECK_RETURN(_en->digitalWrite(!en));
+      return ESP_OK;
+    }
+
     IPin *CD74HC4067::newPin(int id) {
       return new CD74HC4067Pin(this, id);
     }
@@ -132,8 +144,6 @@ namespace esp32m {
       ESP_CHECK_RETURN(_s1->digitalWrite((c & 0x2) != 0));
       ESP_CHECK_RETURN(_s2->digitalWrite((c & 0x4) != 0));
       ESP_CHECK_RETURN(_s3->digitalWrite((c & 0x8) != 0));
-      if (_en)
-        ESP_CHECK_RETURN(_en->digitalWrite(false));
       return err;
     }
 
@@ -146,7 +156,9 @@ namespace esp32m {
         std::lock_guard guard(sig->mutex());
         ESP_CHECK_RETURN(adc->setWidth(_width));
         ESP_CHECK_RETURN(adc->setAtten(_atten));
+        ESP_CHECK_RETURN(_pin->_owner->enable(false));
         ESP_CHECK_RETURN(_pin->select());
+        ESP_CHECK_RETURN(_pin->_owner->enable(true));
         return adc->read(value, mv);
       }
       esp_err_t ADC::range(int &min, int &max, uint32_t *mvMin,

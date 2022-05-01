@@ -11,6 +11,7 @@
 #include <sdkconfig.h>
 #include <soc/sens_reg.h>
 #include <string.h>
+#include <limits.h>
 #include <mutex>
 
 #define DEFAULT_VREF \
@@ -314,8 +315,8 @@ namespace esp32m {
       bool _valid = false;
       esp_err_t install() {
         pcnt_unit_config_t unit_config = {
-            .low_limit = 0,
-            .high_limit = 32767,
+            .low_limit = SHRT_MIN,
+            .high_limit = SHRT_MAX,
         };
         ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &_unit));
         pcnt_chan_config_t chan_config = {

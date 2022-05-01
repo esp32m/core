@@ -13,6 +13,7 @@ namespace esp32m {
       CD74HC4067(IPin* pinEn, IPin* pinS0, IPin* pinS1, IPin* pinS2,
                  IPin* pinS3, IPin* pinSig);
       CD74HC4067(const CD74HC4067&) = delete;
+      esp_err_t enable(bool en);
 
      protected:
       IPin* newPin(int id) override;
