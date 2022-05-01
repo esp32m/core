@@ -127,6 +127,7 @@ namespace esp32m {
           disconnect();
           logD("stopping...");
           waitState([this] { return _state == State::Initial; }, 500);
+          logD("stopped");
         }
       } else if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
         xTaskNotifyGive(_task);

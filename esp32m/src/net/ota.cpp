@@ -133,6 +133,7 @@ namespace esp32m {
           if (err == ESP_OK) {
             logI("OTA update was successful, rebooting...");
             delay(1000);
+            esp_task_wdt_reset();
             App::restart();
           }
         }
