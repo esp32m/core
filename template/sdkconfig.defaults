@@ -4,7 +4,7 @@ CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 
 # comment out for default of 160MHz and less power consumption
-CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 # the most popular ESP32 module has 4MB flash on board
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 

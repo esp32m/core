@@ -181,7 +181,7 @@ class Project:
                         zipf.write(esptoolPath, "esptool.py")
                     cmd = "python esptool.py --baud 115200 --chip esp32 write_flash @flash_args"
                     zipf.writestr("flash.cmd", cmd)
-                    zipf.writestr("flash.sh", "#/bin/sh\n"+cmd)
+                    zipf.writestr("flash.sh", "#!/bin/sh\n"+cmd)
 
                 logging.info(f'compiled binaries are zipped in {zipPath}')
 
