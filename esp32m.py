@@ -17,6 +17,7 @@ import contextlib
 import io
 import argparse
 import string
+import zipfile
 
 config = {
     "path": {
@@ -160,6 +161,29 @@ class Project:
                 dp = os.path.join(dst, name+".bin")
                 shutil.copyfile(src, dp)
                 logging.info(f'firmware is ready at {dp}')
+            if self.args.zip:
+                zipPath = os.path.join(self.dir, "build", name+".zip")
+                esptoolPath = os.path.join(
+                    self.idf.dir, "components", "esptool_py", "esptool", "esptool.py")
+                builtFiles = [
+                    name+".bin",
+                    "flash_args",
+                    "ota_data_initial.bin",
+                    os.path.join("bootloader", "bootloader.bin"),
+                    os.path.join("partition_table", "partition-table.bin")
+                ]
+                with zipfile.ZipFile(zipPath, 'w') as zipf:
+                    for fn in builtFiles:
+                        fp = os.path.join(self.dir, "build", fn)
+                        if os.path.exists(fp):
+                            zipf.write(fp, fn)
+                    if os.path.exists(esptoolPath):
+                        zipf.write(esptoolPath, "esptool.py")
+                    cmd = "python esptool.py --baud 115200 --chip esp32 write_flash @flash_args"
+                    zipf.writestr("flash.cmd", cmd)
+                    zipf.writestr("flash.sh", "#/bin/sh\n"+cmd)
+
+                logging.info(f'compiled binaries are zipped in {zipPath}')
 
 
 def which(name):
@@ -361,6 +385,8 @@ if __name__ == "__main__":
     parser.add_argument('--project', dest='projdir', default='.')
     parser.add_argument('--ui', dest='ui', nargs=1, choices=['skip'])
     parser.add_argument('--port', '-p', dest='port', type=str)
+    parser.add_argument('--zip', action="store_true",
+                        help="create zip file with compiled binaries")
     parser.add_argument('command', nargs='+', help="idf.py command")
     args = parser.parse_args()
     configure()
