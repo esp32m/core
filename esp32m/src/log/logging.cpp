@@ -177,7 +177,7 @@ namespace esp32m {
       localtime_r(&now, &timeinfo);
       if (timeinfo.tm_year > (2016 - 1900))
         return -((int64_t)now * 1000 + (millis() % 1000));
-      return esp_timer_get_time() / 1000;
+      return millis();
     }
 
     char *format(const LogMessage *msg) {

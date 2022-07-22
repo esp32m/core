@@ -1,7 +1,7 @@
 #include <esp32/rom/ets_sys.h>
 #include <esp_app_format.h>
 #include <esp_heap_caps.h>
-#include <esp_spi_flash.h>
+#include <esp_flash.h>
 #include <esp_spiffs.h>
 #include <esp_system.h>
 #include <esp_chip_info.h>
@@ -34,7 +34,7 @@ namespace esp32m {
 
     Esp32::Esp32() {
       esp_image_header_t fhdr;
-      if (spi_flash_read(0x1000, (uint32_t *)&fhdr,
+      if (esp_flash_read(nullptr, (uint32_t *)&fhdr, 0x1000,
                          sizeof(esp_image_header_t)) == ESP_OK &&
           fhdr.magic == ESP_IMAGE_HEADER_MAGIC) {
         switch (fhdr.spi_size & 0x0F) {

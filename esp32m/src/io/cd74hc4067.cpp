@@ -20,18 +20,18 @@ namespace esp32m {
           _atten = atten;
           return ESP_OK;
         }
-        adc_bits_width_t getWidth() override {
+        adc_bitwidth_t getWidth() override {
           return _width;
         }
 
-        esp_err_t setWidth(adc_bits_width_t width) override {
+        esp_err_t setWidth(adc_bitwidth_t width) override {
           _width = width;
           return ESP_OK;
         }
 
        private:
         CD74HC4067Pin *_pin;
-        adc_bits_width_t _width = ADC_WIDTH_BIT_12;
+        adc_bitwidth_t _width = ADC_BITWIDTH_12;
         adc_atten_t _atten = ADC_ATTEN_DB_11;
       };
     }  // namespace cd74hc4067

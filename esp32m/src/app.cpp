@@ -5,8 +5,8 @@
 #endif
 
 #include <esp_image_format.h>
-#include <esp_int_wdt.h>
 #include <esp_ota_ops.h>
+#include <esp_private/esp_int_wdt.h>
 #include <esp_task_wdt.h>
 #include <sdkconfig.h>
 
@@ -136,7 +136,11 @@ namespace esp32m {
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(ret);
     esp_int_wdt_init();
-    esp_task_wdt_init(_wdtTimeout, true);
+    esp_task_wdt_config_t wdtc = {.timeout_ms = _wdtTimeout*1000,
+                                  .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, 
+                                  .trigger_panic = true};
+    esp_task_wdt_deinit();
+    esp_task_wdt_init(&wdtc);
     logI("starting %s", _version ? _version : "");
     _sketchSize = sketchSize();
   }
@@ -226,7 +230,7 @@ namespace esp32m {
     time_t t;
     time(&t);
     info["time"] = t;
-    info["uptime"] = esp_timer_get_time() / 1000;
+    info["uptime"] = millis();
     if (_version)
       info["version"] = _version;
     info["built"] = __DATE__ " " __TIME__;

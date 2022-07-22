@@ -3,15 +3,17 @@
 #include "esp32m/io/pins.hpp"
 #include "esp32m/io/utils.hpp"
 
-#include <driver/adc.h>
+//#include <driver/adc.h>
 #include <driver/dac.h>
 #include <driver/gpio.h>
 #include <driver/pulse_cnt.h>
-#include <esp_adc_cal.h>
+#include <esp_adc/adc_cali.h>
+#include <esp_adc/adc_cali_scheme.h>
+#include <esp_adc/adc_oneshot.h>
+#include <limits.h>
 #include <sdkconfig.h>
 #include <soc/sens_reg.h>
 #include <string.h>
-#include <limits.h>
 #include <mutex>
 
 #define DEFAULT_VREF \
@@ -20,6 +22,9 @@
 
 namespace esp32m {
   namespace gpio {
+
+    adc_cali_scheme_ver_t calischeme = (adc_cali_scheme_ver_t)0;
+
     enum ADCFlags {
       None = 0,
       Valid = BIT0,
@@ -65,7 +70,6 @@ namespace esp32m {
       void isr();
     };
 
-    uint64_t adc2_ctrl = 0;
     class ADC : public io::pin::IADC {
      public:
       ADC(Pin *pin) : _pin(pin) {
@@ -76,34 +80,61 @@ namespace esp32m {
         return (_flags & ADCFlags::Valid) != 0;
       }
       esp_err_t read(int &value, uint32_t *mv) override {
-        esp_err_t err = ESP_OK;
-        adc_power_acquire();
-        if (_c1 >= 0) {
-          int v = adc1_get_raw((adc1_channel_t)_c1);
-          if (v < 0)
-            err = ESP_FAIL;
-          else
-            value = v;
-        } else {
-          WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, adc2_ctrl);
-          SET_PERI_REG_MASK(SENS_SAR_READ_CTRL2_REG, SENS_SAR2_DATA_INV);
-          err = adc2_get_raw((adc2_channel_t)_c2, _width, &value);
-        }
-        adc_power_release();
-        ESP_CHECK_RETURN(err);
+        /* esp_err_t err = ESP_OK;
+         if (_c1 >= 0) {
+           int v = adc1_get_raw((adc1_channel_t)_c1);
+           if (v < 0)
+             err = ESP_FAIL;
+           else
+             value = v;
+         } else {
+           err = adc2_get_raw((adc2_channel_t)_c2, _width, &value);
+         }
+         ESP_CHECK_RETURN(err);
+ */
+        adc_oneshot_unit_handle_t handle;
+        ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
+        ESP_CHECK_RETURN(adc_oneshot_read(handle, _channel, &value));
         if (mv) {
-          if (!_adcChars) {
-            _adcChars = (esp_adc_cal_characteristics_t *)calloc(
-                1, sizeof(esp_adc_cal_characteristics_t));
-            _flags |= ADCFlags::CharsDirty;
-          }
-          if ((_flags & ADCFlags::CharsDirty) != 0) {
+          if (!_calihandle || (_flags & ADCFlags::CharsDirty) != 0) {
             _flags &= ~ADCFlags::CharsDirty;
-            memset(_adcChars, 0, sizeof(esp_adc_cal_characteristics_t));
-            esp_adc_cal_characterize(_c1 >= 0 ? ADC_UNIT_1 : ADC_UNIT_2, _atten,
-                                     _width, DEFAULT_VREF, _adcChars);
+            if (_calihandle) {
+              if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0)
+                adc_cali_delete_scheme_line_fitting(_calihandle);
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+              else if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0)
+                adc_cali_delete_scheme_curve_fitting(_calihandle);
+#endif
+            }
+            _calihandle = nullptr;
+
+            if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0) {
+              adc_cali_line_fitting_config_t cali_config = {
+                  .unit_id = _unit,
+                  .atten = _atten,
+                  .bitwidth = _width,
+                  .default_vref = DEFAULT_VREF};
+              ESP_CHECK_RETURN(adc_cali_create_scheme_line_fitting(
+                  &cali_config, &_calihandle));
+
+            }
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+            else if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
+              adc_cali_curve_fitting_config_t cali_config = {
+                  .unit_id = _unit,
+                  .atten = _atten,
+                  .bitwidth = _width,
+              };
+              ESP_CHECK_RETURN(adc_cali_create_scheme_curve_fitting(
+                  &cali_config, &_calihandle));
+            }
+#endif
           }
-          *mv = esp_adc_cal_raw_to_voltage(value, _adcChars);
+          if (_calihandle) {
+            int v;
+            ESP_CHECK_RETURN(adc_cali_raw_to_voltage(_calihandle, value, &v));
+            *mv = (uint32_t)v;
+          }
         }
         return ESP_OK;
       }
@@ -111,16 +142,16 @@ namespace esp32m {
                       uint32_t *mvMax = nullptr) override {
         min = 0;
         switch (_width) {
-          case ADC_WIDTH_BIT_9:
+          case ADC_BITWIDTH_9:
             max = (1 << 9) - 1;
             break;
-          case ADC_WIDTH_BIT_10:
+          case ADC_BITWIDTH_10:
             max = (1 << 10) - 1;
             break;
-          case ADC_WIDTH_BIT_11:
+          case ADC_BITWIDTH_11:
             max = (1 << 11) - 1;
             break;
-          case ADC_WIDTH_BIT_12:
+          case ADC_BITWIDTH_12:
             max = (1 << 12) - 1;
             break;
           default:
@@ -187,50 +218,53 @@ namespace esp32m {
       esp_err_t setAtten(adc_atten_t atten) override {
         if (atten == _atten)
           return ESP_OK;
-        if (_c1 >= 0)
-          ESP_CHECK_RETURN(
-              adc1_config_channel_atten((adc1_channel_t)_c1, atten));
-        else
-          ESP_CHECK_RETURN(
-              adc2_config_channel_atten((adc2_channel_t)_c2, atten));
         _atten = atten;
         _flags |= ADCFlags::CharsDirty;
-        return ESP_OK;
+        return update();
       }
-      adc_bits_width_t getWidth() override {
+      adc_bitwidth_t getWidth() override {
         return _width;
       }
 
-      esp_err_t setWidth(adc_bits_width_t width) override {
+      esp_err_t setWidth(adc_bitwidth_t width) override {
         if (width == _width)
           return ESP_OK;
-        if (_c1 >= 0)
-          ESP_CHECK_RETURN(adc1_config_width(_width));
         _width = width;
         _flags |= ADCFlags::CharsDirty;
-        return ESP_OK;
+        return update();
       }
 
      private:
       Pin *_pin;
-      int _c1, _c2;
-      adc_bits_width_t _width = ADC_WIDTH_BIT_12;
+      adc_unit_t _unit;
+      adc_channel_t _channel;
+      adc_cali_handle_t _calihandle = nullptr;
+      adc_bitwidth_t _width = ADC_BITWIDTH_12;
       adc_atten_t _atten = ADC_ATTEN_DB_11;
-      esp_adc_cal_characteristics_t *_adcChars = nullptr;
       ADCFlags _flags = ADCFlags::None;
       esp_err_t init() {
-        if (!io::gpio2Adc(_pin->num(), _c1, _c2))
-          return ESP_FAIL;
-        /*ESP_CHECK_RETURN(adc_gpio_init(_c1 >= 0 ? ADC_UNIT_1 : ADC_UNIT_2,
-                                       (adc_channel_t)(_c1 >= 0 ? _c1 :
-           _c2)));*/
-        if (_c1 >= 0) {
+        if (!calischeme)
+          ESP_ERROR_CHECK_WITHOUT_ABORT(adc_cali_check_scheme(&calischeme));
+        ESP_CHECK_RETURN(
+            adc_oneshot_io_to_channel(_pin->num(), &_unit, &_channel));
+
+        /*if (_c1 >= 0) {
           ESP_CHECK_RETURN(adc1_config_width(_width));
           ESP_CHECK_RETURN(
               adc1_config_channel_atten((adc1_channel_t)_c1, _atten));
         } else
           ESP_CHECK_RETURN(
-              adc2_config_channel_atten((adc2_channel_t)_c2, _atten));
+              adc2_config_channel_atten((adc2_channel_t)_c2, _atten));*/
+        return update();
+      }
+      esp_err_t update() {
+        adc_oneshot_chan_cfg_t ccfg = {
+            .atten = _atten,
+            .bitwidth = _width,
+        };
+        adc_oneshot_unit_handle_t handle;
+        ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
+        ESP_CHECK_RETURN(adc_oneshot_config_channel(handle, _channel, &ccfg));
         return ESP_OK;
       }
     };
@@ -473,8 +507,9 @@ namespace esp32m {
         }
         if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
           _features |= Features::DAC;
-        int c1, c2;
-        if (io::gpio2Adc(num, c1, c2))
+        adc_unit_t unit;
+        adc_channel_t channel;
+        if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
           _features |= Features::ADC;
       }
     };
@@ -564,13 +599,27 @@ namespace esp32m {
 
     Gpio::Gpio() {
       init(GPIO_NUM_MAX);
-      gpio::adc2_ctrl = READ_PERI_REG(SENS_SAR_READ_CTRL2_REG);
     }
   }  // namespace io
 
   namespace gpio {
     io::IPin *pin(gpio_num_t n) {
       return io::Gpio::instance().pin(n);
+    }
+
+    adc_oneshot_unit_handle_t adc_handles[] = {nullptr, nullptr};
+
+    esp_err_t getADCUnitHandle(adc_unit_t unit,
+                               adc_oneshot_unit_handle_t *handle) {
+      auto h = adc_handles[unit];
+      if (!h) {
+        adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = unit,
+                                            .ulp_mode = ADC_ULP_MODE_FSM};
+        ESP_CHECK_RETURN(adc_oneshot_new_unit(&ucfg, &h));
+        adc_handles[unit] = h;
+      }
+      *handle = h;
+      return ESP_OK;
     }
   }  // namespace gpio
 }  // namespace esp32m

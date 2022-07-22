@@ -143,8 +143,14 @@ namespace esp32m {
     }
 
     void Ota::begin() {
-      if (App::instance().wdtTimeout())
-        esp_task_wdt_init(60 * 3, true);
+      if (App::instance().wdtTimeout()) {
+        esp_task_wdt_config_t wdtc = {
+            .timeout_ms = 60 * 3 * 1000,
+            .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+            .trigger_panic = true};
+        esp_task_wdt_deinit();
+        esp_task_wdt_init(&wdtc);
+      }
       _isUpdating = true;
       Broadcast::publish(name(), KeyOtaBegin);
       _mutex->lock();
@@ -159,8 +165,14 @@ namespace esp32m {
       _mutex->unlock();
       _isUpdating = false;
       auto wt = App::instance().wdtTimeout();
-      if (wt)
-        esp_task_wdt_init(wt, true);
+      if (wt) {
+        esp_task_wdt_config_t wdtc = {
+            .timeout_ms = wt * 1000,
+            .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+            .trigger_panic = true};
+        esp_task_wdt_deinit();
+        esp_task_wdt_init(&wdtc);
+      }
     }
 
     Ota &Ota::instance() {

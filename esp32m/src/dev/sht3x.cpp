@@ -85,7 +85,7 @@ namespace esp32m {
         return ESP_ERR_INVALID_STATE;
       if (_mode == Mode::Single || _mode == Mode::SingleStretched || !_start) {
         ESP_CHECK_RETURN(cmd(CmdMeasure[_mode][_repeatability]));
-        _start = esp_timer_get_time();
+        _start = micros();
         _first = true;
         _dataValid = false;
       }
@@ -96,7 +96,7 @@ namespace esp32m {
       auto start = _start;
       if (start && _first) {
         auto d = DurationUs[_repeatability];
-        uint64_t elapsed = esp_timer_get_time() - _start;
+        uint64_t elapsed = micros() - _start;
         if (elapsed < d)
           delayUs(d - elapsed);
       }
@@ -105,7 +105,7 @@ namespace esp32m {
     bool Core::isMeasuring() {
       if (!_start || !_first)
         return false;
-      uint64_t elapsed = esp_timer_get_time() - _start;
+      uint64_t elapsed = micros() - _start;
       return elapsed < DurationUs[_repeatability];
     }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <driver/adc.h>
+//#include <driver/adc.h>
 #include <driver/dac.h>
 #include <driver/touch_sensor.h>
 #include <math.h>
@@ -10,7 +10,7 @@
 
 namespace esp32m {
   namespace io {
-    bool gpio2Adc(gpio_num_t pin, int &c1, int &c2);
+    //bool gpio2Adc(gpio_num_t pin, int &c1, int &c2);
     bool gpio2Dac(gpio_num_t pin, dac_channel_t &ch);
     bool gpio2TouchPad(gpio_num_t pin, touch_pad_t &tp);
 

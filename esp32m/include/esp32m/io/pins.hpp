@@ -36,11 +36,11 @@ namespace esp32m {
         virtual esp_err_t read(int &value, uint32_t *mv = nullptr) = 0;
         virtual esp_err_t read(float &value, uint32_t *mv = nullptr);
         virtual esp_err_t range(int &min, int &max, uint32_t *mvMin = nullptr,
-                                uint32_t *mvMax = nullptr);
+                                uint32_t *mvMax = nullptr) = 0;
         virtual adc_atten_t getAtten() = 0;
         virtual esp_err_t setAtten(adc_atten_t atten = ADC_ATTEN_DB_0) = 0;
-        virtual adc_bits_width_t getWidth() = 0;
-        virtual esp_err_t setWidth(adc_bits_width_t width) = 0;
+        virtual adc_bitwidth_t getWidth() = 0;
+        virtual esp_err_t setWidth(adc_bitwidth_t width) = 0;
       };
       class IDAC : public Impl {
        public:

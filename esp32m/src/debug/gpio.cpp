@@ -1,9 +1,11 @@
 #include "esp32m/debug/gpio.hpp"
 #include "esp32m/io/utils.hpp"
+#include "esp32m/io/gpio.hpp"
 #include "esp32m/json.hpp"
 
 #include <driver/gpio.h>
-#include <soc/adc_channel.h>
+//#include <soc/adc_channel.h>
+#include <esp_adc/adc_oneshot.h>
 #include <soc/dac_channel.h>
 #include <soc/touch_sensor_channel.h>
 
@@ -172,19 +174,17 @@ namespace esp32m {
                         gpio_set_pull_mode(pin, c.digital.pull));
                   break;
                 case PinMode::Adc: {
-                  int c1, c2;
+                  /*int c1, c2;
                   if (!io::gpio2Adc(pin, c1, c2))
                     break;
-                  /*err = adc_gpio_init(c1 >= 0 ? ADC_UNIT_1 : ADC_UNIT_2,
-                                      (adc_channel_t)(c1 >= 0 ? c1 : c2));*/
-                  if (c1 >= 0)
-                    err =
-                        ESP_ERROR_CHECK_WITHOUT_ABORT(adc1_config_channel_atten(
-                            (adc1_channel_t)c1, c.adc.atten));
-                  else
-                    err =
-                        ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_config_channel_atten(
-                            (adc2_channel_t)c2, c.adc.atten));
+                   if (c1 >= 0)
+                     err =
+                         ESP_ERROR_CHECK_WITHOUT_ABORT(adc1_config_channel_atten(
+                             (adc1_channel_t)c1, c.adc.atten));
+                   else
+                     err =
+                         ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_config_channel_atten(
+                             (adc2_channel_t)c2, c.adc.atten));*/
                 } break;
                 case PinMode::Dac: {
                   dac_channel_t ch;
@@ -270,7 +270,7 @@ namespace esp32m {
                       sd_channels |= (1 << c.sd.channel);
                   }
                 } break;
-                case PinMode::PulseCounter: {
+                case PinMode::PulseCounter: /*{
                   err = ESP_OK;
                   bool restart = false;
                   if (changeConfigValue(c.pc.unit, a[1], changed) |
@@ -304,7 +304,7 @@ namespace esp32m {
                     ESP_ERROR_CHECK_WITHOUT_ABORT(
                         pcnt_counter_resume(c.pc.unit));
                   }
-                } break;
+                }*/ break;
                 case PinMode::Touch: {
                   touch_pad_t tp;
                   if (!io::gpio2TouchPad(pin, tp))
@@ -457,13 +457,13 @@ namespace esp32m {
             c.add(i.second.sd.prescale);
             break;
           case PinMode::PulseCounter:
-            c.add(i.second.pc.unit);
+           /* c.add(i.second.pc.unit);
             c.add(i.second.pc.channel);
             c.add(i.second.pc.pos_mode);
             c.add(i.second.pc.neg_mode);
             c.add(i.second.pc.counter_h_lim);
             c.add(i.second.pc.counter_l_lim);
-            c.add(i.second.pc.filter);
+            c.add(i.second.pc.filter);*/
             break;
           case PinMode::Touch:
             c.add(i.second.touch.threshold);
@@ -543,24 +543,38 @@ namespace esp32m {
             pins[numbuf] = gpio_get_level(pin);
             break;
           case PinMode::Adc: {
-            int c1, c2, raw;
-            if (!io::gpio2Adc(pin, c1, c2))
-              break;
+            int raw;
+            adc_unit_t unit;
+            adc_channel_t channel;
+            ESP_ERROR_CHECK_WITHOUT_ABORT(
+                adc_oneshot_io_to_channel(pin, &unit, &channel));
             auto c = pins.createNestedArray(numbuf);
-            if (c1 >= 0)
-              c.add(adc1_get_raw((adc1_channel_t)c1));
-            else if (!ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_get_raw(
-                         (adc2_channel_t)c2, ADC_WIDTH_12Bit, &raw)))
-              c.add(raw);
-            else
+            adc_oneshot_unit_handle_t adchandle;
+            if (ESP_ERROR_CHECK_WITHOUT_ABORT(
+                    gpio::getADCUnitHandle(unit, &adchandle)) == 0) {
+              adc_oneshot_chan_cfg_t ccfg = {
+                  .atten = i.second.adc.atten,  // ADC_ATTEN_DB_11,
+                  .bitwidth = ADC_BITWIDTH_DEFAULT,
+              };
+              ESP_ERROR_CHECK_WITHOUT_ABORT(
+                  adc_oneshot_config_channel(adchandle, channel, &ccfg));
+              ESP_ERROR_CHECK_WITHOUT_ABORT(
+                  adc_oneshot_read(adchandle, channel, &raw));
+            } else
+              /*if (c1 >= 0)
+                c.add(adc1_get_raw((adc1_channel_t)c1));
+              else if (!ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_get_raw(
+                           (adc2_channel_t)c2, ADC_BITWIDTH_12, &raw)))
+                c.add(raw);
+              else*/
               c.add(nullptr);
           } break;
-          case PinMode::PulseCounter: {
+          case PinMode::PulseCounter:/* {
             int16_t count;
             if (!ESP_ERROR_CHECK_WITHOUT_ABORT(
                     pcnt_get_counter_value(i.second.pc.unit, &count)))
               pins[numbuf] = count;
-          } break;
+          }*/ break;
           case PinMode::Touch: {
             touch_pad_t tp;
             if (!io::gpio2TouchPad(pin, tp))

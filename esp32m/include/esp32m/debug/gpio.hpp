@@ -4,10 +4,11 @@
 
 #include <map>
 
-#include <driver/adc.h>
+//#include <driver/adc.h>
 #include <driver/dac.h>
 #include <driver/ledc.h>
-#include <driver/pcnt.h>
+//#include <driver/pcnt.h>
+#include <driver/pulse_cnt.h>
 #include <driver/sigmadelta.h>
 #include <driver/touch_sensor.h>
 
@@ -59,13 +60,13 @@ namespace esp32m {
           uint8_t prescale;
         } sd;
         struct {
-          pcnt_unit_t unit;
+         /* pcnt_unit_t unit;
           pcnt_channel_t channel;
           pcnt_count_mode_t pos_mode;
           pcnt_count_mode_t neg_mode;
           int16_t counter_h_lim;
           int16_t counter_l_lim;
-          uint16_t filter;
+          uint16_t filter;*/
         } pc;
         struct {
           uint16_t threshold;

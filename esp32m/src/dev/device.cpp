@@ -75,10 +75,10 @@ namespace esp32m {
   bool Device::sensorsReady() {
     if (_sensorsReady)
       return true;
-    unsigned int millis = esp_timer_get_time() / 1000;
-    if (_sensorsInitAt && millis - _sensorsInitAt < _reinitDelay)
+    unsigned int ms = millis();
+    if (_sensorsInitAt && ms - _sensorsInitAt < _reinitDelay)
       return false;
-    _sensorsInitAt = millis;
+    _sensorsInitAt = ms;
     _sensorsReady = initSensors();
     if (_sensorsReady)
       logI("device initialized");

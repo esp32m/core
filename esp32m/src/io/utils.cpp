@@ -1,10 +1,10 @@
 #include "esp32m/io/utils.hpp"
 
-#include <soc/adc_channel.h>
+//#include <soc/adc_channel.h>
 
 namespace esp32m {
   namespace io {
-    bool gpio2Adc(gpio_num_t pin, int &c1, int &c2) {
+    /*bool gpio2Adc(gpio_num_t pin, int &c1, int &c2) {
       c1 = -1;
       c2 = -1;
       switch (pin) {
@@ -65,7 +65,7 @@ namespace esp32m {
         default:
           return false;
       }
-    }
+    }*/
 
     bool gpio2Dac(gpio_num_t pin, dac_channel_t &ch) {
       switch (pin) {

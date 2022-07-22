@@ -52,7 +52,11 @@ class Idf:
                 break
             s = l.rstrip().split('=', 1)
             if len(s) == 2:
-                os.environ[s[0]] = os.path.expandvars(s[1])
+                k = s[0]
+                v = os.path.expandvars(s[1])
+                os.environ[k] = v
+                if k == "IDF_PYTHON_ENV_PATH":
+                    self.pythonEnvPath = v
         self.idf = os.path.realpath(shutil.which("idf.py"))
         if not os.path.exists(self.idf):
             return
@@ -163,8 +167,8 @@ class Project:
                 logging.info(f'firmware is ready at {dp}')
             if self.args.zip:
                 zipPath = os.path.join(self.dir, "build", name+".zip")
-                esptoolPath = os.path.join(
-                    self.idf.dir, "components", "esptool_py", "esptool", "esptool.py")
+                esptoolDir = os.path.join(self.idf.pythonEnvPath, "Scripts")
+                esptoolPath = os.path.join(esptoolDir, "esptool.py")
                 builtFiles = [
                     name+".bin",
                     "flash_args",
@@ -182,8 +186,20 @@ class Project:
                     cmd = "python esptool.py --baud 115200 --chip esp32 write_flash @flash_args"
                     zipf.writestr("flash.cmd", cmd)
                     zipf.writestr("flash.sh", "#!/bin/sh\n"+cmd)
-
                 logging.info(f'compiled binaries are zipped in {zipPath}')
+
+
+def enumPy(dir, base, list):
+    for item in os.listdir(dir):
+        p = os.path.join(dir, item)
+        bp = os.path.join(base, item)
+        if os.path.isdir(p):
+            if item != '__pycache__':
+                enumPy(p, bp, list)
+        else:
+            name, ext = os.path.splitext(p)
+            if ext in ['.py']:
+                list.append(bp)
 
 
 def which(name):

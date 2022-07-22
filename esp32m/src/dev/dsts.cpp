@@ -119,7 +119,7 @@ namespace esp32m {
           }
         }
       }
-      _lastSync = esp_timer_get_time() / 1000;
+      _lastSync = millis();
       return ESP_OK;
     }  // namespace dsts
 
@@ -292,7 +292,7 @@ namespace esp32m {
     }
 
     std::vector<Probe> &Core::probes() {
-      if (esp_timer_get_time() / 1000 - _lastSync > 3000)
+      if (millis() - _lastSync > 3000)
         sync();
       return _probes;
     }

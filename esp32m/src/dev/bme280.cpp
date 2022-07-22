@@ -122,12 +122,12 @@ namespace esp32m {
       if (idChanged) {
         ESP_CHECK_LOGW_RETURN(_i2c->write(Register::Reset, ResetValue),
                               "failed to reset");
-        auto t = esp_timer_get_time();
+        auto t = micros();
         for (;;) {
           uint8_t status = 0;
           if (!_i2c->read(Register::Status, status) && (status & 1) == 0)
             break;
-          if (esp_timer_get_time() - t > 1000 * 1000) {
+          if (micros() - t > 1000 * 1000) {
             logW("reset timeout");
             return ESP_ERR_TIMEOUT;
           }

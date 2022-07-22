@@ -77,16 +77,16 @@ namespace esp32m {
       int raw;
       ESP_CHECK_RETURN(read(raw, mv));
       switch (getWidth()) {
-        case ADC_WIDTH_BIT_9:
+        case ADC_BITWIDTH_9:
           value = (float)raw / (1 << 9);
           break;
-        case ADC_WIDTH_BIT_10:
+        case ADC_BITWIDTH_10:
           value = (float)raw / (1 << 10);
           break;
-        case ADC_WIDTH_BIT_11:
+        case ADC_BITWIDTH_11:
           value = (float)raw / (1 << 11);
           break;
-        case ADC_WIDTH_BIT_12:
+        case ADC_BITWIDTH_12:
           value = (float)raw / (1 << 12);
           break;
         default:
