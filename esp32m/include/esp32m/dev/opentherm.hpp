@@ -2,7 +2,7 @@
 
 #include "esp32m/device.hpp"
 #include "esp32m/events/response.hpp"
-#include "esp32m/io/rmt.hpp"
+
 
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
@@ -12,6 +12,8 @@
 
 namespace esp32m {
   namespace opentherm {
+    
+    const int FrameSizeBits = 32 + 2;
 
     enum class MessageType : uint8_t {
       /*  Master to Slave */
@@ -456,6 +458,13 @@ namespace esp32m {
       uint32_t _arr[IdInfoArrayLength] = {};
     };
 
+    class IDriver {
+     public:
+      virtual ~IDriver();
+      virtual esp_err_t send(uint32_t frame) = 0;
+      virtual esp_err_t receive(Recv &recv) = 0;
+    };
+
     class Core : public virtual log::Loggable {
      public:
       Core() {}
@@ -482,16 +491,14 @@ namespace esp32m {
       esp_err_t send(Message &msg) {
         return send(msg.type, msg.id, msg.value);
       }
-      esp_err_t init(io::RmtRx *rx, io::RmtTx *tx, const char *name);
+      esp_err_t init(IDriver *driver, const char *name);
       esp_err_t transmit(bool retransmit = false);
       esp_err_t receive();
       void dumpFrame(int attempt);
 
      private:
       const char *_name;
-      io::RmtRx *_rx;
-      io::RmtTx *_tx;
-      RingbufHandle_t _rb = nullptr;
+      IDriver *_driver;
     };
 
     class Slave;
@@ -515,8 +522,8 @@ namespace esp32m {
       Slave(const Slave &) = delete;
 
      protected:
-      esp_err_t init(io::RmtRx *rx, io::RmtTx *tx,
-                     opentherm::ISlaveModel *model, const char *name);
+      esp_err_t init(opentherm::IDriver *driver, opentherm::ISlaveModel *model,
+                     const char *name);
       virtual void processRequest(Message &msg);
       void run();
 
@@ -560,8 +567,8 @@ namespace esp32m {
 
      protected:
       IdInfoArray _ids;
-      esp_err_t init(io::RmtRx *rx, io::RmtTx *tx,
-                     opentherm::IMasterModel *model, const char *name);
+      esp_err_t init(opentherm::IDriver *driver, opentherm::IMasterModel *model,
+                     const char *name);
       virtual bool isSupported(Message &msg);
       virtual void processResponse(Message &msg);
       virtual void incomingFrameInvalid() {}
@@ -752,8 +759,8 @@ namespace esp32m {
     class OpenthermMaster : public virtual opentherm::Master,
                             public virtual Device {
      public:
-      OpenthermMaster(io::RmtRx *rx, io::RmtTx *tx,
-                      opentherm::IMasterModel *model, const char *name);
+      OpenthermMaster(opentherm::IDriver *driver, opentherm::IMasterModel *model,
+                      const char *name);
       OpenthermMaster(const OpenthermMaster &) = delete;
       bool handleRequest(Request &req) override;
 
@@ -778,8 +785,8 @@ namespace esp32m {
     class OpenthermSlave : public virtual opentherm::Slave,
                            public virtual Device {
      public:
-      OpenthermSlave(io::RmtRx *rx, io::RmtTx *tx,
-                     opentherm::ISlaveModel *model, const char *name);
+      OpenthermSlave(opentherm::IDriver *driver, opentherm::ISlaveModel *model,
+                     const char *name);
       OpenthermSlave(const OpenthermSlave &) = delete;
 
      protected:

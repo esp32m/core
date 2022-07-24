@@ -312,6 +312,7 @@ namespace esp32m {
           _channel = nullptr;
         }
         if (_unit) {
+          pcnt_unit_disable(_unit);
           pcnt_del_unit(_unit);
           _unit = nullptr;
         }
@@ -338,7 +339,12 @@ namespace esp32m {
         pcnt_glitch_filter_config_t filter_config = {
             .max_glitch_ns = filter,
         };
+        ESP_CHECK_RETURN(pcnt_unit_stop(_unit));
+        ESP_CHECK_RETURN(pcnt_unit_disable(_unit));
         ESP_CHECK_RETURN(pcnt_unit_set_glitch_filter(_unit, &filter_config));
+        ESP_CHECK_RETURN(pcnt_unit_enable(_unit));
+        ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
+        ESP_CHECK_RETURN(pcnt_unit_start(_unit));
         return ESP_OK;
       };
 
@@ -359,6 +365,8 @@ namespace esp32m {
             .flags = {},
         };
         ESP_CHECK_RETURN(pcnt_new_channel(_unit, &chan_config, &_channel));
+        ESP_CHECK_RETURN(pcnt_unit_enable(_unit));
+        ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
         ESP_CHECK_RETURN(pcnt_unit_start(_unit));
         return ESP_OK;
       };

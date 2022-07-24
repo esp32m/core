@@ -83,12 +83,8 @@ namespace esp32m {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
       bool changed;
       // don't assign directly - _cfg.uri may bee free()'d
-      setCfgStr(&_cfg.uri, "mqtt://mqtt.lan", changed);
-      _cfg.event_handle = [](esp_mqtt_event_handle_t event) {
-        return ((Mqtt *)event->user_context)->handle(event);
-      };
-      _cfg.user_context = (void *)this;
-      _cfg.keepalive = 120;
+      setCfgStr(&_cfg.broker.address.uri, "mqtt://mqtt.lan", changed);
+      _cfg.session.keepalive = 120;
     }
 
     void Mqtt::setState(State state) {
@@ -112,6 +108,13 @@ namespace esp32m {
         xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
         _handle = esp_mqtt_client_init(&_cfg);
+        esp_mqtt_client_register_event(
+            _handle, MQTT_EVENT_ANY,
+            [](void *handler_args, esp_event_base_t base, int32_t event_id,
+               void *event_data) {
+              ((Mqtt *)handler_args)->handle(event_id, event_data);
+            },
+            (void *)this);
         auto name = App::instance().name();
         if (asprintf(&_commandTopic, "esp32m/request/%s/#", name) < 0)
           _commandTopic = nullptr;
@@ -217,12 +220,12 @@ namespace esp32m {
         switch (_state) {
           case State::Initial:
             _timer = 0;
-            if (Wifi::instance().isConnected() && _cfg.uri &&
-                strlen(_cfg.uri)) {
+            if (Wifi::instance().isConnected() && _cfg.broker.address.uri &&
+                strlen(_cfg.broker.address.uri)) {
               setState(State::Connecting);
-              logI("connecting to %s", _cfg.uri);
+              logI("connecting to %s", _cfg.broker.address.uri);
               ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  esp_mqtt_client_set_uri(_handle, _cfg.uri));
+                  esp_mqtt_client_set_uri(_handle, _cfg.broker.address.uri));
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_set_config(_handle, &_cfg));
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_start(_handle));
@@ -231,7 +234,7 @@ namespace esp32m {
             break;
           case State::Connecting:
             if (millis() - _timer > _timeout * 1000) {
-              logW("timeout connecting to %s", _cfg.uri);
+              logW("timeout connecting to %s", _cfg.broker.address.uri);
               setState(State::Initial);
             }
             break;
@@ -276,10 +279,10 @@ namespace esp32m {
       bool ready = _state == State::Ready;
       cr["ready"] = ready;
       if (ready) {
-        if (_cfg.uri)
-          cr["uri"] = _cfg.uri;
-        if (_cfg.client_id)
-          cr["client"] = _cfg.client_id;
+        if (_cfg.broker.address.uri)
+          cr["uri"] = _cfg.broker.address.uri;
+        if (_cfg.credentials.client_id)
+          cr["client"] = _cfg.credentials.client_id;
       }
       cr["pubcnt"] = _pubcnt;
       cr["cmdcnt"] = _cmdcnt;
@@ -295,16 +298,16 @@ namespace esp32m {
       auto cr = doc->to<JsonObject>();
       if (_enabled)
         cr["enabled"] = _enabled;
-      if (_cfg.uri && strlen(_cfg.uri))
-        cr["uri"] = (char *)_cfg.uri;
-      if (_cfg.username && strlen(_cfg.username))
-        cr["username"] = (char *)_cfg.username;
-      if (_cfg.password && strlen(_cfg.password))
-        cr["password"] = (char *)_cfg.password;
-      if (_cfg.client_id && strlen(_cfg.client_id) &&
-          strcmp(_cfg.client_id, App::instance().name()))
-        cr["client"] = (char *)_cfg.client_id;
-      cr["keepalive"] = _cfg.keepalive;
+      if (_cfg.broker.address.uri && strlen(_cfg.broker.address.uri))
+        cr["uri"] = (char *)_cfg.broker.address.uri;
+      if (_cfg.credentials.username && strlen(_cfg.credentials.username))
+        cr["username"] = (char *)_cfg.credentials.username;
+      if (_cfg.credentials.authentication.password && strlen(_cfg.credentials.authentication.password))
+        cr["password"] = (char *)_cfg.credentials.authentication.password;
+      if (_cfg.credentials.client_id && strlen(_cfg.credentials.client_id) &&
+          strcmp(_cfg.credentials.client_id, App::instance().name()))
+        cr["client"] = (char *)_cfg.credentials.client_id;
+      cr["keepalive"] = _cfg.session.keepalive;
       cr["timeout"] = _timeout;
       return doc;
     }
@@ -314,14 +317,17 @@ namespace esp32m {
       bool changed = false;
       json::compareSet(_enabled, ca["enabled"], changed);
       // _sleepBlocker.enable(_enabled);
-      setCfgStr(&_cfg.uri, ca["uri"].as<const char *>(), changed);
-      setCfgStr(&_cfg.username, ca["username"].as<const char *>(), changed);
-      setCfgStr(&_cfg.password, ca["password"].as<const char *>(), changed);
+      setCfgStr(&_cfg.broker.address.uri, ca["uri"].as<const char *>(),
+                changed);
+      setCfgStr(&_cfg.credentials.username, ca["username"].as<const char *>(),
+                changed);
+      setCfgStr(&_cfg.credentials.authentication.password,
+                ca["password"].as<const char *>(), changed);
       const char *client = ca["client"].as<const char *>();
       if (!client)
         client = App::instance().name();
-      setCfgStr(&_cfg.client_id, client, changed);
-      json::compareSet(_cfg.keepalive, ca["keepalive"], changed);
+      setCfgStr(&_cfg.credentials.client_id, client, changed);
+      json::compareSet(_cfg.session.keepalive, ca["keepalive"], changed);
       json::compareSet(_timeout, ca["timeout"], changed);
       if (_timeout < 1)
         _timeout = 1;
@@ -369,9 +375,10 @@ namespace esp32m {
         free(ds);
     }
 
-    esp_err_t Mqtt::handle(esp_mqtt_event_handle_t event) {
+    esp_err_t Mqtt::handle(int32_t event_id, void *event_data) {
+      esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
       size_t ctl;
-      switch (event->event_id) {
+      switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_ERROR:
           logE("error %i", event->error_handle->error_type);
           break;

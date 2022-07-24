@@ -1,173 +1,159 @@
 #include "esp32m/io/rmt.hpp"
-#include "esp32m/logging.hpp"
+#include "esp32m/base.hpp"
+#include "esp32m/defs.hpp"
+
+#include <cstring>
 
 namespace esp32m {
   namespace io {
 
-    std::mutex rmtChannelsMutex;
-    uint8_t rmtChannels = 0;
-
-    esp_err_t Rmt::uninstall() {
-      if (!_installed)
-        return ESP_OK;
-      ESP_CHECK_RETURN(rmt_driver_uninstall(_cfg.channel));
-      _installed = false;
-      return ESP_OK;
-    }
-
     Rmt::~Rmt() {
-      ESP_ERROR_CHECK_WITHOUT_ABORT(uninstall());
-      std::lock_guard lock(rmtChannelsMutex);
-      rmtChannels &= ~(1 << _cfg.channel);
+      if (!_handle)
+        return;
+      if (_enabled)
+        disable();
+      ESP_ERROR_CHECK_WITHOUT_ABORT(rmt_del_channel(_handle));
+      _handle = nullptr;
     }
-
-    esp_err_t Rmt::setGpio(bool invert) {
-      _invertSignal = invert;
-      return rmt_set_gpio(_cfg.channel, _cfg.rmt_mode, _cfg.gpio_num,
-                          _invertSignal);
+    esp_err_t Rmt::enable() {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_enable(_handle));
+      _enabled = true;
+      return ESP_OK;
     }
-
-    esp_err_t Rmt::configure() {
-      ESP_CHECK_RETURN(rmt_config(&_cfg));
-      _configDirty = false;
+    esp_err_t Rmt::disable() {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_disable(_handle));
+      _enabled = false;
+      return ESP_OK;
+    }
+    esp_err_t Rmt::applyCarrier(const rmt_carrier_config_t* config) {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_apply_carrier(_handle, config));
       return ESP_OK;
     }
 
-    RmtRx::RmtRx(rmt_channel_t ch, gpio_num_t gpio, size_t bufsize) {
-      _cfg = (rmt_config_t)RMT_DEFAULT_CONFIG_RX(gpio, ch);
-      _bufSize = bufsize;
-      _configDirty = true;
+    RmtRx::RmtRx(size_t bufsize) {
+      _bufsize = bufsize * sizeof(rmt_symbol_word_t);
+      _buf = malloc(_bufsize);
+      _queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
     }
-
-    esp_err_t RmtRx::getRingbufHandle(RingbufHandle_t* buf_handle) {
-      return rmt_get_ringbuf_handle(_cfg.channel, buf_handle);
+    RmtRx::~RmtRx() {
+      if (_queue)
+        vQueueDelete(_queue);
+      if (_buf)
+        free(_buf);
     }
-    esp_err_t RmtRx::enableFilter(uint8_t thresh) {
-      _cfg.rx_config.filter_en = true;
-      _cfg.rx_config.filter_ticks_thresh = thresh;
-      if (_configDirty)
+    esp_err_t RmtRx::setConfig(const rmt_rx_channel_config_t& config) {
+      if (memcmp(&_config, &config, sizeof(rmt_rx_channel_config_t)) == 0)
         return ESP_OK;
-      return rmt_set_rx_filter(_cfg.channel, true, thresh);
-    }
-
-    esp_err_t RmtRx::disableFilter() {
-      _cfg.rx_config.filter_en = false;
-      if (_configDirty)
-        return ESP_OK;
-      return rmt_set_rx_filter(_cfg.channel, false,
-                               _cfg.rx_config.filter_ticks_thresh);
-    }
-
-    esp_err_t RmtRx::getIdleThreshold(uint16_t& thresh) {
-      ESP_CHECK_RETURN(
-          rmt_get_rx_idle_thresh(_cfg.channel, &_cfg.rx_config.idle_threshold));
-      thresh = _cfg.rx_config.idle_threshold;
+      _config = config;
+      if (_handle) {
+        ESP_CHECK_RETURN(rmt_del_channel(_handle));
+        _handle = nullptr;
+        ESP_CHECK_RETURN(ensureInited());
+      }
       return ESP_OK;
     }
-
-    esp_err_t RmtRx::setIdleThreshold(uint16_t thresh) {
-      _cfg.rx_config.idle_threshold = thresh;
-      if (_configDirty)
-        return ESP_OK;
-      return rmt_set_rx_idle_thresh(_cfg.channel, thresh);
-    }
-
-    esp_err_t RmtRx::install() {
-      if (_configDirty)
-        ESP_CHECK_RETURN(configure());
-      if (_installed)
-        return ESP_OK;
-      ESP_CHECK_RETURN(rmt_driver_install(_cfg.channel, _bufSize, _intrFlags));
-      _installed = true;
+    esp_err_t RmtRx::setSignalThresholds(uint32_t nsMin, uint32_t nsMax) {
+      _thresholds.signal_range_min_ns = nsMin;
+      _thresholds.signal_range_max_ns = nsMax;
       return ESP_OK;
     }
-    esp_err_t RmtRx::start(bool reset) {
-      return rmt_rx_start(_cfg.channel, reset);
-    }
-    esp_err_t RmtRx::stop() {
-      return rmt_rx_stop(_cfg.channel);
-    }
-
-    RmtTx::RmtTx(rmt_channel_t ch, gpio_num_t gpio) {
-      _cfg = (rmt_config_t)RMT_DEFAULT_CONFIG_TX(gpio, ch);
-      _configDirty = true;
-    }
-
-    esp_err_t RmtTx::enableIdle(rmt_idle_level_t level) {
-      _cfg.tx_config.idle_output_en = true;
-      _cfg.tx_config.idle_level = level;
-      if (_configDirty)
-        return ESP_OK;
-      return rmt_set_idle_level(_cfg.channel, true, level);
-    }
-    esp_err_t RmtTx::disableIdle() {
-      _cfg.tx_config.idle_output_en = false;
-      if (_configDirty)
-        return ESP_OK;
-      return rmt_set_idle_level(_cfg.channel, false, _cfg.tx_config.idle_level);
-    }
-    esp_err_t RmtTx::enableCarrier(uint16_t high, uint16_t low,
-                                   rmt_carrier_level_t level) {
-      _cfg.tx_config.carrier_en = true;
-      _cfg.tx_config.carrier_level = level;
-      return rmt_set_tx_carrier(_cfg.channel, true, high, low, level);
-    }
-    esp_err_t RmtTx::disableCarrier() {
-      _cfg.tx_config.carrier_en = false;
-      if (_configDirty)
-        return ESP_OK;
-      return rmt_set_tx_carrier(_cfg.channel, true, 0, 0,
-                                RMT_CARRIER_LEVEL_HIGH);
-    }
-
-    esp_err_t RmtTx::install() {
-      if (_configDirty)
-        ESP_CHECK_RETURN(configure());
-      if (_installed)
-        return ESP_OK;
-      ESP_CHECK_RETURN(rmt_driver_install(_cfg.channel, 0, _intrFlags));
-      _installed = true;
+    esp_err_t RmtRx::beginReceive() {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_receive(_handle, _buf, _bufsize, &_thresholds));
       return ESP_OK;
     }
+    esp_err_t RmtRx::endReceive(rmt_rx_done_event_data_t& data, int timeoutMs) {
+      if (xQueueReceive(_queue, &data, pdMS_TO_TICKS(timeoutMs)) == pdPASS)
+        return ESP_OK;
+      return ESP_FAIL;
+    }
 
-    esp_err_t RmtTx::start(bool reset) {
-      return rmt_tx_start(_cfg.channel, reset);
-    }
-    esp_err_t RmtTx::stop() {
-      return rmt_tx_stop(_cfg.channel);
-    }
-    esp_err_t RmtTx::write(rmt_item32_t* rmt_item, int item_num,
-                           bool wait_tx_done) {
-      return rmt_write_items(_cfg.channel, rmt_item, item_num, wait_tx_done);
-    }
-    esp_err_t RmtTx::wait(TickType_t time) {
-      return rmt_wait_tx_done(_cfg.channel, time);
-    }
-    int useRmtChannel() {
-      std::lock_guard lock(rmtChannelsMutex);
-      int ch = -1;
-      for (auto i = 0; i < RMT_CHANNEL_MAX; i++)
-        if ((rmtChannels & (1 << i)) == 0) {
-          ch = i;
-          break;
+    esp_err_t RmtRx::ensureInited() {
+      if (!_handle) {
+        ESP_CHECK_RETURN(rmt_new_rx_channel(&_config, &_handle));
+        rmt_rx_event_callbacks_t cbs = {
+            .on_recv_done = [](rmt_channel_handle_t rx_chan,
+                               rmt_rx_done_event_data_t* edata,
+                               void* user_ctx) {
+              return ((RmtRx*)user_ctx)->recvDone(edata);
+            }};
+        ESP_CHECK_RETURN(rmt_rx_register_event_callbacks(_handle, &cbs, this));
+        if (_enabled) {
+          _enabled = false;
+          ESP_CHECK_RETURN(enable());
         }
-      if (ch < 0)
-        return -1;
-      rmtChannels |= (1 << ch);
-      return ch;
+      }
+      return ESP_OK;
+    }
+    bool RmtRx::recvDone(rmt_rx_done_event_data_t* edata) {
+      BaseType_t task_woken = pdFALSE;
+      xQueueSendFromISR(_queue, edata, &task_woken);
+      return task_woken;
     }
 
-    RmtRx* useRmtRx(gpio_num_t gpio, size_t bufsize) {
-      int ch = useRmtChannel();
-      if (ch < 0)
-        return nullptr;
-      return new RmtRx((rmt_channel_t)ch, gpio, bufsize);
+    RmtTx::RmtTx() {}
+    RmtTx::~RmtTx() {
+      if (_copyEncoder)
+        rmt_del_encoder(_copyEncoder);
+    };
+
+    esp_err_t RmtTx::setConfig(const rmt_tx_channel_config_t& config) {
+      if (memcmp(&_config, &config, sizeof(rmt_tx_channel_config_t)) == 0)
+        return ESP_OK;
+      _config = config;
+      if (_handle) {
+        ESP_CHECK_RETURN(rmt_del_channel(_handle));
+        _handle = nullptr;
+        ESP_CHECK_RETURN(ensureInited());
+      }
+      return ESP_OK;
     }
-    RmtTx* useRmtTx(gpio_num_t gpio) {
-      int ch = useRmtChannel();
-      if (ch < 0)
-        return nullptr;
-      return new RmtTx((rmt_channel_t)ch, gpio);
+    esp_err_t RmtTx::setTxConfig(const rmt_transmit_config_t& config) {
+      _txconfig = config;
+      return ESP_OK;
+    }
+    esp_err_t RmtTx::transmit(const rmt_symbol_word_t* data, size_t count) {
+      ESP_CHECK_RETURN(ensureInited());
+      if (!_copyEncoder) {
+        rmt_copy_encoder_config_t cfg = {};
+        ESP_CHECK_RETURN(rmt_new_copy_encoder(&cfg, &_copyEncoder));
+      }
+      ESP_CHECK_RETURN(rmt_transmit(_handle, _copyEncoder, data,
+                                    count * sizeof(rmt_symbol_word_t),
+                                    &_txconfig));
+      return ESP_OK;
+    }
+    esp_err_t RmtTx::transmit(rmt_encoder_handle_t encoder, const void* data,
+                              size_t bytes) {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_transmit(_handle, encoder, data, bytes, &_txconfig));
+      return ESP_OK;
+    }
+    esp_err_t RmtTx::wait(int ms) {
+      ESP_CHECK_RETURN(ensureInited());
+      ESP_CHECK_RETURN(rmt_tx_wait_all_done(_handle, ms));
+      return ESP_OK;
+    }
+
+    esp_err_t RmtTx::ensureInited() {
+      if (!_handle) {
+        ESP_CHECK_RETURN(rmt_new_tx_channel(&_config, &_handle));
+        if (_enabled) {
+          _enabled = false;
+          ESP_CHECK_RETURN(enable());
+        }
+      }
+      return ESP_OK;
+    }
+
+    esp_err_t RmtByteEncoder::transmit(const uint8_t* bytes, size_t count) {
+      if (!_handle) {
+        ESP_CHECK_RETURN(rmt_new_bytes_encoder(&_config, &_handle));
+      }
+      return _tx->transmit(_handle, bytes, count);
     }
 
   }  // namespace io

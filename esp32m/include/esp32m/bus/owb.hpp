@@ -12,7 +12,6 @@ namespace esp32m {
   class Owb;
 
   namespace owb {
-    class Driver;
 
     static const uint8_t RomSearch = 0xF0;
     static const uint8_t RomRead = 0x33;
@@ -36,6 +35,24 @@ namespace esp32m {
     uint8_t crc(uint8_t c, uint8_t data);
     uint8_t crc(uint8_t c, const uint8_t *buffer, size_t len);
 
+    class IDriver {
+     public:
+      IDriver(gpio_num_t pin) : _pin(pin) {}
+      virtual ~IDriver() {}
+      virtual esp_err_t reset(bool &present) = 0;
+      virtual esp_err_t readBits(uint8_t *in, int number_of_bits_to_read) = 0;
+      virtual esp_err_t writeBits(uint8_t out, int number_of_bits_to_write) = 0;
+      void claim();
+      void release();
+      gpio_num_t pin() {
+        return _pin;
+      }
+
+     private:
+      gpio_num_t _pin;
+      int _refs = 0;
+    };
+
     class Search {
      public:
       Search(Owb *owb);
@@ -52,9 +69,11 @@ namespace esp32m {
       int _lastFamilyDiscrepancy = 0;
       int _lastDeviceFlag = 0;
       esp_err_t _error = ESP_OK;
+      esp_err_t search(bool *is_found);
       friend class esp32m::Owb;
-      friend class Driver;
     };
+
+    IDriver *useRmtDriver(gpio_num_t pin);
 
   }  // namespace owb
 
@@ -76,7 +95,7 @@ namespace esp32m {
     esp_err_t write(const owb::ROMCode &code);
 
    private:
-    owb::Driver *_driver;
+    owb::IDriver *_driver;
     std::mutex &_mutex;
     friend class owb::Search;
   };

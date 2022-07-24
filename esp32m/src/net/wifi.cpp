@@ -399,7 +399,7 @@ namespace esp32m {
               xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
               break;
             case WIFI_EVENT_STA_CONNECTED:
-              esp_wifi_set_rssi_threshold(-67);
+              // esp_wifi_set_rssi_threshold(-67);
               xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
               break;
             case WIFI_EVENT_STA_DISCONNECTED: {
@@ -733,9 +733,9 @@ namespace esp32m {
             strlcpy(reinterpret_cast<char *>(conf.sta.password), password,
                     sizeof(conf.sta.password));
         }
-        conf.sta.rm_enabled = 1;
-        conf.sta.btm_enabled = 1;
-        conf.sta.mbo_enabled = 1;
+        // conf.sta.rm_enabled = 1;
+        // conf.sta.btm_enabled = 1;
+        // conf.sta.mbo_enabled = 1;
         conf.sta.pmf_cfg.capable = 1;
 
         wifi_config_t current_conf;

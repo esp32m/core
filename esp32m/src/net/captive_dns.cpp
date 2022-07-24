@@ -146,6 +146,9 @@ namespace esp32m {
     return p;  // ptr to first free byte in resp
   }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+
   // Receive a DNS packet and maybe send a response back
   void CaptiveDns::recv(struct sockaddr_in *premote_addr, char *pusrdata,
                         unsigned short length) {
@@ -258,6 +261,8 @@ namespace esp32m {
            (struct sockaddr *)premote_addr, sizeof(struct sockaddr_in));
   }
 
+#pragma GCC diagnostic pop
+
   CaptiveDns::CaptiveDns(esp_ip4_addr_t ip)
       : SimpleLoggable("captive-dns"), _ip(ip) {
     xTaskCreate([](void *self) { ((CaptiveDns *)self)->run(); },
@@ -304,7 +309,7 @@ namespace esp32m {
       }
     } while (ret != 0);
     fcntl(_sockFd, F_SETFL, O_NONBLOCK);
-    
+
     logI("captive portal starting at " IPSTR, IP2STR(&_ip));
 
     for (;;) {

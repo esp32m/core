@@ -65,7 +65,7 @@ namespace esp32m {
       uint32_t _cmdcnt = 0, _pubcnt = 0;
       unsigned long _timer = 0;
       int _timeout = 30;
-      esp_err_t handle(esp_mqtt_event_handle_t event);
+      esp_err_t handle(int32_t event_id, void *event_data);
       void run();
       void disconnect();
       void respond(const char *source, int seq, const JsonVariantConst data,

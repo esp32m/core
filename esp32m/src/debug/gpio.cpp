@@ -149,7 +149,6 @@ namespace esp32m {
         uint64_t pinsInRequest = 0;
         int cw_channel = -1;
         uint8_t led_channels = 0;
-        uint8_t sd_channels = 0;
         auto touchMask0 = touchMask();
         for (JsonPairConst kv : pins)
           if (s2pn(kv.key().c_str(), pin)) {
@@ -251,7 +250,7 @@ namespace esp32m {
                       led_channels |= (1 << c.ledc.channel);
                   }
                 } break;
-                case PinMode::SigmaDelta: {
+                case PinMode::SigmaDelta:/* {
                   bool cc = changeConfigValue(c.sd.channel, a[1], changed);
                   if (sd_channels &
                       (1 << c.sd.channel))  // only one pin per channel
@@ -269,7 +268,7 @@ namespace esp32m {
                     if (!err)
                       sd_channels |= (1 << c.sd.channel);
                   }
-                } break;
+                }*/ break;
                 case PinMode::PulseCounter: /*{
                   err = ESP_OK;
                   bool restart = false;
@@ -403,7 +402,7 @@ namespace esp32m {
             arr_len += 6;
             break;
           case PinMode::SigmaDelta:
-            arr_len += 3;
+            arr_len += 2;
             break;
           case PinMode::PulseCounter:
             arr_len += 7;
@@ -452,9 +451,8 @@ namespace esp32m {
             c.add(i.second.ledc.hpoint);
             break;
           case PinMode::SigmaDelta:
-            c.add(i.second.sd.channel);
+            c.add(i.second.sd.rate);
             c.add(i.second.sd.duty);
-            c.add(i.second.sd.prescale);
             break;
           case PinMode::PulseCounter:
            /* c.add(i.second.pc.unit);

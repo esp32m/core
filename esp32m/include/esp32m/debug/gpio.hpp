@@ -9,7 +9,7 @@
 #include <driver/ledc.h>
 //#include <driver/pcnt.h>
 #include <driver/pulse_cnt.h>
-#include <driver/sigmadelta.h>
+#include <driver/sdm.h>
 #include <driver/touch_sensor.h>
 
 namespace esp32m {
@@ -55,9 +55,8 @@ namespace esp32m {
           int hpoint;
         } ledc;
         struct {
-          sigmadelta_channel_t channel;
+          uint32_t rate;
           int8_t duty;
-          uint8_t prescale;
         } sd;
         struct {
          /* pcnt_unit_t unit;

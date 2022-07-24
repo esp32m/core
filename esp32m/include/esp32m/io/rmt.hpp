@@ -1,88 +1,82 @@
-#include "esp32m/base.hpp"
-#include "esp32m/defs.hpp"
+#pragma once
 
-#include <driver/rmt.h>
-#include <mutex>
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+
+#include "driver/rmt_encoder.h"
+#include "driver/rmt_rx.h"
+#include "driver/rmt_tx.h"
+#include "driver/rmt_types.h"
 
 namespace esp32m {
   namespace io {
     class Rmt {
      public:
-      Rmt(const Rmt&) = delete;
+      Rmt(const Rmt &) = delete;
       virtual ~Rmt();
-      rmt_channel_t channel() const {
-        return _cfg.channel;
-      }
-      gpio_num_t gpio() const {
-        return _cfg.gpio_num;
-      }
-      rmt_mode_t mode() const {
-        return _cfg.rmt_mode;
-      }
-      int getIntrFlags() const {
-        return _intrFlags;
-      }
-      void setIntrFlags(int flags) {
-        _intrFlags = flags;
-      }
-      esp_err_t setGpio(bool invert);
-      esp_err_t configure();
-      virtual esp_err_t install() = 0;
-      esp_err_t uninstall();
+      esp_err_t enable();
+      esp_err_t disable();
+      esp_err_t applyCarrier(const rmt_carrier_config_t *carrier);
 
      protected:
-      Rmt() : _configDirty(true), _installed(false), _invertSignal(false) {}
-      rmt_config_t _cfg;
-      int _intrFlags =
-          ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED;
-      uint8_t _configDirty : 1;
-      uint8_t _installed : 1;
-      uint8_t _invertSignal : 1;
+      rmt_channel_handle_t _handle = nullptr;
+      bool _enabled = false;
+      Rmt() {}
+      virtual esp_err_t ensureInited() = 0;
     };
-
     class RmtRx : public Rmt {
      public:
-      size_t getBufSize() const {
-        return _bufSize;
-      }
-      void setBufSize(size_t value) {
-        _bufSize = value;
-      }
-      esp_err_t getRingbufHandle(RingbufHandle_t* buf_handle);
-      esp_err_t enableFilter(uint8_t thresh);
-      esp_err_t disableFilter();
-      esp_err_t getIdleThreshold(uint16_t& thresh);
-      esp_err_t setIdleThreshold(uint16_t thresh);
-      esp_err_t install() override;
-      esp_err_t start(bool reset);
-      esp_err_t stop();
+      RmtRx(size_t bufSize);
+      ~RmtRx() override;
+      esp_err_t setConfig(const rmt_rx_channel_config_t &config);
+      esp_err_t setSignalThresholds(uint32_t nsMin, uint32_t nsMax);
+      esp_err_t beginReceive();
+      esp_err_t endReceive(rmt_rx_done_event_data_t& data, int timeoutMs);
+
+     protected:
+      esp_err_t ensureInited() override;
 
      private:
-      RmtRx(rmt_channel_t ch, gpio_num_t gpio, size_t bufsize);
-      size_t _bufSize;
-      friend RmtRx* useRmtRx(gpio_num_t gpio, size_t bufsize);
-    };
+      rmt_rx_channel_config_t _config = {};
+      rmt_receive_config_t _thresholds = {.signal_range_min_ns = 1000,
+                                         .signal_range_max_ns = 1000 * 1000};
+      QueueHandle_t _queue;
+      void *_buf;
+      size_t _bufsize;
 
+      bool recvDone(rmt_rx_done_event_data_t *edata);
+    };
     class RmtTx : public Rmt {
      public:
-      esp_err_t enableIdle(rmt_idle_level_t level);
-      esp_err_t disableIdle();
-      esp_err_t enableCarrier(uint16_t high, uint16_t low,
-                              rmt_carrier_level_t level);
-      esp_err_t disableCarrier();
-      esp_err_t install() override;
-      esp_err_t start(bool reset);
-      esp_err_t stop();
-      esp_err_t write(rmt_item32_t* rmt_item, int item_num, bool wait_tx_done);
-      esp_err_t wait(TickType_t time);
+      RmtTx();
+      ~RmtTx() override;
+      esp_err_t setConfig(const rmt_tx_channel_config_t &config);
+      esp_err_t setTxConfig(const rmt_transmit_config_t &config);
+      esp_err_t transmit(const rmt_symbol_word_t *data, size_t count);
+      esp_err_t transmit(rmt_encoder_handle_t encoder, const void *data,
+                         size_t bytes);
+      esp_err_t wait(int ms);
+
+     protected:
+      esp_err_t ensureInited() override;
 
      private:
-      RmtTx(rmt_channel_t ch, gpio_num_t gpio);
-      friend RmtTx* useRmtTx(gpio_num_t gpio);
+      rmt_tx_channel_config_t _config = {};
+      rmt_transmit_config_t _txconfig = {};
+      rmt_encoder_handle_t _copyEncoder = nullptr;
     };
 
-    RmtRx* useRmtRx(gpio_num_t gpio, size_t bufsize = 512);
-    RmtTx* useRmtTx(gpio_num_t gpio);
+    class RmtByteEncoder {
+     public:
+      RmtByteEncoder(RmtTx *tx, const rmt_bytes_encoder_config_t &config): _tx(tx),
+          _config(config) {}
+      esp_err_t transmit(const uint8_t *bytes, size_t count);
 
+     private:
+      RmtTx *_tx;
+      rmt_bytes_encoder_config_t _config;
+      rmt_encoder_handle_t _handle=nullptr;
+    };
   }  // namespace io
-};   // namespace esp32m
+}  // namespace esp32m

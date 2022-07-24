@@ -54,6 +54,8 @@ namespace esp32m {
             return ESP_OK;
           case GPIO_MODE_OUTPUT:
             return ESP_OK;
+          case GPIO_MODE_INPUT_OUTPUT:
+            return ESP_OK;
           default:
             return ESP_FAIL;
         }
