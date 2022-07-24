@@ -10,5 +10,6 @@
 !.yarn/versions
 .pnp.*
 node_modules
+managed_components
 dist
 build
