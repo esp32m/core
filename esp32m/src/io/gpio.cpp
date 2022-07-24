@@ -622,7 +622,7 @@ namespace esp32m {
       auto h = adc_handles[unit];
       if (!h) {
         adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = unit,
-                                            .ulp_mode = ADC_ULP_MODE_FSM};
+                                            .ulp_mode = (adc_ulp_mode_t)0};
         ESP_CHECK_RETURN(adc_oneshot_new_unit(&ucfg, &h));
         adc_handles[unit] = h;
       }
