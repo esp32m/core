@@ -13,3 +13,5 @@ node_modules
 managed_components
 dist
 build
+dependencies.lock
+sdkconfig
