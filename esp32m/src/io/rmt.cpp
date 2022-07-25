@@ -68,7 +68,7 @@ namespace esp32m {
     esp_err_t RmtRx::endReceive(rmt_rx_done_event_data_t& data, int timeoutMs) {
       if (xQueueReceive(_queue, &data, pdMS_TO_TICKS(timeoutMs)) == pdPASS)
         return ESP_OK;
-      return ESP_FAIL;
+      return ESP_ERR_TIMEOUT;
     }
 
     esp_err_t RmtRx::ensureInited() {
