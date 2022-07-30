@@ -1,6 +1,7 @@
-#include "esp32m/json.hpp"
-
 #include "esp32m/net/wifi_utils.hpp"
+
+#include "esp32m/json.hpp"
+#include "esp32m/net/net.hpp"
 
 namespace esp32m {
 
@@ -27,9 +28,9 @@ namespace esp32m {
 
   void json2ip(JsonObjectConst json, esp_netif_ip_info_t &target,
                bool &changed) {
-    json::compareSet(target.ip, json["ip"], changed);
-    json::compareSet(target.gw, json["gw"], changed);
-    json::compareSet(target.netmask, json["mask"], changed);
+    json::from(json["ip"], target.ip, &changed);
+    json::from(json["gw"], target.gw, &changed);
+    json::from(json["mask"], target.netmask, &changed);
   }
 
 }  // namespace esp32m

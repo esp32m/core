@@ -152,9 +152,9 @@ namespace esp32m {
       bool changed = false;
       auto pm = cfg["pm"];
       if (pm) {
-        json::compareSet(_pm.max_freq_mhz, pm[0], 240, changed);
-        json::compareSet(_pm.min_freq_mhz, pm[1], 160, changed);
-        json::compareSet(_pm.light_sleep_enable, pm[2], false, changed);
+        json::from(pm[0], _pm.max_freq_mhz, 240, &changed);
+        json::from(pm[1], _pm.min_freq_mhz, 160, &changed);
+        json::from(pm[2], _pm.light_sleep_enable, false, &changed);
         if (changed)
           json::checkSetResult(
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_pm_configure(&_pm)), result);

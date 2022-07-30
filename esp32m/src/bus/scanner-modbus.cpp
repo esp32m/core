@@ -46,15 +46,15 @@ namespace esp32m {
           _ascii = ascii;
           changed = true;
         }
-        json::compareSet(_startAddr, data["from"], changed);
-        json::compareSet(_endAddr, data["to"], changed);
-        json::compareSet(_addr, data["addr"], changed);
-        json::compareSet(_uart, data["uart"], changed);
-        json::compareSet(_baud, data["baud"], changed);
-        json::compareSet((int &)_parity, data["parity"], changed);
-        json::compareSet(_regs, data["regs"], changed);
-        json::compareSet(_regc, data["regc"], changed);
-        json::compareSet((int &)_cmd, data["cmd"], changed);
+        json::from(data["from"], _startAddr, &changed);
+        json::from(data["to"], _endAddr, &changed);
+        json::from(data["addr"], _addr, &changed);
+        json::from(data["uart"], _uart, &changed);
+        json::from(data["baud"], _baud, &changed);
+        json::from(data["parity"], (int &)_parity, &changed);
+        json::from(data["regs"], _regs, &changed);
+        json::from(data["regc"], _regc, &changed);
+        json::from(data["cmd"], (int &)_cmd, &changed);
         if (_startAddr < 1) {
           _startAddr = 1;
           changed = true;

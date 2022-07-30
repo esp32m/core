@@ -50,7 +50,7 @@ namespace esp32m {
     bool Ota::setConfig(const JsonVariantConst cfg,
                         DynamicJsonDocument **result) {
       bool changed = false;
-      json::compareDup(_defaultUrl, cfg["url"], nullptr, changed);
+      json::fromDup(cfg["url"], _defaultUrl, nullptr, &changed);
       return changed;
     }
 

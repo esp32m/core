@@ -45,7 +45,7 @@ namespace esp32m {
       void *_buf;
       size_t _bufsize;
 
-      bool recvDone(rmt_rx_done_event_data_t *edata);
+      bool recvDone(const rmt_rx_done_event_data_t *edata);
     };
     class RmtTx : public Rmt {
      public:

@@ -1,9 +1,6 @@
-import { startUi, useCaptivePortal, useWifi, useSystem, useMqtt } from "@esp32m/ui";
+import { startUi, CaptivePortal, Wifi, System, Mqtt, use } from "@esp32m/ui";
 
-useCaptivePortal();
-useSystem();
-useWifi();
-useMqtt();
+use(CaptivePortal, System, Wifi, NetworkInterfaces, Mqtt);
 
 // useRelay([["fan", "Fan"]]);
 // useBme280();

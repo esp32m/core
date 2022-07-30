@@ -315,7 +315,7 @@ namespace esp32m {
     bool Mqtt::setConfig(const JsonVariantConst ca,
                          DynamicJsonDocument **result) {
       bool changed = false;
-      json::compareSet(_enabled, ca["enabled"], changed);
+      json::from(ca["enabled"], _enabled, &changed);
       // _sleepBlocker.enable(_enabled);
       setCfgStr(&_cfg.broker.address.uri, ca["uri"].as<const char *>(),
                 changed);
@@ -327,8 +327,8 @@ namespace esp32m {
       if (!client)
         client = App::instance().name();
       setCfgStr(&_cfg.credentials.client_id, client, changed);
-      json::compareSet(_cfg.session.keepalive, ca["keepalive"], changed);
-      json::compareSet(_timeout, ca["timeout"], changed);
+      json::from(ca["keepalive"], _cfg.session.keepalive, &changed);
+      json::from(ca["timeout"], _timeout, &changed);
       if (_timeout < 1)
         _timeout = 1;
       _configChanged = changed;

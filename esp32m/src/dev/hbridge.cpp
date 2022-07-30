@@ -68,8 +68,8 @@ namespace esp32m {
 
     void HBridge::setState(const JsonVariantConst state,
                            DynamicJsonDocument **result) {
-      json::set(_mode, state["mode"]);
-      json::set(_speed, state["speed"]);
+      json::from(state["mode"], _mode);
+      json::from(state["speed"], _speed);
       json::checkSetResult(run(_mode, _speed), result);
     }
 

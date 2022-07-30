@@ -1,8 +1,9 @@
 #pragma once
 
-#include <esp_netif.h>
-#include <lwip/ip_addr.h>
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <ArduinoJson.h>
 
@@ -26,57 +27,34 @@ namespace esp32m {
     }
 
     template <typename T>
-    void set(T &target, JsonVariantConst v, bool *changed = nullptr) {
-      if (v.isUnbound() || v.isNull() || v.as<T>() == target)
-        return;
+    void to(JsonObject target, const char *key, const T value) {
+      target[key] = value;
+    }
+
+    void to(JsonObject target, const char *key, const float value);
+
+    template <typename T>
+    bool from(JsonVariantConst source, T &target, bool *changed = nullptr) {
+      if (source.isUnbound() || source.isNull() || source.as<T>() == target)
+        return false;
       if (changed)
         *changed = true;
-      target = v.as<T>();
+      target = source.as<T>();
+      return true;
     }
-
-#ifdef ARDUINO
-    void compareSet(IPAddress &target, JsonVariantConst v, bool &changed);
-#endif
-
-    void compareSet(ip_addr_t &target, JsonVariantConst v, bool &changed);
-    void compareSet(ip4_addr_t &target, JsonVariantConst v, bool &changed);
-    void compareSet(esp_ip4_addr_t &target, JsonVariantConst v, bool &changed);
-
     template <typename T>
-    void compareSet(T &target, JsonVariantConst v, bool &changed) {
-      if (v.isUnbound() || v.isNull() || v == target)
-        return;
-      changed = true;
-      target = v.as<T>();
-    }
-
-    template <typename T>
-    void set(T &target, JsonVariantConst v, T def) {
-      if (!v.isUnbound())
-        target = v.as<T>();
-      else
-        target = def;
-    }
-
-    template <typename T>
-    void compareSet(T &target, JsonVariantConst v, T def, bool &changed) {
-      T src = (v.isUnbound() || v.isNull()) ? def : v.as<T>();
+    bool from(JsonVariantConst source, T &target, T def,
+              bool *changed = nullptr) {
+      T src = (source.isUnbound() || source.isNull()) ? def : source.as<T>();
       if (src == target)
-        return;
-      changed = true;
+        return false;
+      if (changed)
+        *changed = true;
       target = src;
+      return true;
     }
-
-    void dup(char *&target, JsonVariantConst v);
-    void dup(char *&target, JsonVariantConst v, const char *def);
-
-    void compareDup(char *&target, JsonVariantConst v, const char *def,
-                    bool &changed);
-
-    void to(JsonObject target, const char *key, const ip_addr_t &value);
-    void to(JsonObject target, const char *key, const ip4_addr_t &value);
-    void to(JsonObject target, const char *key, const esp_ip4_addr_t &value);
-    void to(JsonObject target, const char *key, const float value);
+    bool fromDup(JsonVariantConst source, char *&target, const char *def,
+                 bool *changed = nullptr);
 
     template <typename T>
     class Value {
@@ -101,6 +79,42 @@ namespace esp32m {
       virtual const JsonObjectConst props() const {
         return null<JsonObjectConst>();
       }
+    };
+
+    class ConcatToArray {
+     public:
+      void add(DynamicJsonDocument *doc) {
+        _documents.push_back(std::unique_ptr<DynamicJsonDocument>(doc));
+      }
+      DynamicJsonDocument *concat() {
+        size_t mu = JSON_ARRAY_SIZE(_documents.size());
+        for (auto &d : _documents) mu += d->memoryUsage();
+        auto doc = new DynamicJsonDocument(mu);
+        auto root = doc->to<JsonArray>();
+        for (auto &d : _documents) root.add(*d);
+        return doc;
+      }
+
+     private:
+      std::vector<std::unique_ptr<DynamicJsonDocument> > _documents;
+    };
+    class ConcatToObject {
+     public:
+      void add(const char *key, DynamicJsonDocument *doc) {
+        _documents[key] = std::unique_ptr<DynamicJsonDocument>(doc);
+      }
+      DynamicJsonDocument *concat() {
+        size_t mu = JSON_OBJECT_SIZE(_documents.size());
+        for (auto &d : _documents)
+          mu += d.second->memoryUsage() + JSON_STRING_SIZE(d.first.size());
+        auto doc = new DynamicJsonDocument(mu);
+        auto root = doc->to<JsonObject>();
+        for (auto &d : _documents) root[d.first] = *d.second;
+        return doc;
+      }
+
+     private:
+      std::map<std::string, std::unique_ptr<DynamicJsonDocument> > _documents;
     };
 
   }  // namespace json

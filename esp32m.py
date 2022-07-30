@@ -167,7 +167,8 @@ class Project:
                 logging.info(f'firmware is ready at {dp}')
             if self.args.zip:
                 zipPath = os.path.join(self.dir, "build", name+".zip")
-                esptoolDir = os.path.join(self.idf.pythonEnvPath, "Scripts")
+                # esptoolDir = os.path.join(self.idf.pythonEnvPath, "Scripts")
+                esptoolDir = os.path.join(self.idf.dir, "components", "esptool_py", "esptool")
                 esptoolPath = os.path.join(esptoolDir, "esptool.py")
                 builtFiles = [
                     name+".bin",

@@ -76,7 +76,7 @@ namespace esp32m {
         ESP_CHECK_RETURN(rmt_new_rx_channel(&_config, &_handle));
         rmt_rx_event_callbacks_t cbs = {
             .on_recv_done = [](rmt_channel_handle_t rx_chan,
-                               rmt_rx_done_event_data_t* edata,
+                               const rmt_rx_done_event_data_t* edata,
                                void* user_ctx) {
               return ((RmtRx*)user_ctx)->recvDone(edata);
             }};
@@ -88,7 +88,7 @@ namespace esp32m {
       }
       return ESP_OK;
     }
-    bool RmtRx::recvDone(rmt_rx_done_event_data_t* edata) {
+    bool RmtRx::recvDone(const rmt_rx_done_event_data_t* edata) {
       BaseType_t task_woken = pdFALSE;
       xQueueSendFromISR(_queue, edata, &task_woken);
       return task_woken;

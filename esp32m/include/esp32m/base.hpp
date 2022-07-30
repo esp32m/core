@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ArduinoJson.h>
 #include <driver/gpio.h>
 #include <esp_err.h>
 #include <hal/uart_types.h>
@@ -7,6 +8,7 @@
 #include <cstdint>
 #include <mutex>
 #include <type_traits>
+#include <vector>
 
 namespace esp32m {
 
@@ -35,6 +37,47 @@ namespace esp32m {
     return false;
   }
 
+  struct ErrorItem {
+   public:
+    esp_err_t code;
+    const char *message;
+    ErrorItem(esp_err_t c, const char *m) : code(c), message(m) {}
+  };
+  class ErrorList {
+   public:
+    esp_err_t check(esp_err_t err, const char *msg = nullptr) {
+      if (err != ESP_OK)
+        _list.emplace_back(ESP_ERROR_CHECK_WITHOUT_ABORT(err), msg);
+      return err;
+    };
+    DynamicJsonDocument *toJson(DynamicJsonDocument **result) {
+      auto ls = _list.size();
+      if (!ls)
+        return nullptr;
+      size_t size = JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(ls);
+      for (auto &item : _list)
+        if (item.message)
+          size += JSON_ARRAY_SIZE(2) + strlen(item.message) + 1;
+        else
+          size += JSON_ARRAY_SIZE(1);
+      auto doc = new DynamicJsonDocument(size);
+      auto root = doc->to<JsonObject>();
+      auto arr = root.createNestedArray("error");
+      for (auto &item : _list) {
+        auto i = arr.createNestedArray();
+        i.add(item.code);
+        if (item.message)
+          i.add((char *)item.message);
+      }
+      if (*result)
+        *result = doc;
+      return doc;
+    }
+
+   private:
+    std::vector<ErrorItem> _list;
+  };
+
   namespace locks {
     class Guard {
      public:
@@ -53,6 +96,7 @@ namespace esp32m {
 
     std::mutex &uart(uart_port_t pin);
   }  // namespace locks
+
   enum Endian { Little, Big };
 
   static const Endian HostEndianness = Endian::Little;

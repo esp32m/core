@@ -176,9 +176,6 @@ namespace esp32m {
       wifi_err_reason_t _errReason = (wifi_err_reason_t)0;
       esp_netif_ip_info_t _staIp = {}, _apIp;
       ip_addr_t _dns1 = {}, _dns2 = {};
-      bool _useNtp = true;
-      char *_ntpHost;
-      int _dstOfs = 0, _tzOfs = 0;
       int8_t _txp = 0;
 
       unsigned long _staTimer = 0, _apTimer = 0, _scanStarted = 0;
@@ -197,11 +194,10 @@ namespace esp32m {
       Response *_pendingResponse = nullptr;
       CaptiveDns *_captivePortal = nullptr;
       std::unique_ptr<ApInfo> _connect;
-      void init();
+      esp_err_t init();
       esp_err_t mode(wifi_mode_t prev, wifi_mode_t next);
       void setState(StaState state);
       void setState(ApState state);
-      void updateTimeConfig();
       void checkScan();
       esp_err_t checkNameChanged();
       void run();

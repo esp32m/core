@@ -1,0 +1,1 @@
+{ "extends": "@esp32m/ui/config/babel.shared.json" }

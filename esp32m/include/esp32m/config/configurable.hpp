@@ -8,10 +8,14 @@
 
 namespace esp32m {
   namespace config {
-    bool getMaskSensitive(JsonVariantConst args);
-    void setMaskSensitive(JsonVariant args, bool mask = true);
-    DynamicJsonDocument* addMaskSensitive(JsonVariantConst args,
-                                          bool mask = true);
+    /*    bool getMaskSensitive(JsonVariantConst args);
+        void setMaskSensitive(JsonVariant args, bool mask = true);
+        DynamicJsonDocument* addMaskSensitive(JsonVariantConst args,
+                                              bool mask = true);*/
+                                              
+    // TODO: this must be FIXED to maybe an additional parameter passed to getConfig()
+    // This is dangerous in case internal getConfig request runs in parallel with UI getConfig, all sensitive info will be revealed
+    bool isInternalRequest();
   }  // namespace config
 
   class Configurable : public virtual log::Loggable {

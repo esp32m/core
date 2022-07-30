@@ -55,7 +55,7 @@ namespace esp32m {
     bool FlowSensor::setConfig(const JsonVariantConst cfg,
                                DynamicJsonDocument **result) {
       bool changed = false;
-      json::compareSet(_consumption, cfg["consumption"], changed);
+      json::from(cfg["consumption"], _consumption, &changed);
       return changed;
     }
 

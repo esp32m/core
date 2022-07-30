@@ -45,11 +45,10 @@ namespace esp32m {
           return;
         const char *name = msg["name"];
         if (name) {
-          DynamicJsonDocument *data = config::addMaskSensitive(msg["data"]);
-          Req ev(ui, name, msg["seq"], msg["target"],
-                 data->as<JsonVariantConst>(), cid);
+          // DynamicJsonDocument *data = config::addMaskSensitive(msg["data"]);
+          Req ev(ui, name, msg["seq"], msg["target"], msg["data"], cid);
           ev.publish();
-          delete data;
+          // delete data;
         }
       }
 

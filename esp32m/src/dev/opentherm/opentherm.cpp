@@ -2,6 +2,7 @@
 #include "esp32m/config/changed.hpp"
 
 #include <esp_task_wdt.h>
+#include <cinttypes>
 
 namespace esp32m {
   namespace opentherm {
@@ -45,8 +46,8 @@ namespace esp32m {
 
     bool Range::fromJson(JsonArrayConst arr, bool *changed) {
       if (arr && arr.size() == 2) {
-        json::set(lower, arr[0], changed);
-        json::set(upper, arr[1], changed);
+        json::from(arr[0], lower, changed);
+        json::from(arr[1], upper, changed);
         return true;
       }
       return false;
@@ -1054,9 +1055,9 @@ namespace esp32m {
                                   DynamicJsonDocument **result) {
       JsonVariantConst hvac = state["hvac"];
       if (hvac) {
-        json::set(_hvac.status.value, hvac["status"]);
-        json::set(_hvac.tSet, hvac["ts"]);
-        json::set(_hvac.coolingControl, hvac["cc"]);
+        json::from(hvac["status"], _hvac.status.value);
+        json::from(hvac["ts"], _hvac.tSet);
+        json::from(hvac["cc"], _hvac.coolingControl);
       }
     }
 
@@ -1073,8 +1074,8 @@ namespace esp32m {
       bool changed = false;
       if (hvac) {
         _hvac.bounds.fromJson(hvac, &changed);
-        json::set(_hvac.config.value, hvac["cfg"], &changed);
-        json::set(_hvac.fault.value, hvac["fault"], &changed);
+        json::from(hvac["cfg"], _hvac.config.value, &changed);
+        json::from(hvac["fault"], _hvac.fault.value, &changed);
       }
       return changed;
     }
@@ -1136,24 +1137,24 @@ namespace esp32m {
                                    DynamicJsonDocument **result) {
       JsonVariantConst hvac = state["hvac"];
       if (hvac) {
-        json::set(_hvac.status.value, hvac["status"]);
-        json::set(_hvac.tSet, hvac["ts"]);
+        json::from(hvac["status"], _hvac.status.value);
+        json::from(hvac["ts"], _hvac.tSet);
         bool changed = false;
         opentherm::Config c = _hvac.config;
-        json::set(c.value, hvac["cfg"], &changed);
+        json::from(hvac["cfg"], c.value, &changed);
         if (changed)
           _hvac.config.master.value = c.master.value;
-        json::set(_hvac.coolingControl, hvac["cc"]);
-        json::set(_hvac.tSetCh2, hvac["tsch2"]);
-        json::set(_hvac.maxRelMod, hvac["maxrm"]);
-        json::set(_hvac.trSet, hvac["trs"]);
-        json::set(_hvac.trSetCh2, hvac["trsch2"]);
-        json::set(_hvac.tr, hvac["tr"]);
-        json::set(_hvac.tDhwSet, hvac["tdhws"]);
-        json::set(_hvac.maxTSet, hvac["maxts"]);
-        json::set(_hvac.hcratio, hvac["hcr"]);
-        json::set(_hvac.otverMaster, hvac["otvm"]);
-        json::set(_hvac.verMaster, hvac["vm"]);
+        json::from(hvac["cc"], _hvac.coolingControl);
+        json::from(hvac["tsch2"], _hvac.tSetCh2);
+        json::from(hvac["maxrm"], _hvac.maxRelMod);
+        json::from(hvac["trs"], _hvac.trSet);
+        json::from(hvac["trsch2"], _hvac.trSetCh2);
+        json::from(hvac["tr"], _hvac.tr);
+        json::from(hvac["tdhws"], _hvac.tDhwSet);
+        json::from(hvac["maxts"], _hvac.maxTSet);
+        json::from(hvac["hcr"], _hvac.hcratio);
+        json::from(hvac["otvm"], _hvac.otverMaster);
+        json::from(hvac["vm"], _hvac.verMaster);
       }
     }
 
@@ -1172,12 +1173,12 @@ namespace esp32m {
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
         opentherm::Status s = _hvac.status;
-        json::set(s.value, hvac["status"], &changed);
+        json::from(hvac["status"], s.value, &changed);
         if (changed)
           _hvac.status.master.value = s.master.value;
-        json::set(_hvac.tSet, hvac["ts"], &changed);
-        json::set(_hvac.tDhwSet, hvac["tdhws"], &changed);
-        json::set(_hvac.maxTSet, hvac["maxts"], &changed);
+        json::from(hvac["ts"], _hvac.tSet, &changed);
+        json::from(hvac["tdhws"], _hvac.tDhwSet, &changed);
+        json::from(hvac["maxts"], _hvac.maxTSet, &changed);
       }
       return changed;
     }

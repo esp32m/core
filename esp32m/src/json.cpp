@@ -80,121 +80,42 @@ namespace esp32m {
       root["error"] = err;
     }
 
-    void dup(char *&target, JsonVariantConst v) {
-      if (target) {
-        free(target);
-        target = nullptr;
-      }
-      if (!v.isNull()) {
-        const char *c = v.as<const char *>();
-        if (c)
-          target = strdup(c);
-      }
-    }
-
-    void dup(char *&target, JsonVariantConst v, const char *def) {
-      if (target && target != def)
-        free(target);
-      if (!v.isNull()) {
-        const char *c = v.as<const char *>();
-        if (!c)
-          target = nullptr;
-        else if (!strcmp(c, def))
-          target = (char *)def;
-        else
-          target = strdup(c);
-      } else
-        target = (char *)def;
-    }
-
-#ifdef ARDUINO
-    void compareSet(IPAddress &target, JsonVariantConst v, bool &changed) {
-      if (v.isNull())
-        return;
-      const char *str = v.as<const char *>();
-      IPAddress ip;
-      ip.fromString(str);
-      if (target == ip)
-        return;
-      target = ip;
-      changed = true;
-    }
-#endif
-
-    void compareSet(ip_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isUnbound() || v.isNull())
-        return;
-      const char *str = v.as<const char *>();
-      if (!str)
-        return;
-      ip_addr_t addr;
-      if (!ipaddr_aton(str, &addr) || ip_addr_cmp(&target, &addr))
-        return;
-      ip_addr_copy(target, addr);
-      changed = true;
-    }
-
-    void compareSet(ip4_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isUnbound() || v.isNull())
-        return;
-      const char *str = v.as<const char *>();
-      if (!str)
-        return;
-      ip4_addr_t addr;
-      if (!ip4addr_aton(str, &addr) || ip4_addr_cmp(&target, &addr))
-        return;
-      ip4_addr_copy(target, addr);
-      changed = true;
-    }
-
-    void compareSet(esp_ip4_addr_t &target, JsonVariantConst v, bool &changed) {
-      if (v.isUnbound() || v.isNull())
-        return;
-      const char *str = v.as<const char *>();
-      if (!str)
-        return;
-      uint32_t addr = esp_ip4addr_aton(str);
-      if (target.addr == addr)
-        return;
-      target.addr = addr;
-      changed = true;
-    }
-
-    void to(JsonObject target, const char *key, const esp_ip4_addr_t &value) {
-      if (!value.addr)
-        return;
-      char buf[16];
-      esp_ip4addr_ntoa(&value, buf, sizeof(buf));
-      target[key] = buf;
-    }
-
-    void to(JsonObject target, const char *key, const ip_addr_t &value) {
-      if (ip_addr_isany(&value))
-        return;
-      char buf[40];
-      ipaddr_ntoa_r(&value, buf, sizeof(buf));
-      target[key] = buf;
-    }
-
-    void to(JsonVariant target, const char *key, const ip4_addr_t &value) {
-      if (ip4_addr_isany_val(value))
-        return;
-      char buf[16];
-      ip4addr_ntoa_r(&value, buf, sizeof(buf));
-      target[key] = buf;
-    }
-
     void to(JsonObject target, const char *key, const float value) {
       if (isnan(value))
         return;
       target[key] = value;
     }
 
-    void compareDup(char *&target, JsonVariantConst v, const char *def,
-                    bool &changed) {
+    bool from(JsonVariantConst source, std::string &target,
+              bool *changed = nullptr) {
+      if (source.isUnbound() || source.isNull() ||
+          source.as<std::string>() == target)
+        return false;
+      if (changed)
+        *changed = true;
+      target = source.as<std::string>();
+      return true;
+    }
+
+    bool from(JsonVariantConst source, std::string &target, std::string def,
+              bool *changed = nullptr) {
+      std::string src = (source.isUnbound() || source.isNull())
+                            ? def
+                            : source.as<std::string>();
+      if (src == target)
+        return false;
+      if (changed)
+        *changed = true;
+      target = src;
+      return true;
+    }
+    
+    bool fromDup(JsonVariantConst v, char *&target, const char *def,
+                 bool *changed) {
+      bool c = false;
       if (target && target != def) {
         free(target);
-        changed = true;
+        c = true;
       }
       bool setToDefault = false;
       if (!v.isNull()) {
@@ -210,10 +131,13 @@ namespace esp32m {
       if (setToDefault) {
         if (target != def) {
           target = (char *)def;
-          changed = true;
+          c = true;
         }
       } else
-        changed = true;
+        c = true;
+      if (c && changed)
+        *changed = true;
+      return c;
     }
 
     bool check(log::Loggable *l, DynamicJsonDocument *doc, const char *msg) {

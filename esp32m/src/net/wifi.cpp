@@ -5,6 +5,7 @@
 #include "esp32m/events/diag.hpp"
 #include "esp32m/events/response.hpp"
 #include "esp32m/net/ip_event.hpp"
+#include "esp32m/net/net.hpp"
 #include "esp32m/net/wifi_utils.hpp"
 
 #include <dhcpserver/dhcpserver.h>
@@ -17,7 +18,6 @@
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
 #include <lwip/apps/netbiosns.h>
-#include <lwip/apps/sntp.h>
 #include <lwip/dns.h>
 #include <mdns.h>
 #include <algorithm>
@@ -27,7 +27,6 @@ namespace esp32m {
     const esp_ip4_addr_t DefaultNetmask = {
         PP_HTONL(LWIP_MAKEU32(255, 255, 255, 0))};
     const esp_ip4_addr_t DefaultApIp = {PP_HTONL(LWIP_MAKEU32(192, 168, 4, 1))};
-    const char *DefaultNtpHost = "pool.ntp.org";
 
     const char *StaStateNames[]{
         "Initial",
@@ -163,8 +162,7 @@ namespace esp32m {
 
     Wifi::Wifi()
         : Device(Flags::HasSensors),
-          _apIp{DefaultApIp, DefaultNetmask, DefaultApIp},
-          _ntpHost((char *)DefaultNtpHost) {
+          _apIp{DefaultApIp, DefaultNetmask, DefaultApIp} {
       /*_scanConfig.scan_time.active.min = 100;
       _scanConfig.scan_time.active.max = 300;*/
     }
@@ -381,10 +379,10 @@ namespace esp32m {
       }
     }
 
-    void Wifi::init() {
+    esp_err_t Wifi::init() {
       static bool inited = false;
       if (inited)
-        return;
+        return ESP_OK;
       inited = true;
       EventManager::instance().subscribe([this](Event &ev) {
         IpEvent *ip;
@@ -477,23 +475,20 @@ namespace esp32m {
         if (_task)
           xTaskNotifyGive(_task);
       });
-      // const char *hostname = App::instance().name();
-      esp_netif_init();
+      ESP_CHECK_RETURN(useNetif());
+      ESP_CHECK_RETURN(useEventLoop());
       _eventGroup = xEventGroupCreate();
-      ESP_ERROR_CHECK(esp_event_loop_create_default());
       _ifap = esp_netif_create_default_wifi_ap();
       _ifsta = esp_netif_create_default_wifi_sta();
       wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-      ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-      ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-      /*esp_netif_set_hostname(_ifsta, hostname);
-      esp_netif_set_hostname(_ifap, hostname);*/
-      ESP_ERROR_CHECK(esp_event_handler_instance_register(
+      ESP_CHECK_RETURN(esp_wifi_init(&cfg));
+      ESP_CHECK_RETURN(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+      ESP_CHECK_RETURN(esp_event_handler_instance_register(
           WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, nullptr, nullptr));
-      ESP_ERROR_CHECK(esp_event_handler_instance_register(
+      ESP_CHECK_RETURN(esp_event_handler_instance_register(
           IP_EVENT, IP_EVENT_STA_GOT_IP, ip_event_handler, nullptr, nullptr));
       xEventGroupSetBits(_eventGroup, WifiFlags::Initialized);
-      ESP_ERROR_CHECK(esp_wifi_start());
+      ESP_CHECK_RETURN(esp_wifi_start());
       _errReason = (wifi_err_reason_t)0;
       WifiEvent::publish(WIFI_EVENT_WIFI_READY,
                          nullptr);  // this event is never sent by esp-idf, so
@@ -504,7 +499,7 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_get_max_tx_power(&_txp));
       if (_task)
         xTaskNotifyGive(_task);
-      ap(false);
+      return ap(false);
     }
 
     esp_err_t Wifi::checkNameChanged() {
@@ -609,20 +604,14 @@ namespace esp32m {
         target["inact"] = inact;
     }
 
+    void setIfcfg(wifi_interface_t ifx, JsonObjectConst source) {}
+
     DynamicJsonDocument *Wifi::getConfig(const JsonVariantConst args) {
-      bool haveSta = _staDhcp || !ip4_addr_isany_val(_staIp.ip);
-      bool haveAp = !ip4_addr_isany_val(_apIp.ip);
-      bool haveTime = _useNtp || _ntpHost || _tzOfs || _dstOfs;
-      size_t size = JSON_OBJECT_SIZE(1) +  // txp
-                    (haveSta ? JSON_OBJECT_SIZE(1 + 7) + 3 * 16
-                             : 0) +  // sta: dhcp, ip, gw, mask, proto, bw,
-                                     // inact, strings(ip, gw, mask)
-                    (haveAp ? JSON_OBJECT_SIZE(1 + 8) + 3 * 16
-                            : 0) +  // ap:  ip, gw, mask, proto, bw, inact,
-                                    // strings(ip, gw, mask)
-                    (haveTime ? JSON_OBJECT_SIZE(1 + 4)
-                              : 0);  // time:  use-ntp, ntp-host, tz, dst
-      bool maskSensitive = config::getMaskSensitive(args);
+      size_t size = JSON_OBJECT_SIZE(1) +      // txp
+                    JSON_OBJECT_SIZE(1 + 3) +  // sta: proto, bw, inact
+                    JSON_OBJECT_SIZE(1 + 3);   // ap:  proto, bw, inact,
+
+      bool maskSensitive = !config::isInternalRequest();
       size_t apsCount = _aps.size();
       if (apsCount) {
         size += JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(apsCount);
@@ -633,29 +622,10 @@ namespace esp32m {
       auto doc = new DynamicJsonDocument(size);
       auto cr = doc->to<JsonObject>();
       cr["txp"] = _txp;
-      if (haveSta) {
-        auto sta = cr.createNestedObject("sta");
-        if (_staDhcp)
-          sta["dhcp"] = _staDhcp;
-        ip2json(sta, _staIp);
-        getIfcfg(WIFI_IF_STA, sta);
-      }
-      if (haveAp) {
-        auto ap = cr.createNestedObject("ap");
-        ip2json(ap, _apIp);
-        getIfcfg(WIFI_IF_AP, ap);
-      }
-      if (haveTime) {
-        auto time = cr.createNestedObject("time");
-        if (_useNtp)
-          time["ntp"] = _useNtp;
-        if (_ntpHost)
-          time["host"] = (const char *)_ntpHost;  // should be safe to reference
-        if (_tzOfs)
-          time["tz"] = _tzOfs;
-        if (_dstOfs)
-          time["dst"] = _dstOfs;
-      }
+      auto sta = cr.createNestedObject("sta");
+      getIfcfg(WIFI_IF_STA, sta);
+      auto ap = cr.createNestedObject("ap");
+      getIfcfg(WIFI_IF_AP, ap);
       if (apsCount) {
         auto aps = cr.createNestedArray("aps");
         for (auto it = _aps.begin(); it != _aps.end(); it++) {
@@ -680,21 +650,13 @@ namespace esp32m {
           changed = true;
         }
       JsonObjectConst obj = ca["sta"];
-      if (obj) {
-        json::set(_staDhcp, obj["dhcp"], changed);
-        json2ip(obj, _staIp, changed);
-      }
+      if (obj)
+        setIfcfg(WIFI_IF_STA, obj);
+
       obj = ca["ap"];
       if (obj)
-        json2ip(obj, _apIp, changed);
-      obj = ca["time"];
-      if (obj) {
-        json::compareSet(_useNtp, obj["ntp"], changed);
-        json::compareDup(_ntpHost, obj["host"], DefaultNtpHost, changed);
-        json::compareSet(_tzOfs, obj["tz"], changed);
-        json::compareSet(_dstOfs, obj["dst"], changed);
-        updateTimeConfig();
-      }
+        setIfcfg(WIFI_IF_AP, obj);
+
       JsonArrayConst aps = ca["aps"];
       if (aps)
         for (JsonArrayConst v : aps) addOrUpdateAp(v, changed);
@@ -820,7 +782,7 @@ namespace esp32m {
       if (connected) {
         setState(StaState::Connected);
         _connectFailures = 0;
-        updateTimeConfig();
+        // updateTimeConfig();
       } else {
         delay(100);
         if (apClientsCount() == 0)
@@ -918,40 +880,6 @@ namespace esp32m {
     Wifi &Wifi::instance() {
       static Wifi i;
       return i;
-    }
-
-    void Wifi::updateTimeConfig() {
-      if (isConnected()) {
-        if (sntp_enabled())
-          sntp_stop();
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
-        sntp_setservername(
-            0, _useNtp ? (_ntpHost ? _ntpHost : DefaultNtpHost) : nullptr);
-        sntp_init();
-        char cst[17] = {0};
-        char cdt[17] = "DST";
-        char tz[33] = {0};
-        long offset = _tzOfs * 60;
-        int daylight = _dstOfs * 60;
-        if (offset % 3600)
-          sprintf(cst, "UTC%ld:%02u:%02u", (offset / 3600),
-                  (uint32_t)abs((offset % 3600) / 60),
-                  (uint32_t)abs(offset % 60));
-        else
-          sprintf(cst, "UTC%ld", offset / 3600);
-        if (daylight != 3600) {
-          long tz_dst = offset - daylight;
-          if (tz_dst % 3600)
-            sprintf(cdt, "DST%ld:%02u:%02u", tz_dst / 3600,
-                    (uint32_t)abs((tz_dst % 3600) / 60),
-                    (uint32_t)abs(tz_dst % 60));
-          else
-            sprintf(cdt, "DST%ld", tz_dst / 3600);
-        }
-        sprintf(tz, "%s%s", cst, cdt);
-        setenv("TZ", tz, 1);
-        tzset();
-      }
     }
 
     void Wifi::setState(StaState state) {

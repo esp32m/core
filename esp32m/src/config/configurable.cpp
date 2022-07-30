@@ -5,7 +5,7 @@
 #include "esp32m/json.hpp"
 
 namespace esp32m {
-  namespace config {
+  /*namespace config {
     bool getMaskSensitive(JsonVariantConst args) {
       return args["options"]["mask_sensitive"] | false;
     }
@@ -24,7 +24,7 @@ namespace esp32m {
       return doc;
     }
   }  // namespace config
-
+*/
   bool Configurable::handleConfigRequest(Request &req) {
     const char *name = req.name();
     if (!strcmp(name, Config::KeyConfigGet)) {

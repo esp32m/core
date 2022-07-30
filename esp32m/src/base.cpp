@@ -6,6 +6,7 @@
 #include <freertos/task.h>
 #include <string.h>
 #include <map>
+#include <string>
 
 #define NOP() asm volatile("nop")
 
@@ -63,7 +64,7 @@ namespace esp32m {
   namespace locks {
 
     std::map<gpio_num_t, std::mutex> _gpio_locks;
-    std::map<const char *, std::mutex> _locks;
+    std::map<std::string, std::mutex> _locks;
     std::map<uart_port_t, std::mutex> _uart_locks;
 
     Guard::Guard(const char *name) : _lock(find(name)) {
