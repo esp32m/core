@@ -189,6 +189,12 @@ namespace esp32m {
        * @param msg Message to be recorded
        */
       void logf(Level level, const char *format, ...);
+      /**
+       * @brief Dump hex data to the log
+       * @param buf data pointer
+       * @param buflen length of the data
+       */
+      void dump(Level level, const void* buf, size_t buflen);
 
      private:
       const Loggable &_loggable;

@@ -41,6 +41,8 @@ namespace esp32m {
             std::map<esp_netif_dns_type_t, esp_netif_dns_info_t> &source);
     void to(JsonObject target, const dhcps_lease_t &source);
     void macTo(JsonObject target, const uint8_t mac[]);
+    void interfacesTo(JsonObject target);
+    size_t interfacesSize();
 
     bool from(JsonVariantConst source, ip_addr_t &target,
               bool *changed = nullptr);
@@ -72,7 +74,7 @@ namespace esp32m {
     const int MacMaxChars = 18;
 
     bool isEmptyMac(uint8_t *mac);
-    bool isEmpty(esp_netif_dns_info_t* dns);
+    bool isEmpty(esp_netif_dns_info_t *dns);
 
     esp_err_t useNetif();
     esp_err_t useEventLoop();

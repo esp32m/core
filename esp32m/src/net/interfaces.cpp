@@ -103,7 +103,7 @@ namespace esp32m {
         case ConfigItem::Dns:
           if (_role != Role::DhcpClient) {
             for (auto &kv : _dns) {
-              logi("%s set DNS: %d, %d", _key.c_str(), kv.first, kv.second.ip.u_addr.ip4.addr);
+              // logi("%s set DNS: %d, %d", _key.c_str(), kv.first, kv.second.ip.u_addr.ip4.addr);
               errl.check(esp_netif_set_dns_info(_handle, kv.first, &kv.second));
             }
           }
@@ -259,7 +259,7 @@ namespace esp32m {
       bool changed = false;
       JsonObjectConst map = cfg.as<JsonObjectConst>();
       for (JsonPairConst kv : map) {
-        logi("setConfig for %s", kv.key().c_str());
+        // logi("setConfig for %s", kv.key().c_str());
         if (getOrAddInterface(kv.key().c_str())->setConfig(kv.value(), result))
           changed = true;
       }

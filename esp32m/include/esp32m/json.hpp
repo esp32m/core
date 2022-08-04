@@ -31,6 +31,12 @@ namespace esp32m {
       target[key] = value;
     }
 
+    template <typename T>
+    void to(JsonObject target, const char *key, const T value, const T def) {
+      if (value != def)
+        target[key] = value;
+    }
+
     void to(JsonObject target, const char *key, const float value);
 
     template <typename T>

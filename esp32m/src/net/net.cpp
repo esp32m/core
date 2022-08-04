@@ -12,7 +12,7 @@ namespace esp32m {
     void to(JsonObject target, const char *key, const esp_ip4_addr_t &value) {
       if (!value.addr)
         return;
-      char buf[16];
+      char buf[net::Ipv4MaxChars];
       esp_ip4addr_ntoa(&value, buf, sizeof(buf));
       target[key] = buf;
     }
@@ -20,7 +20,7 @@ namespace esp32m {
     void to(JsonObject target, const char *key, const ip_addr_t &value) {
       if (ip_addr_isany(&value))
         return;
-      char buf[40];
+      char buf[net::Ipv6MaxChars];
       ipaddr_ntoa_r(&value, buf, sizeof(buf));
       target[key] = buf;
     }
@@ -28,7 +28,7 @@ namespace esp32m {
     void to(JsonVariant target, const char *key, const ip4_addr_t &value) {
       if (ip4_addr_isany_val(value))
         return;
-      char buf[16];
+      char buf[net::Ipv4MaxChars];
       ip4addr_ntoa_r(&value, buf, sizeof(buf));
       target[key] = buf;
     }
@@ -100,6 +100,33 @@ namespace esp32m {
       char buf[net::MacMaxChars];
       sprintf(buf, MACSTR, MAC2STR(mac));
       target["mac"] = buf;
+    }
+
+    void interfacesTo(JsonObject target) {
+      auto nr = esp_netif_get_nr_of_ifs();
+      if (nr == 0)
+        return;
+      auto ifaces = target.createNestedArray("interfaces");
+      esp_netif_t *cif = nullptr;
+      for (;;) {
+        cif = esp_netif_next(cif);
+        if (!cif)
+          break;
+        auto a = ifaces.createNestedArray();
+        a.add(esp_netif_get_ifkey(cif));
+        a.add(esp_netif_get_desc(cif));
+        a.add(esp_netif_get_netif_impl_index(cif));
+        char in[NETIF_NAMESIZE] = {'\0'};
+        if (esp_netif_get_netif_impl_name(cif, in) == ESP_OK && strlen(in))
+          a.add(in);
+      }
+    }
+    size_t interfacesSize() {
+      auto nr = esp_netif_get_nr_of_ifs();
+      if (nr == 0)
+        return 0;
+      return JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(nr) +
+             nr * JSON_ARRAY_SIZE(4) + nr * JSON_STRING_SIZE(NETIF_NAMESIZE);
     }
 
     bool from(JsonVariantConst source, ip_addr_t &target, bool *changed) {
