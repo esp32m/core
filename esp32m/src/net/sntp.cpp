@@ -66,16 +66,16 @@ namespace esp32m {
         int daylight = _dstOfs * 60;
         if (offset % 3600)
           sprintf(cst, "UTC%ld:%02u:%02u", (offset / 3600),
-                  (uint32_t)abs((offset % 3600) / 60),
-                  (uint32_t)abs(offset % 60));
+                  (unsigned int)abs((offset % 3600) / 60),
+                  (unsigned int)abs(offset % 60));
         else
           sprintf(cst, "UTC%ld", offset / 3600);
         if (daylight != 3600) {
           long tz_dst = offset - daylight;
           if (tz_dst % 3600)
             sprintf(cdt, "DST%ld:%02u:%02u", tz_dst / 3600,
-                    (uint32_t)abs((tz_dst % 3600) / 60),
-                    (uint32_t)abs(tz_dst % 60));
+                    (unsigned int)abs((tz_dst % 3600) / 60),
+                    (unsigned int)abs(tz_dst % 60));
           else
             sprintf(cdt, "DST%ld", tz_dst / 3600);
         }

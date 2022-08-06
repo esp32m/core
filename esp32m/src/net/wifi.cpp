@@ -338,7 +338,7 @@ namespace esp32m {
         len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
         /* bssid info */
         len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "0x%04x",
-                        WPA_GET_LE32(nr + ETH_ALEN));
+                        (unsigned int)WPA_GET_LE32(nr + ETH_ALEN));
         len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
         /* operating class */
         len +=
