@@ -105,7 +105,7 @@ namespace esp32m {
       return;
     }
     if (!name || !version) {
-      auto desc = esp_ota_get_app_description();
+      auto desc = esp_app_get_description();
       if (!name)
         name = desc->project_name;
       if (!version)
