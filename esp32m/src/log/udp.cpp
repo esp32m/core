@@ -1,14 +1,17 @@
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+
 #include <esp_netif.h>
 #include <lwip/dns.h>
 #include <lwip/netdb.h>
 #include <string.h>
 
-#include "esp32m/events.hpp"
 #include "esp32m/app.hpp"
+#include "esp32m/events.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/wifi.hpp"
-
+#include "esp32m/net/ota.hpp"
 namespace esp32m {
 
   namespace log {
@@ -44,6 +47,10 @@ namespace esp32m {
     const uint8_t SyslogSeverity[] = {5, 5, 3, 4, 6, 7, 7};
 
     bool Udp::append(const LogMessage *message) {
+      if (!xPortCanYield())  // called from ISR
+        return false;
+      if (net::ota::isRunning())
+        return false;
       if (!net::Wifi::instance().isConnected())
         return false;
       if (!_addr.sin_addr.s_addr) {

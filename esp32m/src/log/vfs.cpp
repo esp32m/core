@@ -1,12 +1,19 @@
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #include "esp32m/log/vfs.hpp"
-
+#include "esp32m/net/ota.hpp"
 namespace esp32m {
   namespace log {
     bool Vfs::append(const char *message) {
+      if (!xPortCanYield()) // called from ISR
+        return false;
+      if (net::ota::isRunning())
+        return false;
       bool result = false;
       std::lock_guard<std::mutex> guard(_lock);
       if (!_file)

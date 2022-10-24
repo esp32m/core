@@ -1,11 +1,24 @@
 #include "esp32m/io/rmt.hpp"
+#include <cstring>
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
-
-#include <cstring>
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
   namespace io {
+
+    namespace rmt {
+
+      void dump(const char* msg, rmt_symbol_word_t* syms, size_t count) {
+        logd("%s (%d rmt symbols):", msg, count);
+        for (auto i = 0; i < count; i++) {
+          auto& s = syms[i];
+          logd(" * %d %d (%dms %dms)", s.level0, s.level1, s.duration0,
+               s.duration1);
+        }
+      }
+
+    }  // namespace rmt
 
     Rmt::~Rmt() {
       if (!_handle)
@@ -17,14 +30,18 @@ namespace esp32m {
     }
     esp_err_t Rmt::enable() {
       ESP_CHECK_RETURN(ensureInited());
-      ESP_CHECK_RETURN(rmt_enable(_handle));
-      _enabled = true;
+      if (!_enabled) {
+        ESP_CHECK_RETURN(rmt_enable(_handle));
+        _enabled = true;
+      }
       return ESP_OK;
     }
     esp_err_t Rmt::disable() {
       ESP_CHECK_RETURN(ensureInited());
-      ESP_CHECK_RETURN(rmt_disable(_handle));
-      _enabled = false;
+      if (_enabled) {
+        ESP_CHECK_RETURN(rmt_disable(_handle));
+        _enabled = false;
+      }
       return ESP_OK;
     }
     esp_err_t Rmt::applyCarrier(const rmt_carrier_config_t* config) {

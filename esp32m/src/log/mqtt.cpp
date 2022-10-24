@@ -1,7 +1,10 @@
+#include <freertos/FreeRTOS.h>
+#include <freertos/portmacro.h>
+
 #include "esp32m/net/mqtt.hpp"
 #include "esp32m/app.hpp"
 #include "esp32m/log/mqtt.hpp"
-
+#include "esp32m/net/ota.hpp"
 namespace esp32m {
 
   namespace log {
@@ -11,6 +14,10 @@ namespace esp32m {
     }
 
     bool Mqtt::append(const char *message) {
+      if (!xPortCanYield()) // called from ISR
+        return false;
+      if (net::ota::isRunning())
+        return false;
       auto &mqtt = net::Mqtt::instance();
       if (!mqtt.isReady())
         return false;

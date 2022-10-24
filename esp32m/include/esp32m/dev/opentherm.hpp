@@ -3,7 +3,6 @@
 #include "esp32m/device.hpp"
 #include "esp32m/events/response.hpp"
 
-
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -12,7 +11,7 @@
 
 namespace esp32m {
   namespace opentherm {
-    
+
     const int FrameSizeBits = 32 + 2;
 
     enum class MessageType : uint8_t {
@@ -460,7 +459,7 @@ namespace esp32m {
 
     class IDriver {
      public:
-      virtual ~IDriver();
+      virtual ~IDriver(){};
       virtual esp_err_t send(uint32_t frame) = 0;
       virtual esp_err_t receive(Recv &recv) = 0;
     };
@@ -674,9 +673,10 @@ namespace esp32m {
             s.slave.value = 0xCA;  // magic
             msg.read(DataId::Status, s.value);
           } break;
-          case 1:
-            msg.write(DataId::TSet, toF88(hvac.tSet));
-            break;
+          case 1: {
+            float tset = hvac.status.master.CH ? hvac.tSet : 0;
+            msg.write(DataId::TSet, toF88(tset));
+          } break;
           case 2:
             switch (oi) {
               case 0:
@@ -759,8 +759,8 @@ namespace esp32m {
     class OpenthermMaster : public virtual opentherm::Master,
                             public virtual Device {
      public:
-      OpenthermMaster(opentherm::IDriver *driver, opentherm::IMasterModel *model,
-                      const char *name);
+      OpenthermMaster(opentherm::IDriver *driver,
+                      opentherm::IMasterModel *model, const char *name);
       OpenthermMaster(const OpenthermMaster &) = delete;
       bool handleRequest(Request &req) override;
 

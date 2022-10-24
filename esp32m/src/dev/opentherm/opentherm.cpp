@@ -318,8 +318,7 @@ namespace esp32m {
 
     esp_err_t Core::receive() {
       _recv.init();
-      ESP_CHECK_RETURN(_driver->receive(_recv));
-      return ESP_OK;
+      return _driver->receive(_recv);
     }
 
     void Core::dumpFrame(int attempt) {
@@ -916,14 +915,6 @@ namespace esp32m {
         int attempt = 0;
         if (transmit() == ESP_OK)
           while (true) {
-            // should we have a delay here at all? Spec says slave
-            // must wait at least 20ms before responding, but in fact
-            // some respond instantly. On the other hand, there are delayed
-            // fluctuations on RX pin during transmission via simple OT<->TTL
-            // adapters, that may be picked up by the receiver. So we must wait
-            // some time after transmission to make sure RX line calms down. 1ms
-            // seems reasonable.
-            // delay(1);
             esp_err_t err = ESP_ERROR_CHECK_WITHOUT_ABORT(receive());
             if (err == ESP_OK) {
               if (_recv.state == RecvState::MessageValid) {
@@ -938,9 +929,9 @@ namespace esp32m {
                 incomingFrameInvalid();
               break;
             }
-            transmit(true);
             esp_task_wdt_reset();
             delay(100 * attempt);  // min 100 ms delay between messages
+            transmit(true);
           }
         delay(commDelay());
       }

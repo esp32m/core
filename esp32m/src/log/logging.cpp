@@ -1,5 +1,6 @@
 #include "esp32m/logging.hpp"
 #include "esp32m/base.hpp"
+#include "esp32m/net/ota.hpp"
 
 #include <esp32/rom/ets_sys.h>
 #include <esp_task_wdt.h>
@@ -203,12 +204,14 @@ namespace esp32m {
     };
 
     int64_t timeOrUptime() {
-      time_t now;
-      time(&now);
-      struct tm timeinfo;
-      localtime_r(&now, &timeinfo);
-      if (timeinfo.tm_year > (2016 - 1900))
-        return -((int64_t)now * 1000 + (millis() % 1000));
+      if (xPortCanYield()) {
+        time_t now;
+        time(&now);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        if (timeinfo.tm_year > (2016 - 1900))
+          return -((int64_t)now * 1000 + (millis() % 1000));
+      }
       return millis();
     }
 
@@ -282,6 +285,8 @@ namespace esp32m {
     void Logger::log(Level level, const char *msg) {
       if (isEmpty(msg))
         return;
+      if (net::ota::isRunning())
+        return;
       auto effectiveLevel = _level;
       if (effectiveLevel == Level::Default)
         effectiveLevel = log::level();
@@ -324,6 +329,8 @@ namespace esp32m {
 
     void Logger::logf(Level level, const char *format, va_list arg) {
       if (!format)
+        return;
+      if (net::ota::isRunning())
         return;
       char buf[64];
       char *temp = buf;

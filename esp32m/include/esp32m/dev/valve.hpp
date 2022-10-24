@@ -73,6 +73,7 @@ namespace esp32m {
       const char *name() const override {
         return _name;
       }
+      State state() const { return _state; }
       esp_err_t turn(float value);
       esp_err_t set(valve::Cmd cmd, bool wait = true);
       void setPersistent(bool p) {

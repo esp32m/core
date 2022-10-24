@@ -2,7 +2,7 @@
 
 #include <mutex>
 
-#include <mbcontroller.h>
+#include "mbcontroller.h"
 #include <hal/uart_types.h>
 
 namespace esp32m {

@@ -13,8 +13,10 @@ namespace esp32m {
       modbus::Master &mb = modbus::Master::instance();
       if (mb.isRunning())
         ESP_ERROR_CHECK_WITHOUT_ABORT(mb.stop());
+      delay(500);
       if (!mb.isRunning())
         ESP_ERROR_CHECK_WITHOUT_ABORT(mb.start());
+      delay(500);
       return mb.isRunning();
     }
 
@@ -32,16 +34,16 @@ namespace esp32m {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
-      uint16_t reg[0x18];
-      memset(reg, 0, sizeof(reg));
+      if (millis() - _stamp < 2000)
+        return true;
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 1, 1, &_pv));
       sensor("pv", _pv);
       _stamp = millis();
-      delay(100);
-      if (mb.request(_addr, modbus::Command::ReadHolding, 63, 1, &_ad) ==
+      delay(500);
+      /*if (mb.request(_addr, modbus::Command::ReadHolding, 63, 1, &_ad) ==
           ESP_OK)
-        sensor("ad", _ad);
+        sensor("ad", _ad);*/
       return true;
     }
 

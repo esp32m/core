@@ -32,7 +32,8 @@ namespace esp32m {
       esp_err_t setConfig(const rmt_rx_channel_config_t &config);
       esp_err_t setSignalThresholds(uint32_t nsMin, uint32_t nsMax);
       esp_err_t beginReceive();
-      esp_err_t endReceive(rmt_rx_done_event_data_t& data, int timeoutMs);
+      esp_err_t endReceive(rmt_rx_done_event_data_t &data,
+                           int timeoutMs = portMAX_DELAY);
 
      protected:
       esp_err_t ensureInited() override;
@@ -40,7 +41,7 @@ namespace esp32m {
      private:
       rmt_rx_channel_config_t _config = {};
       rmt_receive_config_t _thresholds = {.signal_range_min_ns = 1000,
-                                         .signal_range_max_ns = 1000 * 1000};
+                                          .signal_range_max_ns = 1000 * 1000};
       QueueHandle_t _queue;
       void *_buf;
       size_t _bufsize;
@@ -56,7 +57,7 @@ namespace esp32m {
       esp_err_t transmit(const rmt_symbol_word_t *data, size_t count);
       esp_err_t transmit(rmt_encoder_handle_t encoder, const void *data,
                          size_t bytes);
-      esp_err_t wait(int ms);
+      esp_err_t wait(int ms = portMAX_DELAY);
 
      protected:
       esp_err_t ensureInited() override;
@@ -69,14 +70,21 @@ namespace esp32m {
 
     class RmtByteEncoder {
      public:
-      RmtByteEncoder(RmtTx *tx, const rmt_bytes_encoder_config_t &config): _tx(tx),
-          _config(config) {}
+      RmtByteEncoder(RmtTx *tx, const rmt_bytes_encoder_config_t &config)
+          : _tx(tx), _config(config) {}
       esp_err_t transmit(const uint8_t *bytes, size_t count);
 
      private:
       RmtTx *_tx;
       rmt_bytes_encoder_config_t _config;
-      rmt_encoder_handle_t _handle=nullptr;
+      rmt_encoder_handle_t _handle = nullptr;
     };
+
+    namespace rmt {
+
+      void dump(const char *msg, rmt_symbol_word_t *syms,
+                size_t count);
+    }  // namespace rmt
+
   }  // namespace io
 }  // namespace esp32m

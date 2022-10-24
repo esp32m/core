@@ -14,6 +14,20 @@
 
 namespace esp32m {
   namespace net {
+
+    namespace ota {
+      const char *Name = "ota";
+      bool _isRunning = false;
+      
+      void setDefaultUrl(const char *url) {
+        Ota::instance().setDefaultUrl(url);
+      }
+
+      bool isRunning() {
+        return _isRunning;
+      }
+    }  // namespace ota
+
     const char *Ota::KeyOtaBegin = "begin";
     const char *Ota::KeyOtaEnd = "end";
 
@@ -148,10 +162,10 @@ namespace esp32m {
             .timeout_ms = 60 * 3 * 1000,
             .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
             .trigger_panic = true};
-        esp_task_wdt_deinit();
-        esp_task_wdt_init(&wdtc);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_task_wdt_reconfigure(&wdtc));
       }
       _isUpdating = true;
+      ota::_isRunning=true;
       Broadcast::publish(name(), KeyOtaBegin);
       _mutex->lock();
     }
@@ -164,14 +178,14 @@ namespace esp32m {
       _total = 0;
       _mutex->unlock();
       _isUpdating = false;
+      ota::_isRunning=false;
       auto wt = App::instance().wdtTimeout();
       if (wt) {
         esp_task_wdt_config_t wdtc = {
             .timeout_ms = wt * 1000,
             .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
             .trigger_panic = true};
-        esp_task_wdt_deinit();
-        esp_task_wdt_init(&wdtc);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_task_wdt_reconfigure(&wdtc));
       }
     }
 
@@ -184,12 +198,5 @@ namespace esp32m {
       Ota::instance();
     }
 
-    namespace ota {
-      const char *Name = "ota";
-
-      void setDefaultUrl(const char *url) {
-        Ota::instance().setDefaultUrl(url);
-      }
-    }  // namespace ota
-  }    // namespace net
+  }  // namespace net
 }  // namespace esp32m

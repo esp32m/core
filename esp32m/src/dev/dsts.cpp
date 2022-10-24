@@ -253,7 +253,7 @@ namespace esp32m {
     unsigned int Core::conversionTicks(const Probe &probe) {
       int divisor = 1 << (Resolution::R12b - probe._resolution);
       float max_conversion_time = (float)TConv / (float)divisor * 1.1;
-      return (unsigned int)(max_conversion_time / portTICK_PERIOD_MS);
+      return (unsigned int)(pdMS_TO_TICKS(max_conversion_time));
     }
 
     esp_err_t Core::waitForConversion(const Probe &probe) {

@@ -46,6 +46,7 @@ namespace esp32m {
     namespace ota {
       extern const char *Name;
       void setDefaultUrl(const char *url);
+      bool isRunning();
     }  // namespace ota
 
   }  // namespace net
