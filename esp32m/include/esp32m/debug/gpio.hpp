@@ -5,7 +5,7 @@
 #include <map>
 
 //#include <driver/adc.h>
-#include <driver/dac.h>
+//#include <driver/dac.h>
 #include <driver/ledc.h>
 //#include <driver/pcnt.h>
 #include <driver/pulse_cnt.h>
@@ -35,15 +35,15 @@ namespace esp32m {
           gpio_pull_mode_t pull;
         } digital;
         struct {
-          adc_atten_t atten;
+          //adc_atten_t atten;
         } adc;
         struct {
           uint8_t voltage;
         } dac;
         struct {
           int8_t offset;
-          dac_cw_scale_t scale;
-          dac_cw_phase_t phase;
+          //dac_cw_scale_t scale;
+          //dac_cw_phase_t phase;
           uint32_t freq;
         } cw;
         struct {

@@ -33,6 +33,7 @@ namespace esp32m {
         uart_parity_t _parity = UART_PARITY_DISABLE;
         bool _ascii = false;
         uint8_t _addrs[32];
+        void *_data = nullptr;
         Modbus();
         void run();
       };

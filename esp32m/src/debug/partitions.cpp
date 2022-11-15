@@ -1,5 +1,6 @@
 #include <esp_flash.h>
 #include <esp_flash_partitions.h>
+#include <spi_flash_mmap.h>
 #include <esp_partition.h>
 
 #include "esp32m/debug/partitions.hpp"
@@ -59,4 +60,4 @@ namespace esp32m {
     }
 
   }  // namespace debug
-}  // namespace esp32m
+}  // namespace esp32m  	

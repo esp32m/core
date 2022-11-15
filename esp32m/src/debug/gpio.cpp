@@ -118,9 +118,9 @@ namespace esp32m {
       memset(&c, 0, sizeof(PinConfig));
       switch (c.mode) {
         case PinMode::Dac: {
-          dac_channel_t ch;
+         /* dac_channel_t ch;
           if (io::gpio2Dac(pin, ch))
-            ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_disable(ch));
+            ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_disable(ch));*/
         } break;
         default:
           break;
@@ -190,11 +190,11 @@ namespace esp32m {
                   if (!io::gpio2Dac(pin, ch))
                     break;
                   err = ESP_OK;
-                  if (changeConfigValue(c.dac.voltage, a[1], changed))
+                  /*if (changeConfigValue(c.dac.voltage, a[1], changed))
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
                         dac_output_voltage(ch, c.dac.voltage));
                   if (!err)
-                    err = ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_enable(ch));
+                    err = ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_enable(ch));*/
                 } break;
                 case PinMode::CosineWave: {
                   dac_channel_t ch;
@@ -204,10 +204,10 @@ namespace esp32m {
                     break;
                   err = ESP_OK;
                   if (changeConfigValue(c.cw.offset, a[1], changed) |
-                      changeConfigValue(c.cw.scale, a[2], changed) |
-                      changeConfigValue(c.cw.phase, a[3], changed) |
+                      //changeConfigValue(c.cw.scale, a[2], changed) |
+                      //changeConfigValue(c.cw.phase, a[3], changed) |
                       changeConfigValue(c.cw.freq, a[4], changed)) {
-                    dac_cw_config_t cw = {
+                    /*dac_cw_config_t cw = {
                         .en_ch = ch,
                         .scale = c.cw.scale,
                         .phase = c.cw.phase,
@@ -217,7 +217,7 @@ namespace esp32m {
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
                         dac_cw_generator_config(&cw));
                     if (!err)
-                      cw_channel = ch;
+                      cw_channel = ch;*/
                   }
                 } break;
                 case PinMode::Ledc: {
@@ -343,10 +343,10 @@ namespace esp32m {
               ESP_ERROR_CHECK_WITHOUT_ABORT(touch_pad_deinit());
           }
 
-          if (cw_channel >= 0)
+          /*if (cw_channel >= 0)
             ESP_ERROR_CHECK_WITHOUT_ABORT(dac_cw_generator_enable());
           else
-            ESP_ERROR_CHECK_WITHOUT_ABORT(dac_cw_generator_disable());
+            ESP_ERROR_CHECK_WITHOUT_ABORT(dac_cw_generator_disable());*/
         }
       }
       auto ledcTimers = cfg["ledcts"].as<JsonArrayConst>();
@@ -431,15 +431,15 @@ namespace esp32m {
             c.add(i.second.digital.pull);
             break;
           case PinMode::Adc:
-            c.add(i.second.adc.atten);
+            //c.add(i.second.adc.atten);
             break;
           case PinMode::Dac:
             c.add(i.second.dac.voltage);
             break;
           case PinMode::CosineWave:
             c.add(i.second.cw.offset);
-            c.add(i.second.cw.scale);
-            c.add(i.second.cw.phase);
+            //c.add(i.second.cw.scale);
+            //c.add(i.second.cw.phase);
             c.add(i.second.cw.freq);
             break;
           case PinMode::Ledc:
@@ -550,12 +550,12 @@ namespace esp32m {
             adc_oneshot_unit_handle_t adchandle;
             if (ESP_ERROR_CHECK_WITHOUT_ABORT(
                     gpio::getADCUnitHandle(unit, &adchandle)) == 0) {
-              adc_oneshot_chan_cfg_t ccfg = {
+              /*adc_oneshot_chan_cfg_t ccfg = {
                   .atten = i.second.adc.atten,  // ADC_ATTEN_DB_11,
                   .bitwidth = ADC_BITWIDTH_DEFAULT,
               };
               ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  adc_oneshot_config_channel(adchandle, channel, &ccfg));
+                  adc_oneshot_config_channel(adchandle, channel, &ccfg));*/
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   adc_oneshot_read(adchandle, channel, &raw));
             } else

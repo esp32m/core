@@ -119,6 +119,8 @@ namespace esp32m {
         err = turn(value.as<float>());
       else {
         const char *action = state["state"];
+        if (!action)
+          return;
         if (!strcmp(action, "open"))
           err = set(valve::Cmd::Open, false);
         else if (!strcmp(action, "close"))

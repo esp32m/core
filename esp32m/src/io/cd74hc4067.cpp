@@ -51,24 +51,30 @@ namespace esp32m {
       esp_err_t setDirection(gpio_mode_t mode) override {
         switch (mode) {
           case GPIO_MODE_INPUT:
-            return ESP_OK;
           case GPIO_MODE_OUTPUT:
-            return ESP_OK;
           case GPIO_MODE_INPUT_OUTPUT:
+            _mode = mode;
             return ESP_OK;
           default:
             return ESP_FAIL;
         }
       }
       esp_err_t setPull(gpio_pull_mode_t pull) override {
-        return ESP_FAIL;
+        _pull = pull;
+        return ESP_OK;
       }
       esp_err_t digitalRead(bool &value) override {
+        /*if (_mode == GPIO_MODE_INPUT_OUTPUT && _set) {
+          value = _value;
+          return ESP_OK;
+        }*/
         auto sig = _owner->_sig;
         std::lock_guard guard(sig->mutex());
         ESP_CHECK_RETURN(_owner->enable(false));
         ESP_CHECK_RETURN(select());
         ESP_CHECK_RETURN(_owner->enable(true));
+        ESP_CHECK_RETURN(sig->setDirection(_mode));
+        ESP_CHECK_RETURN(sig->setPull(_pull));
         ESP_CHECK_RETURN(sig->digitalRead(value));
         return ESP_OK;
       }
@@ -77,8 +83,13 @@ namespace esp32m {
         std::lock_guard guard(sig->mutex());
         ESP_CHECK_RETURN(_owner->enable(false));
         ESP_CHECK_RETURN(select());
+        ESP_CHECK_RETURN(sig->setDirection(_mode));
         ESP_CHECK_RETURN(sig->digitalWrite(value));
         ESP_CHECK_RETURN(_owner->enable(true));
+        if (_mode == GPIO_MODE_INPUT_OUTPUT) {
+          _set = true;
+          _value = value;
+        }
         return ESP_OK;
       }
       pin::Impl *createImpl(pin::Type type) override {
@@ -100,6 +111,9 @@ namespace esp32m {
 
      private:
       CD74HC4067 *_owner;
+      gpio_mode_t _mode = GPIO_MODE_INPUT;
+      gpio_pull_mode_t _pull = GPIO_FLOATING;
+      bool _value = false, _set = false;
       char _name[14];
       friend class cd74hc4067::ADC;
     };

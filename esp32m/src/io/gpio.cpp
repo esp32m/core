@@ -4,7 +4,7 @@
 #include "esp32m/io/utils.hpp"
 
 //#include <driver/adc.h>
-#include <driver/dac.h>
+#include <driver/dac_oneshot.h>
 #include <driver/gpio.h>
 #include <driver/pulse_cnt.h>
 #include <esp_adc/adc_cali.h>
@@ -273,30 +273,33 @@ namespace esp32m {
       DAC(Pin *pin) {
         switch (pin->num()) {
           case DAC_CHANNEL_1_GPIO_NUM:
-            _channel = DAC_CHANNEL_1;
+            _channel = DAC_CHAN_0;
             break;
           case DAC_CHANNEL_2_GPIO_NUM:
-            _channel = DAC_CHANNEL_2;
+            _channel = DAC_CHAN_1;
             break;
           default:
-            _channel = DAC_CHANNEL_MAX;
+            _channel = (dac_channel_t)-1;
             break;
         }
       }
       bool valid() override {
-        return _channel < DAC_CHANNEL_MAX;
+        return _channel >= 0;
       }
       esp_err_t write(float value) override {
         if (value >= 0) {
-          ESP_CHECK_RETURN(dac_output_enable(_channel));
-          ESP_CHECK_RETURN(dac_output_voltage(_channel, 255 * value));
-        } else
-          ESP_CHECK_RETURN(dac_output_disable(_channel));
+          if (!_handle) {
+            dac_oneshot_config_t cfg = {.chan_id = _channel};
+            ESP_CHECK_RETURN(dac_oneshot_new_channel(&cfg, &_handle));
+          }
+          ESP_CHECK_RETURN(dac_oneshot_output_voltage(_handle, 255 * value));
+        }
         return ESP_OK;
       }
 
      private:
       dac_channel_t _channel;
+      dac_oneshot_handle_t _handle = nullptr;
     };
 
     class Pcnt : public io::pin::IPcnt {

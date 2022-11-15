@@ -1,7 +1,8 @@
 #pragma once
 
 //#include <driver/adc.h>
-#include <driver/dac.h>
+#include <hal/gpio_types.h>
+#include <driver/dac_oneshot.h>
 #include <driver/touch_sensor.h>
 #include <math.h>
 #include <soc/dac_channel.h>

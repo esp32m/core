@@ -55,6 +55,14 @@ namespace esp32m {
         json::from(data["regs"], _regs, &changed);
         json::from(data["regc"], _regc, &changed);
         json::from(data["cmd"], (int &)_cmd, &changed);
+        JsonArrayConst d = data["data"];
+        if (d) {
+          if (_data)
+            free(_data);
+          _data = nullptr;
+          _data = malloc(sizeof(uint16_t) * d.size());
+          for (int i = 0; i < d.size(); i++) ((uint16_t *)_data)[i] = d[i];
+        }
         if (_startAddr < 1) {
           _startAddr = 1;
           changed = true;
@@ -77,7 +85,7 @@ namespace esp32m {
       bool Modbus::handleRequest(Request &req) {
         if (AppObject::handleRequest(req))
           return true;
-        if (req.is("scan") || req.is("request")) {
+        if (req.is("scan") || req.is("request") || req.is("write")) {
           auto data = req.data();
           if (_pendingResponse)
             req.respond(ESP_ERR_INVALID_STATE);
@@ -163,6 +171,11 @@ namespace esp32m {
                 } else
                   _pendingResponse->setError(err);
                 free(buf);
+                _pendingResponse->publish();
+              } else if (_pendingResponse->is("write") && _data && _regc) {
+                err = mb.request(_addr, _cmd, _regs, _regc, _data);
+                if (err != ESP_OK)
+                  _pendingResponse->setError(err);
                 _pendingResponse->publish();
               }
             }
