@@ -10,8 +10,8 @@
 #include "esp32m/events.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/net/ip_event.hpp"
-#include "esp32m/net/wifi.hpp"
 #include "esp32m/net/ota.hpp"
+#include "esp32m/net/wifi.hpp"
 namespace esp32m {
 
   namespace log {
@@ -140,6 +140,12 @@ namespace esp32m {
                   (int)(stamp % 1000), hostname, name, message->message());
           auto result = sendto(_fd, buf, strlen(buf), 0,
                                (struct sockaddr *)&_addr, sizeof(_addr));
+          if (result == EMSGSIZE) {
+            sprintf(buf, "<%d>1 %s.%04dZ %s %s - - - %s", pri, strftime_buf,
+                    (int)(stamp % 1000), hostname, name, "message too long!");
+            result = sendto(_fd, buf, strlen(buf), 0, (struct sockaddr *)&_addr,
+                            sizeof(_addr));
+          }
           free(buf);
           return (result >= 0);
       }

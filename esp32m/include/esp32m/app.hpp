@@ -7,7 +7,9 @@
 #include "esp32m/config.hpp"
 #include "esp32m/config/configurable.hpp"
 #include "esp32m/events/request.hpp"
+#include "esp32m/json.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/props.hpp"
 
 namespace esp32m {
 
@@ -61,25 +63,26 @@ namespace esp32m {
     DoneReason _reason;
     static const char *NAME;
   };
-  class EventPropChanged : public Event {
+
+  class EventDescribe : public Event {
    public:
-    static bool is(Event &ev, const char *name) {
+    static bool is(Event &ev, EventDescribe **r) {
       if (!ev.is(NAME))
         return false;
-      auto &e = (EventPropChanged &)ev;
-      if (name && e._name && !strcmp(name, e._name))
-        return true;
-      return false;
+      if (r)
+        *r = (EventDescribe *)&ev;
+      return true;
     }
-    static void publish(const char *name);
-    const char *name() const {
-      return _name;
+    void add(const char *name, const JsonVariantConst descriptor) {
+      if (descriptor)
+        descriptors[name] = descriptor;
     }
 
    private:
-    EventPropChanged(const char *name) : Event(NAME), _name(name) {}
-    const char *_name;
+    EventDescribe() : Event(NAME) {}
+    std::map<std::string, JsonVariantConst> descriptors;
     static const char *NAME;
+    friend class App;
   };
 
   class Stateful : public virtual log::Loggable {
@@ -114,6 +117,9 @@ namespace esp32m {
     virtual bool handleEvent(Event &ev) {
       return false;
     };
+    virtual const JsonVariantConst descriptor() const {
+      return json::emptyArray();
+    };
   };
 
   class AppObject : public virtual log::Loggable,
@@ -145,13 +151,16 @@ namespace esp32m {
       return _config.get();
     }
     const char *name() const override {
-      return _name;
+      return _name.c_str();
     }
     const char *interactiveName() const override {
       return "app";
     }
     const char *stateName() const override {
       return "app";
+    }
+    Props &props() {
+      return _props;
     }
     uint32_t wdtTimeout() const {
       return _wdtTimeout;
@@ -160,19 +169,18 @@ namespace esp32m {
       if (!name)
         return;
       bool fire = false;
-      if (_name) {
-        if (!strcmp(name, _name))
+      std::string prev = _name;
+      if (!_name.empty()) {
+        if (_name == name)
           return;
-        free(_name);
         fire = true;
       }
-      _name = strdup(name);
+      _name = name;
       if (fire) {  // don't fire event the first time the name is set
         logI("my name is now %s", _name);
-        EventPropChanged::publish(PropName);
+        EventPropChanged::publish("app", "name", prev, _name);
       }
     }
-    static const char *PropName;
 
    protected:
     DynamicJsonDocument *getState(const JsonVariantConst args) override;
@@ -180,8 +188,9 @@ namespace esp32m {
     bool handleRequest(Request &req) override;
 
    private:
-    char *_name = nullptr;
+    std::string _name;
     const char *_version;
+    Props _props;
     uint32_t _sketchSize, _wdtTimeout = 30;
     uint8_t _maxInitLevel = 0;
     uint8_t _curInitLevel = 0;

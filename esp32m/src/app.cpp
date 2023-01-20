@@ -9,6 +9,7 @@
 #include <esp_private/esp_int_wdt.h>
 #include <esp_task_wdt.h>
 #include <sdkconfig.h>
+#include "esp_mac.h"
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
@@ -21,21 +22,16 @@ namespace esp32m {
   const char *EventInit::NAME = "init";
   const char *EventInited::NAME = "inited";
   const char *EventDone::NAME = "done";
+  const char *EventDescribe::NAME = "describe";
   const char *EventPropChanged::NAME = "prop-changed";
   App *_appInstance = nullptr;
 
   const char *Stateful::KeyStateSet = "state-set";
   const char *Stateful::KeyStateGet = "state-get";
-  const char *App::PropName = "app::name";
 
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
     EventManager::instance().publishBackwards(ev);
-  }
-
-  void EventPropChanged::publish(const char *name) {
-    EventPropChanged ev(name);
-    EventManager::instance().publish(ev);
   }
 
   bool Stateful::handleStateRequest(Request &req) {
@@ -69,9 +65,12 @@ namespace esp32m {
   Interactive::Interactive() {
     EventManager::instance().subscribe([this](Event &ev) {
       Request *req;
+      EventDescribe *ed;
       if (Request::is(ev, interactiveName(), &req))
         handleRequest(*req);
-      else
+      else if (EventDescribe::is(ev, &ed)) {
+        ed->add(name(), descriptor());
+      } else
         handleEvent(ev);
     });
   };
@@ -126,8 +125,17 @@ namespace esp32m {
     _appInstance->_config.reset(new Config(store));
   }
 
-  App ::App(const char *name, const char *version) : _version(version) {
+  App ::App(const char *name, const char *version)
+      : _version(version), _props("app") {
     setName(name);
+    uint8_t macOrEui[8];
+    char buf[13];
+    if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_efuse_mac_get_default(macOrEui)) ==
+        ESP_OK) {
+      sprintf(buf, "%02x%02x%02x%02x%02x%02x", macOrEui[0], macOrEui[1],
+              macOrEui[2], macOrEui[3], macOrEui[4], macOrEui[5]);
+      _props.set("uid", buf);
+    }
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
         ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -136,9 +144,10 @@ namespace esp32m {
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(ret);
     esp_int_wdt_init();
-    esp_task_wdt_config_t wdtc = {.timeout_ms = _wdtTimeout*1000,
-                                  .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, 
-                                  .trigger_panic = true};
+    esp_task_wdt_config_t wdtc = {
+        .timeout_ms = _wdtTimeout * 1000,
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+        .trigger_panic = true};
     esp_task_wdt_deinit();
     esp_task_wdt_init(&wdtc);
     logI("starting %s", _version ? _version : "");
@@ -165,7 +174,7 @@ namespace esp32m {
     if (initialized())
       return;
     if (!_config)
-      _config.reset(new Config(spiffs::newConfigStore()));
+      _config.reset(new Config(io::Spiffs::instance().newConfigStore()));
     _config->load();
     for (int i = 0; i <= _maxInitLevel; i++) {
       EventInit evt(i);
@@ -199,10 +208,27 @@ namespace esp32m {
       req.respond();
       restart();
       return true;
-    }
-    if (req.is("reset")) {
+    } else if (req.is("reset")) {
       config()->reset();
       req.respond();
+      return true;
+    } else if (req.is("describe")) {
+      EventDescribe ev;
+      EventManager::instance().publish(ev);
+      size_t size = JSON_OBJECT_SIZE(ev.descriptors.size());
+      if (size) {
+        for (auto &e : ev.descriptors) {
+          size += JSON_STRING_SIZE(e.first.size()) + json::measure(e.second);
+        }
+        auto doc = new DynamicJsonDocument(size);
+        auto root = doc->to<JsonObject>();
+        for (auto &e : ev.descriptors) {
+          root[e.first] = e.second;
+        }
+        req.respond(root, false);
+        delete doc;
+      } else
+        req.respond();
       return true;
     }
     return false;

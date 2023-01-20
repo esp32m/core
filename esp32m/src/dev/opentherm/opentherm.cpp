@@ -167,7 +167,7 @@ namespace esp32m {
 
     DataIdInfo IdInfoArray::get(DataId id) {
       auto i = static_cast<uint8_t>(id);
-      return static_cast<DataIdInfo>((_arr[i >> 3] >> ((i & 7) << 2)) & 15);
+      return DataIdInfo((_arr[i >> 3] >> ((i & 7) << 2)) & 15);
     }
 
     void IdInfoArray::update(DataId id, DataIdInfo info) {
@@ -921,7 +921,7 @@ namespace esp32m {
                 Message msg(_recv.buf);
                 processResponse(msg);
                 break;
-              } else
+              } else if (attempt > 0)
                 dumpFrame(attempt);
             }
             if (attempt++ >= MaxAttempts) {
@@ -1164,6 +1164,7 @@ namespace esp32m {
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
         opentherm::Status s = _hvac.status;
+        s.slave.value = 0;
         json::from(hvac["status"], s.value, &changed);
         if (changed)
           _hvac.status.master.value = s.master.value;
@@ -1181,7 +1182,9 @@ namespace esp32m {
       JsonObject root = doc->to<JsonObject>();
       _ids.toJson(root);
       auto hvac = root.createNestedObject("hvac");
-      hvac["status"] = _hvac.status.value & 0xff00;
+      opentherm::Status s = _hvac.status;
+      s.slave.value = 0;
+      hvac["status"] = s.value;
       json::to(hvac, "ts", _hvac.tSet);
       json::to(hvac, "tdhws", _hvac.tDhwSet);
       json::to(hvac, "maxts", _hvac.maxTSet);

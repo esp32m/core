@@ -50,8 +50,7 @@ namespace esp32m {
 
       class TwoPinSensor : public ISensor {
        public:
-        TwoPinSensor(io::IPin *open, io::IPin *closed)
-            : _open(open), _closed(closed){};
+        TwoPinSensor(io::IPin *open, io::IPin *closed);
         void setLevels(bool open, bool closed) {
           _openLevel = open;
           _closedLevel = closed;
@@ -85,6 +84,14 @@ namespace esp32m {
       void setSamplesCount(int samples);
 
      protected:
+      const JsonVariantConst descriptor() const override {
+        static StaticJsonDocument<JSON_ARRAY_SIZE(1)> doc;
+        if (doc.isNull()) {
+          auto root = doc.to<JsonArray>();
+          root.add("valve");
+        }
+        return doc.as<JsonArrayConst>();
+      };
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       void setState(const JsonVariantConst cfg,
                     DynamicJsonDocument **result) override;

@@ -77,6 +77,9 @@ namespace esp32m {
     bool isEmpty(esp_netif_dns_info_t *dns);
 
     esp_err_t useNetif();
+    bool isNetifInited();
     esp_err_t useEventLoop();
+    bool isEventLoopInited();
+
   }  // namespace net
 }  // namespace esp32m

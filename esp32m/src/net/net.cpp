@@ -312,12 +312,20 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    bool isNetifInited() {
+      return inited.netif;
+    }
+
     esp_err_t useEventLoop() {
       if (!inited.loop) {
         ESP_CHECK_RETURN(esp_event_loop_create_default());
         inited.loop = true;
       }
       return ESP_OK;
+    }
+
+    bool isEventLoopInited() {
+      return inited.loop;
     }
 
   }  // namespace net

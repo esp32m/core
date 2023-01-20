@@ -19,7 +19,10 @@ namespace esp32m {
 
     void checkSetResult(esp_err_t err, DynamicJsonDocument **result);
 
+   
     JsonDocument &empty();
+    JsonArrayConst emptyArray();
+    JsonObjectConst emptyObject();
 
     template <class T>
     T null() {

@@ -91,11 +91,11 @@ namespace esp32m {
         logW("buffer size (%d) != serialized size (%d)", bufsize, ss);
       if (check(fwrite(&mu, sizeof(mu), 1, file) == 1, file,
                 "error writing config header"))
-        check(fwrite(buf, 1, ss, file) == ss, file, "error writing config");
+        if (check(fwrite(buf, 1, ss, file) == ss, file, "error writing config"))
+          logD("%d bytes saved, mu=%d, data=%s", ss, mu, buf);
       free(buf);
       fflush(file);
       fclose(file);
-      logD("%d bytes saved", ss + sizeof(mu));
     } else
       logW("could not open %s for writing: %d", _path, errno);
   }

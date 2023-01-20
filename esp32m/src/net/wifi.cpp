@@ -6,6 +6,7 @@
 #include "esp32m/events/response.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
+#include "esp32m/props.hpp"
 #include "esp32m/net/wifi_utils.hpp"
 
 #include <dhcpserver/dhcpserver.h>
@@ -509,8 +510,6 @@ namespace esp32m {
       const char *hostname = App::instance().name();
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifsta, hostname));
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifap, hostname));
-      if (ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_init()) == ESP_OK)
-        ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_hostname_set(hostname));
       netbiosns_set_name(hostname);
       return ESP_OK;
     }
@@ -545,7 +544,7 @@ namespace esp32m {
       } else if (EventDone::is(ev, &reason)) {
         stop();
         return true;
-      } else if (EventPropChanged::is(ev, App::PropName)) {
+      } else if (EventPropChanged::is(ev, "app", "name")) {
         _appNameChanged = true;
         if (_task)
           xTaskNotifyGive(_task);

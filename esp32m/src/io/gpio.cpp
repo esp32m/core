@@ -3,7 +3,7 @@
 #include "esp32m/io/pins.hpp"
 #include "esp32m/io/utils.hpp"
 
-//#include <driver/adc.h>
+// #include <driver/adc.h>
 #include <driver/dac_oneshot.h>
 #include <driver/gpio.h>
 #include <driver/pulse_cnt.h>
@@ -80,21 +80,27 @@ namespace esp32m {
         return (_flags & ADCFlags::Valid) != 0;
       }
       esp_err_t read(int &value, uint32_t *mv) override {
-        /* esp_err_t err = ESP_OK;
-         if (_c1 >= 0) {
-           int v = adc1_get_raw((adc1_channel_t)_c1);
-           if (v < 0)
-             err = ESP_FAIL;
-           else
-             value = v;
-         } else {
-           err = adc2_get_raw((adc2_channel_t)_c2, _width, &value);
-         }
-         ESP_CHECK_RETURN(err);
- */
         adc_oneshot_unit_handle_t handle;
         ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
-        ESP_CHECK_RETURN(adc_oneshot_read(handle, _channel, &value));
+        /*
+        esp_err_t err = ESP_OK;
+        for (int attempt = 0; attempt < 3; attempt++) {
+          // unfortunately it doesnt't wait for the other thread to release ADC,
+        so we have to do ugly retries.
+          // we can add our own mutex, but what if
+          err = adc_oneshot_read(handle, _channel, &value);
+          if (err == ESP_ERR_TIMEOUT)
+            delay(attempt);
+          else
+            break;
+        }
+        ESP_CHECK_RETURN(err);
+        */
+        auto &mutex = getADCUnitMutex(_unit);
+        {
+          std::lock_guard guard(mutex);
+          ESP_CHECK_RETURN(adc_oneshot_read(handle, _channel, &value));
+        }
         if (mv) {
           if (!_calihandle || (_flags & ADCFlags::CharsDirty) != 0) {
             _flags &= ~ADCFlags::CharsDirty;
@@ -357,10 +363,11 @@ namespace esp32m {
       pcnt_channel_handle_t _channel = nullptr;
       bool _valid = false;
       esp_err_t install() {
-        pcnt_unit_config_t unit_config = {
-            .low_limit = SHRT_MIN,
-            .high_limit = SHRT_MAX,
-        };
+        pcnt_unit_config_t unit_config = {.low_limit = SHRT_MIN,
+                                          .high_limit = SHRT_MAX,
+                                          .flags = {
+                                              .accum_count = true,
+                                          }};
         ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &_unit));
         pcnt_chan_config_t chan_config = {
             .edge_gpio_num = _pin->num(),
@@ -619,6 +626,7 @@ namespace esp32m {
     }
 
     adc_oneshot_unit_handle_t adc_handles[] = {nullptr, nullptr};
+    std::map<adc_unit_t, std::mutex> _adc_locks;
 
     esp_err_t getADCUnitHandle(adc_unit_t unit,
                                adc_oneshot_unit_handle_t *handle) {
@@ -632,5 +640,13 @@ namespace esp32m {
       *handle = h;
       return ESP_OK;
     }
+
+    std::mutex &getADCUnitMutex(adc_unit_t unit) {
+      auto it = _adc_locks.find(unit);
+      if (it != _adc_locks.end())
+        return it->second;
+      return _adc_locks[unit];
+    }
+
   }  // namespace gpio
 }  // namespace esp32m

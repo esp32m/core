@@ -433,10 +433,10 @@ namespace esp32m {
 
     union DataIdInfo {
       struct {
-        int8_t readableSet : 1;
-        int8_t readable : 1;
-        int8_t writableSet : 1;
-        int8_t writable : 1;
+        uint8_t readableSet : 1;
+        uint8_t readable : 1;
+        uint8_t writableSet : 1;
+        uint8_t writable : 1;
       };
       uint8_t value : 4;
       DataIdInfo(uint8_t v) : value(v) {}
@@ -613,9 +613,18 @@ namespace esp32m {
       const char *name() const override {
         return "otm-img";
       }
+      void init(Master *master) override {
+        IMasterModel::init(master);
+        auto &hvac = master->hvac();
+        hvac.tSet = 35;
+        hvac.maxTSet = 35;
+        hvac.tDhw = 40;
+        hvac.status.master.CH = 1;
+        hvac.status.master.DHW = 1;
+      }
 
      protected:
-      bool nextRequest(Message &msg) {
+      bool nextRequest(Message &msg) override {
         auto &hvac = _master->hvac();
         if (_index < 0)
           _index = 0;
@@ -623,9 +632,11 @@ namespace esp32m {
           int ii = _index;
           _index++;
           switch (ii) {
-            case 0:
-              msg.read(DataId::Status, hvac.status.value);
-              break;
+            case 0: {
+              Status s = hvac.status;
+              s.slave.value = 0xCA;  // magic
+              msg.read(DataId::Status, s.value);
+            } break;
             case 1:
               msg.read(DataId::TdhwSetUBTdhwSetLB);
               break;
@@ -735,7 +746,7 @@ namespace esp32m {
       const char *name() const override {
         return "ots-img";
       }
-      void init(Slave *slave) {
+      void init(Slave *slave) override {
         ISlaveModel::init(slave);
         auto &hvac = slave->hvac();
         hvac.rbp.rw_dhw = 1;

@@ -7,10 +7,23 @@
 namespace esp32m {
   namespace json {
 
-    StaticJsonDocument<0> EmptyDocument;
-
     JsonDocument &empty() {
-      return EmptyDocument;
+      static StaticJsonDocument<0> doc;
+      return doc;
+    }
+
+    JsonArrayConst emptyArray() {
+      static StaticJsonDocument<0> doc;
+      if (doc.isNull())
+        doc.to<JsonArray>();
+      return doc.as<JsonArrayConst>();
+    }
+
+    JsonObjectConst emptyObject() {
+      static StaticJsonDocument<0> doc;
+      if (doc.isNull())
+        doc.to<JsonObject>();
+      return doc.as<JsonObjectConst>();
     }
 
     DynamicJsonDocument *parse(const char *data, int len) {
@@ -109,7 +122,7 @@ namespace esp32m {
       target = src;
       return true;
     }
-    
+
     bool fromDup(JsonVariantConst v, char *&target, const char *def,
                  bool *changed) {
       bool c = false;

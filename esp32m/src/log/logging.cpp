@@ -208,7 +208,7 @@ namespace esp32m {
         time_t now;
         time(&now);
         struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
+        gmtime_r(&now, &timeinfo);
         if (timeinfo.tm_year > (2016 - 1900))
           return -((int64_t)now * 1000 + (millis() % 1000));
       }
@@ -229,7 +229,7 @@ namespace esp32m {
         char strftime_buf[32];
         time_t now = stamp / 1000;
         struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
+        gmtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%F %T", &timeinfo);
         buf = (char *)malloc(strlen(strftime_buf) + 1 /*dot*/ + 4 /*millis*/ +
                              1 /*space*/ + 1 /*level*/ + 1 /*space*/ +

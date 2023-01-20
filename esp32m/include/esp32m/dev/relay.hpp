@@ -54,6 +54,14 @@ namespace esp32m {
       static const char *toString(State s);
 
      protected:
+      const JsonVariantConst descriptor() const override {
+        static StaticJsonDocument<JSON_ARRAY_SIZE(1)> doc;
+        if (doc.isNull()) {
+          auto root = doc.to<JsonArray>();
+          root.add("switch");
+        }
+        return doc.as<JsonArrayConst>();
+      };
       void setState(const JsonVariantConst cfg,
                     DynamicJsonDocument **result) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;

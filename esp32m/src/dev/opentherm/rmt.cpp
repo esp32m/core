@@ -21,7 +21,7 @@ namespace esp32m {
     class Driver : public IDriver {
      public:
       Driver(gpio_num_t rx, gpio_num_t tx) : _rxPin(rx), _txPin(tx) {
-        _rx = new io::RmtRx(FrameSizeBits);
+        _rx = new io::RmtRx(FrameSizeBits * 2);
         _tx = new io::RmtTx();
       }
       ~Driver() override {
@@ -99,8 +99,10 @@ namespace esp32m {
                                         // need only FrameSizeBits
               .flags = {}};
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
-          // be a little more permissive, especially for the max pulse duration, I've seen it over 1.2ms
-          ESP_CHECK_RETURN(_rx->setSignalThresholds((400 - 50) * 1000,  (1150 + 150) * 1000));
+          // be a little more permissive, especially for the max pulse duration,
+          // I've seen it over 1.2ms
+          ESP_CHECK_RETURN(
+              _rx->setSignalThresholds((400 - 50) * 1000, (1150 + 150) * 1000));
           rmt_tx_channel_config_t txcfg = {
               .gpio_num = _txPin,
               .clk_src = RMT_CLK_SRC_DEFAULT,

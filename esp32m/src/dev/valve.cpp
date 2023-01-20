@@ -39,6 +39,12 @@ namespace esp32m {
         return ESP_OK;
       }
 
+      TwoPinSensor::TwoPinSensor(io::IPin *open, io::IPin *closed)
+          : _open(open), _closed(closed) {
+        open->setDirection(GPIO_MODE_INPUT);
+        closed->setDirection(GPIO_MODE_INPUT);
+      };
+
       esp_err_t TwoPinSensor::sense(State &state) {
         bool opened, closed;
         ESP_CHECK_RETURN(_open->digitalRead(opened));

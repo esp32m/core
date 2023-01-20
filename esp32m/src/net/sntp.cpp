@@ -1,11 +1,29 @@
-#include "esp32m/net/sntp.hpp"
+// need this as of 2023-01-20 to compile apps/esp_sntp.h
+#define ESP_LWIP_COMPONENT_BUILD
+
 #include "apps/esp_sntp.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/timers.h"
+
 #include "esp32m/json.hpp"
+#include "esp32m/net/ip_event.hpp"
+#include "esp32m/net/sntp.hpp"
+#include "esp32m/net/net.hpp"
 
 namespace esp32m {
   namespace net {
 
     const char *DefaultNtpHost = "pool.ntp.org";
+
+    bool Sntp::handleEvent(Event &ev) {
+      if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
+        xTimerPendFunctionCall(
+            [](void *self, uint32_t a) { ((Sntp *)self)->update(); }, this, 0,
+            pdMS_TO_TICKS(1000));
+      else
+        return false;
+      return true;
+    }
 
     DynamicJsonDocument *Sntp::getState(const JsonVariantConst args) {
       size_t size = JSON_OBJECT_SIZE(2);
@@ -53,12 +71,14 @@ namespace esp32m {
     }
 
     void Sntp::update() {
-      if (sntp_enabled())
-        sntp_stop();
+      if (!net::isNetifInited())
+        return;
+      esp_sntp_stop();
       if (_enabled) {
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
-        sntp_setservername(0, _host.size() ? _host.c_str() : DefaultNtpHost);
-        sntp_init();
+        esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+        esp_sntp_setservername(0,
+                               _host.size() ? _host.c_str() : DefaultNtpHost);
+        esp_sntp_init();
         char cst[17] = {0};
         char cdt[17] = "DST";
         char tz[33] = {0};
