@@ -14,13 +14,13 @@ namespace esp32m {
       spi_bus_config_t buscfg = {};
       spi_device_interface_config_t devCfg = {};
       switch (_host) {
-        case VSPI_HOST:
+        case SPI3_HOST:
           buscfg.miso_io_num = 19;
           // buscfg.mosi_io_num = 23;
           buscfg.sclk_io_num = 18;
           devCfg.spics_io_num = 5;
           break;
-        case HSPI_HOST:
+        case SPI2_HOST:
           buscfg.miso_io_num = 12;
           // buscfg.mosi_io_num = 13;
           buscfg.sclk_io_num = 14;

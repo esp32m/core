@@ -40,8 +40,8 @@ namespace esp32m {
           if (_pendingResponse) {
             req.respond("i2c", _i2cScannerErrors[0], true);
           } else {
-            _pinSDA = data["sda"] | GPIO_NUM_21;
-            _pinSCL = data["scl"] | GPIO_NUM_22;
+            _pinSDA = data["sda"] | I2C_MASTER_SDA;
+            _pinSCL = data["scl"] | I2C_MASTER_SCL;
             _freq = data["freq"] | 100000;
             _startId = data["from"] | 3;
             _endId = data["to"] | 120;

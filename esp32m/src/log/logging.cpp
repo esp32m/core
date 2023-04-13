@@ -2,7 +2,8 @@
 #include "esp32m/base.hpp"
 #include "esp32m/net/ota.hpp"
 
-#include <esp32/rom/ets_sys.h>
+#include <esp_rom_uart.h>
+#include <rom/ets_sys.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>

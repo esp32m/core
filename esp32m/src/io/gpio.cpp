@@ -15,6 +15,9 @@
 #include <soc/sens_reg.h>
 #include <string.h>
 #include <mutex>
+#if SOC_DAC_SUPPORTED
+#  include <soc/dac_channel.h>
+#endif
 
 #define DEFAULT_VREF \
   1100  // Use adc2_vref_to_gpio() to obtain a better
@@ -105,15 +108,18 @@ namespace esp32m {
           if (!_calihandle || (_flags & ADCFlags::CharsDirty) != 0) {
             _flags &= ~ADCFlags::CharsDirty;
             if (_calihandle) {
+#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
               if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0)
                 adc_cali_delete_scheme_line_fitting(_calihandle);
+#endif
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-              else if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0)
+              if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0)
                 adc_cali_delete_scheme_curve_fitting(_calihandle);
 #endif
             }
             _calihandle = nullptr;
 
+#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
             if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0) {
               adc_cali_line_fitting_config_t cali_config = {
                   .unit_id = _unit,
@@ -122,10 +128,11 @@ namespace esp32m {
                   .default_vref = DEFAULT_VREF};
               ESP_CHECK_RETURN(adc_cali_create_scheme_line_fitting(
                   &cali_config, &_calihandle));
-
             }
+#endif
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-            else if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
+            if (!_calihandle &&
+                (calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
               adc_cali_curve_fitting_config_t cali_config = {
                   .unit_id = _unit,
                   .atten = _atten,
@@ -274,6 +281,8 @@ namespace esp32m {
         return ESP_OK;
       }
     };
+
+#if SOC_DAC_SUPPORTED
     class DAC : public io::pin::IDAC {
      public:
       DAC(Pin *pin) {
@@ -307,7 +316,7 @@ namespace esp32m {
       dac_channel_t _channel;
       dac_oneshot_handle_t _handle = nullptr;
     };
-
+#endif
     class Pcnt : public io::pin::IPcnt {
      public:
       Pcnt(Pin *pin) : _pin(pin) {
@@ -504,7 +513,11 @@ namespace esp32m {
 
      private:
       Pin *_pin;
+#if SOC_LEDC_SUPPORT_HS_MODE
       ledc_mode_t _speedMode = LEDC_HIGH_SPEED_MODE;
+#else
+      ledc_mode_t _speedMode = LEDC_LOW_SPEED_MODE;
+#endif
       int _channel = -1;
       int _timer = -1;
     };
@@ -523,8 +536,10 @@ namespace esp32m {
           if (num != GPIO_NUM_3)
             _features |= Features::PullDown;
         }
+#if SOC_DAC_SUPPORTED
         if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
           _features |= Features::DAC;
+#endif
         adc_unit_t unit;
         adc_channel_t channel;
         if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
@@ -586,10 +601,12 @@ namespace esp32m {
           if ((_features & io::IPin::Features::ADC) != 0)
             return new gpio::ADC(this);
           break;
+#if SOC_DAC_SUPPORTED
         case io::pin::Type::DAC:
           if ((_features & io::IPin::Features::DAC) != 0)
             return new gpio::DAC(this);
           break;
+#endif
         case io::pin::Type::Pcnt:
           if ((_features & io::IPin::Features::PulseCounter) != 0)
             return new gpio::Pcnt(this);
@@ -633,7 +650,8 @@ namespace esp32m {
       auto h = adc_handles[unit];
       if (!h) {
         adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = unit,
-                                            .ulp_mode = (adc_ulp_mode_t)0};
+                                            .clk_src = (adc_oneshot_clk_src_t)0,
+                                            .ulp_mode = ADC_ULP_MODE_DISABLE};
         ESP_CHECK_RETURN(adc_oneshot_new_unit(&ucfg, &h));
         adc_handles[unit] = h;
       }

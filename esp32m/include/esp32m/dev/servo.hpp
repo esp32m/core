@@ -16,7 +16,7 @@ namespace esp32m {
         return _name;
       }
       esp_err_t config(int pwMin = 500, int pwMax = 2500, int freq = 50,
-                       ledc_timer_bit_t timerRes = LEDC_TIMER_15_BIT);
+                       ledc_timer_bit_t timerRes = LEDC_TIMER_14_BIT);
       esp_err_t setAngle(float angle);
       float getAngle();
       esp_err_t setPulseWidth(int us);
@@ -47,7 +47,7 @@ namespace esp32m {
      private:
       const char *_name;
       int _pwMin = 500, _pwMax = 2500, _freq = 50;
-      ledc_timer_bit_t _timerRes = LEDC_TIMER_15_BIT;
+      ledc_timer_bit_t _timerRes = LEDC_TIMER_14_BIT;
       bool _configDirty;
       io::IPin *_pin;
       io::pin::ILEDC *_ledc;

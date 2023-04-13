@@ -1,6 +1,7 @@
+#include "sdkconfig.h"
 #include "esp32m/io/utils.hpp"
 
-//#include <soc/adc_channel.h>
+// #include <soc/adc_channel.h>
 
 namespace esp32m {
   namespace io {
@@ -65,7 +66,7 @@ namespace esp32m {
         default:
           return false;
       }
-    }*/
+    }
 
     bool gpio2Dac(gpio_num_t pin, dac_channel_t &ch) {
       switch (pin) {
@@ -78,10 +79,54 @@ namespace esp32m {
         default:
           return false;
       }
-    }
+    }*/
 
     bool gpio2TouchPad(gpio_num_t pin, touch_pad_t &tp) {
       switch (pin) {
+#if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+        case GPIO_NUM_1:
+          tp = TOUCH_PAD_GPIO1_CHANNEL;
+          return true;
+        case GPIO_NUM_2:
+          tp = TOUCH_PAD_GPIO2_CHANNEL;
+          return true;
+        case GPIO_NUM_3:
+          tp = TOUCH_PAD_GPIO3_CHANNEL;
+          return true;
+        case GPIO_NUM_4:
+          tp = TOUCH_PAD_GPIO4_CHANNEL;
+          return true;
+        case GPIO_NUM_5:
+          tp = TOUCH_PAD_GPIO5_CHANNEL;
+          return true;
+        case GPIO_NUM_6:
+          tp = TOUCH_PAD_GPIO6_CHANNEL;
+          return true;
+        case GPIO_NUM_7:
+          tp = TOUCH_PAD_GPIO7_CHANNEL;
+          return true;
+        case GPIO_NUM_8:
+          tp = TOUCH_PAD_GPIO8_CHANNEL;
+          return true;
+        case GPIO_NUM_9:
+          tp = TOUCH_PAD_GPIO9_CHANNEL;
+          return true;
+        case GPIO_NUM_10:
+          tp = TOUCH_PAD_GPIO10_CHANNEL;
+          return true;
+        case GPIO_NUM_11:
+          tp = TOUCH_PAD_GPIO11_CHANNEL;
+          return true;
+        case GPIO_NUM_12:
+          tp = TOUCH_PAD_GPIO12_CHANNEL;
+          return true;
+        case GPIO_NUM_13:
+          tp = TOUCH_PAD_GPIO13_CHANNEL;
+          return true;
+        case GPIO_NUM_14:
+          tp = TOUCH_PAD_GPIO14_CHANNEL;
+          return true;
+#else
         case GPIO_NUM_4:
           tp = TOUCH_PAD_GPIO4_CHANNEL;
           return true;
@@ -112,6 +157,7 @@ namespace esp32m {
         case GPIO_NUM_32:
           tp = TOUCH_PAD_GPIO32_CHANNEL;
           return true;
+#endif
         default:
           return false;
       }

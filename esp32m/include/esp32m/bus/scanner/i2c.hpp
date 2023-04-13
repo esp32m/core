@@ -30,7 +30,7 @@ namespace esp32m {
        private:
         TaskHandle_t _task = nullptr;
         Response *_pendingResponse = nullptr;
-        int _pinSDA = GPIO_NUM_21, _pinSCL = GPIO_NUM_22;
+        int _pinSDA = I2C_MASTER_SDA, _pinSCL = I2C_MASTER_SCL;
         int _startId = 3, _endId = 120;
         uint8_t _ids[16];
         uint32_t _freq = 100000;

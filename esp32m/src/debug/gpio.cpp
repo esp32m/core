@@ -1,12 +1,14 @@
 #include "esp32m/debug/gpio.hpp"
-#include "esp32m/io/utils.hpp"
 #include "esp32m/io/gpio.hpp"
+#include "esp32m/io/utils.hpp"
 #include "esp32m/json.hpp"
 
 #include <driver/gpio.h>
-//#include <soc/adc_channel.h>
+// #include <soc/adc_channel.h>
 #include <esp_adc/adc_oneshot.h>
-#include <soc/dac_channel.h>
+#if SOC_DAC_SUPPORTED
+#  include <soc/dac_channel.h>
+#endif
 #include <soc/touch_sensor_channel.h>
 
 namespace esp32m {
@@ -118,9 +120,9 @@ namespace esp32m {
       memset(&c, 0, sizeof(PinConfig));
       switch (c.mode) {
         case PinMode::Dac: {
-         /* dac_channel_t ch;
-          if (io::gpio2Dac(pin, ch))
-            ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_disable(ch));*/
+          /* dac_channel_t ch;
+           if (io::gpio2Dac(pin, ch))
+             ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_disable(ch));*/
         } break;
         default:
           break;
@@ -147,7 +149,7 @@ namespace esp32m {
       if (pins) {
         gpio_num_t pin;
         uint64_t pinsInRequest = 0;
-        int cw_channel = -1;
+        // int cw_channel = -1;
         uint8_t led_channels = 0;
         auto touchMask0 = touchMask();
         for (JsonPairConst kv : pins)
@@ -186,20 +188,19 @@ namespace esp32m {
                              (adc2_channel_t)c2, c.adc.atten));*/
                 } break;
                 case PinMode::Dac: {
-                  dac_channel_t ch;
+                  /*dac_channel_t ch;
                   if (!io::gpio2Dac(pin, ch))
                     break;
                   err = ESP_OK;
-                  /*if (changeConfigValue(c.dac.voltage, a[1], changed))
+                  if (changeConfigValue(c.dac.voltage, a[1], changed))
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
                         dac_output_voltage(ch, c.dac.voltage));
                   if (!err)
-                    err = ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_enable(ch));*/
+                    err =
+                  ESP_ERROR_CHECK_WITHOUT_ABORT(dac_output_enable(ch));*/
                 } break;
                 case PinMode::CosineWave: {
-                  dac_channel_t ch;
-                  if (!io::gpio2Dac(pin, ch))
-                    break;
+                  /*dac_channel_t ch;
                   if (cw_channel >= 0)  // we can have only one cw
                     break;
                   err = ESP_OK;
@@ -207,7 +208,7 @@ namespace esp32m {
                       //changeConfigValue(c.cw.scale, a[2], changed) |
                       //changeConfigValue(c.cw.phase, a[3], changed) |
                       changeConfigValue(c.cw.freq, a[4], changed)) {
-                    /*dac_cw_config_t cw = {
+                    dac_cw_config_t cw = {
                         .en_ch = ch,
                         .scale = c.cw.scale,
                         .phase = c.cw.phase,
@@ -217,8 +218,8 @@ namespace esp32m {
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
                         dac_cw_generator_config(&cw));
                     if (!err)
-                      cw_channel = ch;*/
-                  }
+                      cw_channel = ch;
+                  }*/
                 } break;
                 case PinMode::Ledc: {
                   bool cc = changeConfigValue(c.ledc.channel, a[1], changed);
@@ -250,25 +251,26 @@ namespace esp32m {
                       led_channels |= (1 << c.ledc.channel);
                   }
                 } break;
-                case PinMode::SigmaDelta:/* {
-                  bool cc = changeConfigValue(c.sd.channel, a[1], changed);
-                  if (sd_channels &
-                      (1 << c.sd.channel))  // only one pin per channel
-                    break;
-                  err = ESP_OK;
-                  if (cc | changeConfigValue(c.sd.duty, a[2], changed) |
-                      changeConfigValue(c.sd.prescale, a[3], changed)) {
-                    sigmadelta_config_t sd = {
-                        .channel = c.sd.channel,
-                        .sigmadelta_duty = c.sd.duty,
-                        .sigmadelta_prescale = c.sd.prescale,
-                        .sigmadelta_gpio = pin,
-                    };
-                    err = ESP_ERROR_CHECK_WITHOUT_ABORT(sigmadelta_config(&sd));
-                    if (!err)
-                      sd_channels |= (1 << c.sd.channel);
-                  }
-                }*/ break;
+                case PinMode::SigmaDelta: /* {
+                   bool cc = changeConfigValue(c.sd.channel, a[1], changed);
+                   if (sd_channels &
+                       (1 << c.sd.channel))  // only one pin per channel
+                     break;
+                   err = ESP_OK;
+                   if (cc | changeConfigValue(c.sd.duty, a[2], changed) |
+                       changeConfigValue(c.sd.prescale, a[3], changed)) {
+                     sigmadelta_config_t sd = {
+                         .channel = c.sd.channel,
+                         .sigmadelta_duty = c.sd.duty,
+                         .sigmadelta_prescale = c.sd.prescale,
+                         .sigmadelta_gpio = pin,
+                     };
+                     err =
+                 ESP_ERROR_CHECK_WITHOUT_ABORT(sigmadelta_config(&sd)); if
+                 (!err) sd_channels |= (1 << c.sd.channel);
+                   }
+                 }*/
+                  break;
                 case PinMode::PulseCounter: /*{
                   err = ESP_OK;
                   bool restart = false;
@@ -303,7 +305,8 @@ namespace esp32m {
                     ESP_ERROR_CHECK_WITHOUT_ABORT(
                         pcnt_counter_resume(c.pc.unit));
                   }
-                }*/ break;
+                }*/
+                  break;
                 case PinMode::Touch: {
                   touch_pad_t tp;
                   if (!io::gpio2TouchPad(pin, tp))
@@ -319,8 +322,12 @@ namespace esp32m {
                     touchMask0 |= (1 << tp);
                   }
                   if (changeConfigValue(c.touch.threshold, a[1], changed))
+#if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+                    err = ESP_ERROR_CHECK_WITHOUT_ABORT(touch_pad_config(tp));
+#else
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
                         touch_pad_config(tp, c.touch.threshold));
+#endif
                   if (!err && (changeConfigValue(c.touch.slope, a[2], changed) |
                                changeConfigValue(c.touch.opt, a[3], changed)))
                     err = ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -431,15 +438,15 @@ namespace esp32m {
             c.add(i.second.digital.pull);
             break;
           case PinMode::Adc:
-            //c.add(i.second.adc.atten);
+            // c.add(i.second.adc.atten);
             break;
           case PinMode::Dac:
             c.add(i.second.dac.voltage);
             break;
           case PinMode::CosineWave:
             c.add(i.second.cw.offset);
-            //c.add(i.second.cw.scale);
-            //c.add(i.second.cw.phase);
+            // c.add(i.second.cw.scale);
+            // c.add(i.second.cw.phase);
             c.add(i.second.cw.freq);
             break;
           case PinMode::Ledc:
@@ -455,13 +462,13 @@ namespace esp32m {
             c.add(i.second.sd.duty);
             break;
           case PinMode::PulseCounter:
-           /* c.add(i.second.pc.unit);
-            c.add(i.second.pc.channel);
-            c.add(i.second.pc.pos_mode);
-            c.add(i.second.pc.neg_mode);
-            c.add(i.second.pc.counter_h_lim);
-            c.add(i.second.pc.counter_l_lim);
-            c.add(i.second.pc.filter);*/
+            /* c.add(i.second.pc.unit);
+             c.add(i.second.pc.channel);
+             c.add(i.second.pc.pos_mode);
+             c.add(i.second.pc.neg_mode);
+             c.add(i.second.pc.counter_h_lim);
+             c.add(i.second.pc.counter_l_lim);
+             c.add(i.second.pc.filter);*/
             break;
           case PinMode::Touch:
             c.add(i.second.touch.threshold);
@@ -567,18 +574,24 @@ namespace esp32m {
               else*/
               c.add(nullptr);
           } break;
-          case PinMode::PulseCounter:/* {
-            int16_t count;
-            if (!ESP_ERROR_CHECK_WITHOUT_ABORT(
-                    pcnt_get_counter_value(i.second.pc.unit, &count)))
-              pins[numbuf] = count;
-          }*/ break;
+          case PinMode::PulseCounter: /* {
+             int16_t count;
+             if (!ESP_ERROR_CHECK_WITHOUT_ABORT(
+                     pcnt_get_counter_value(i.second.pc.unit, &count)))
+               pins[numbuf] = count;
+           }*/
+            break;
           case PinMode::Touch: {
             touch_pad_t tp;
             if (!io::gpio2TouchPad(pin, tp))
               break;
+#if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+            uint32_t value;
+#else
             uint16_t value;
-            if (!ESP_ERROR_CHECK_WITHOUT_ABORT(touch_pad_read(tp, &value)))
+#endif
+            if (!ESP_ERROR_CHECK_WITHOUT_ABORT(
+                    touch_pad_read_raw_data(tp, &value)))
               pins[numbuf] = value;
           } break;
           default:

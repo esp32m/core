@@ -1,11 +1,15 @@
-#include <esp32/rom/ets_sys.h>
+#include "sdkconfig.h"
+
+#if CONFIG_IDF_TARGET_ESP32
+#  include <esp32/rom/ets_sys.h>
+#endif
 #include <esp_app_format.h>
-#include <esp_heap_caps.h>
+#include <esp_chip_info.h>
 #include <esp_flash.h>
+#include <esp_heap_caps.h>
+#include <esp_mac.h>
 #include <esp_spiffs.h>
 #include <esp_system.h>
-#include <esp_chip_info.h>
-#include <esp_mac.h>
 #include <math.h>
 #include <soc/rtc.h>
 #include <soc/rtc_cntl_reg.h>
@@ -15,6 +19,8 @@
 
 namespace esp32m {
   namespace dev {
+
+#if CONFIG_IDF_TARGET_ESP32
     float temperatureReadFixed() {
       SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, 3,
                         SENS_FORCE_XPD_SAR_S);
@@ -31,7 +37,7 @@ namespace esp32m {
                                    SENS_TSENS_OUT_S);
       return (res - 32) / 1.8;
     }
-
+#endif
     Esp32::Esp32() {
       esp_image_header_t fhdr;
       if (esp_flash_read(nullptr, (uint32_t *)&fhdr, 0x1000,
@@ -134,9 +140,11 @@ namespace esp32m {
       esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
       infoChip["mac"] = _chipmacid;
       infoChip["rr"] = _rr;
+#if CONFIG_IDF_TARGET_ESP32
       auto temp = temperatureReadFixed();
       if (!isnan(temp))
         infoChip["temperature"] = temp;
+#endif
       if (_flashChipSize)
         infoFlash["size"] = _flashChipSize;
       if (_flashChipSpeed)

@@ -57,7 +57,7 @@ namespace esp32m {
     }
 
     void eth_ip_event_handler(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data) {
+                              int32_t event_id, void *event_data) {
       IpEvent::publish((ip_event_t)event_id, event_data);
     }
 
@@ -159,7 +159,7 @@ namespace esp32m {
       }
       return false;
     }
-
+#if CONFIG_ETH_USE_ESP32_EMAC
     Ethernet *useOlimexEthernet(const char *name) {
       // power up LAN8710 chip
       auto pin = gpio::pin(GPIO_NUM_12);
@@ -181,6 +181,6 @@ namespace esp32m {
 
       return ether;
     }
-
+#endif
   }  // namespace net
 }  // namespace esp32m

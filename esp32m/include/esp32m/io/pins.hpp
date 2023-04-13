@@ -68,7 +68,7 @@ namespace esp32m {
           return Type::LEDC;
         };
         virtual esp_err_t config(
-            uint32_t freq_hz, ledc_mode_t mode = LEDC_HIGH_SPEED_MODE,
+            uint32_t freq_hz, ledc_mode_t mode = LEDC_BEST_SPEED_MODE,
             ledc_timer_bit_t duty_resolution = LEDC_TIMER_10_BIT,
             ledc_clk_cfg_t clk_cfg = LEDC_AUTO_CLK) = 0;
         virtual esp_err_t setDuty(uint32_t duty) = 0;

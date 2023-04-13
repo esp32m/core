@@ -34,6 +34,6 @@ namespace esp32m {
     };
 
     Max6675 *useMax6675(const char *name = nullptr,
-                        spi_host_device_t host = VSPI_HOST);
+                        spi_host_device_t host = SPI3_HOST);
   }  // namespace dev
 }  // namespace esp32m

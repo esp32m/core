@@ -73,7 +73,8 @@ namespace esp32m {
       esp_err_t stop();
     };
 
+#if CONFIG_ETH_USE_ESP32_EMAC
     Ethernet *useOlimexEthernet(const char *name = nullptr);
-
+#endif
   }  // namespace net
 }  // namespace esp32m

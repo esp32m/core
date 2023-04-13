@@ -4,7 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
 
-#include <esp32/rom/ets_sys.h>
+#include <esp_rom_uart.h>
 #include <string.h>
 
 namespace esp32m {
@@ -22,8 +22,8 @@ namespace esp32m {
         return false;
       if (message) {
         auto l = strlen(message);
-        for (auto i = 0; i < l; i++) ets_write_char_uart(message[i]);
-        ets_write_char_uart('\n');
+        for (auto i = 0; i < l; i++) esp_rom_uart_putc(message[i]);
+        esp_rom_uart_putc('\n');
       }
 
       return true;

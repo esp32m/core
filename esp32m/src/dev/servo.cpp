@@ -47,7 +47,7 @@ namespace esp32m {
       if (!_ledc)
         return ESP_FAIL;
       if (_configDirty) {
-        ESP_CHECK_RETURN(_ledc->config(_freq, LEDC_HIGH_SPEED_MODE, _timerRes));
+        ESP_CHECK_RETURN(_ledc->config(_freq, LEDC_BEST_SPEED_MODE, _timerRes));
         _configDirty = false;
       }
       if (value < _pwMin)

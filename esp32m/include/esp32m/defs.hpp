@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sdkconfig.h"
+
 #define ESP_CHECK_RETURN(x)                              \
   do {                                                   \
     esp_err_t __;                                        \
@@ -54,3 +56,21 @@
   inline bool operator!=(T a, int b) {                                     \
     return static_cast<std::underlying_type<T>::type>(a) != b;             \
   }
+
+
+#if SOC_LEDC_SUPPORT_HS_MODE
+#define LEDC_BEST_SPEED_MODE LEDC_HIGH_SPEED_MODE
+#else 
+#define LEDC_BEST_SPEED_MODE LEDC_LOW_SPEED_MODE
+#endif
+
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32H4
+#define I2C_MASTER_SCL GPIO_NUM_5
+#define I2C_MASTER_SDA GPIO_NUM_6
+#elif CONFIG_IDF_TARGET_ESP32S3
+#define I2C_MASTER_SCL GPIO_NUM_2
+#define I2C_MASTER_SDA GPIO_NUM_1
+#else
+#define I2C_MASTER_SCL GPIO_NUM_22
+#define I2C_MASTER_SDA GPIO_NUM_21
+#endif

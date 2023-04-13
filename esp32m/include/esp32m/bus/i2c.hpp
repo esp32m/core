@@ -21,8 +21,8 @@ namespace esp32m {
 
     class MutexRef {
      public:
-      MutexRef(uint8_t addr, i2c_port_t port = I2C_NUM_0, int sda = GPIO_NUM_21,
-               int scl = GPIO_NUM_22);
+      MutexRef(uint8_t addr, i2c_port_t port = I2C_NUM_0, int sda = I2C_MASTER_SDA,
+               int scl = I2C_MASTER_SCL);
       ~MutexRef();
       std::mutex &mutex();
 
@@ -34,8 +34,8 @@ namespace esp32m {
 
   class I2C {
    public:
-    I2C(uint8_t addr, i2c_port_t port = I2C_NUM_0, gpio_num_t sda = GPIO_NUM_21,
-        gpio_num_t scl = GPIO_NUM_22, uint32_t clk_speed = 100000);
+    I2C(uint8_t addr, i2c_port_t port = I2C_NUM_0, gpio_num_t sda = I2C_MASTER_SDA,
+        gpio_num_t scl = I2C_MASTER_SCL, uint32_t clk_speed = 100000);
     I2C(const I2C &) = delete;
     std::mutex &mutex() const {
       return _mutex->mutex();
