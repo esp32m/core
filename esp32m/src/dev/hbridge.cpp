@@ -35,6 +35,7 @@ namespace esp32m {
         default:
           return ESP_FAIL;
       }
+      // logD("run %d", mode);
       ESP_CHECK_RETURN(_pinFwd->digitalWrite(f));
       ESP_CHECK_RETURN(_pinRev->digitalWrite(r));
       ESP_CHECK_RETURN(refresh());

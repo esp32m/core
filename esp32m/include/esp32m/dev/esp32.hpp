@@ -26,7 +26,7 @@ namespace esp32m {
       size_t _psramSize = 0;
       uint8_t _flashChipMode = 0xff;
       esp_reset_reason_t _rr;
-      esp_pm_config_esp32_t _pm = {.max_freq_mhz = 240,
+      esp_pm_config_t _pm = {.max_freq_mhz = 240,
                                    .min_freq_mhz = 160,
                                    .light_sleep_enable = false};
     };

@@ -222,6 +222,7 @@ namespace esp32m {
         default:
           break;
       }
+//      logD("state transition %d->%d", _state, state);
       _state = state;
     }
 
@@ -246,7 +247,7 @@ namespace esp32m {
             case State::Opening:
             case State::Closing:
               if (millis() - _startTime <
-                  1000)  // give it some time to change sensor state afer we
+                  3000)  // give it some time to change sensor state afer we
                          // started the motor
                 return ESP_OK;
               break;
