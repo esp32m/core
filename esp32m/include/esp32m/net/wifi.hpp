@@ -136,6 +136,12 @@ namespace esp32m {
       const esp_netif_ip_info_t &staIp() const {
         return _staIp;
       }
+      StaState staState() const {
+        return _staState;
+      }
+      ApState apState() const {
+        return _apState;
+      }
       void configureAp(const esp_netif_ip_info_t &ip) {
         _apIp = ip;
       }
