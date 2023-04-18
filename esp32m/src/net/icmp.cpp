@@ -173,7 +173,7 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Ping::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Ping::getConfig(RequestContext &ctx) {
       size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
                     json::interfacesSize();
       auto doc = new DynamicJsonDocument(size);
@@ -589,7 +589,7 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Traceroute::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Traceroute::getConfig(RequestContext &ctx) {
       size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
                     json::interfacesSize();
       auto doc = new DynamicJsonDocument(size);

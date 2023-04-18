@@ -1072,7 +1072,7 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *OpenthermSlave::getConfig(
-        const JsonVariantConst args) {
+        RequestContext &ctx) {
       size_t docsize = JSON_OBJECT_SIZE(1 /*hvac*/ + 2 /*tset,config*/) +
                        _hvac.bounds.jsonSize();
       DynamicJsonDocument *doc = new DynamicJsonDocument(docsize);
@@ -1176,7 +1176,7 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *OpenthermMaster::getConfig(
-        const JsonVariantConst args) {
+        RequestContext &ctx) {
       DynamicJsonDocument *doc = new DynamicJsonDocument(
           JSON_OBJECT_SIZE(1 /*hvac*/ + 4) + _ids.jsonSize());
       JsonObject root = doc->to<JsonObject>();

@@ -20,7 +20,7 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       bool handleRequest(Request &req) override;
       static const char *KeyOtaBegin;
       static const char *KeyOtaEnd;

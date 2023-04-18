@@ -15,11 +15,22 @@
 namespace esp32m {
   namespace net {
 
+    namespace mqtt {
+      const char *StatusChanged::NAME = "mqtt-status";
+      const char *Incoming::NAME = "mqtt-incoming";
+      int subscriptionIdCounter = 0;
+      Subscription::~Subscription() {
+        _mqtt->unsubscribe(this);
+      }
+    }  // namespace mqtt
+
+    using namespace mqtt;
+
     class MqttRequest : public Request {
      public:
       MqttRequest(const char *name, int id, const char *target,
                   const JsonVariantConst data)
-          : Request(name, id, target, data) {}
+          : Request(name, id, target, data, "mqtt") {}
 
      protected:
       void respondImpl(const char *source, const JsonVariantConst data,
@@ -68,34 +79,43 @@ namespace esp32m {
       changed = true;
       if (*dest)
         free((void *)*dest);
-      *dest = nullptr;
-      auto l = src ? strlen(src) : 0;
-      if (l) {
-        auto m = (char *)malloc(l + 1);
-        if (m) {
-          *dest = m;
-          memcpy(m, src, l + 1);
-        }
-      }
+      *dest = src ? strdup(src) : nullptr;
     }
 
     Mqtt::Mqtt() {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
-      bool changed;
+      // bool changed;
       // don't assign directly - _cfg.uri may bee free()'d
-      setCfgStr(&_cfg.broker.address.uri, "mqtt://mqtt.lan", changed);
+      // setCfgStr(&_cfg.broker.address.uri, "mqtt://mqtt.lan", changed);
+      _uri = "mqtt://mqtt.lan";
       _cfg.session.keepalive = 120;
     }
 
-    void Mqtt::setState(State state) {
-      std::lock_guard guard(_mutex);
-      if (_state == state)
-        return;
-      /*if (state == State::Ready)
+    bool Mqtt::isReady() {
+      return _handle && _status == Status::Ready;
+    }
+
+    bool Mqtt::isConnected() {
+      return _handle &&
+             (_status == Status::Ready || _status == Status::Connected ||
+              _status == Status::Subscribing);
+    }
+
+    void Mqtt::setState(Status status) {
+      Status prev;
+      {
+        std::lock_guard guard(_mutex);
+        if (_status == status)
+          return;
+        prev = _status;
+        _status = status;
+      }
+      mqtt::StatusChanged ev(status, prev);
+      /*if (status == Status::Ready)
         _sleepBlocker.unblock();
-      if (_state == State::Ready)
+      if (_status == Status::Ready)
         _sleepBlocker.block();*/
-      _state = state;
+      ev.publish();
       xTaskNotifyGive(_task);
     }
 
@@ -107,6 +127,7 @@ namespace esp32m {
       if (EventInit::is(ev, 0)) {
         xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
+        prepareCfg();
         _handle = esp_mqtt_client_init(&_cfg);
         esp_mqtt_client_register_event(
             _handle, MQTT_EVENT_ANY,
@@ -115,7 +136,7 @@ namespace esp32m {
               ((Mqtt *)handler_args)->handle(event_id, event_data);
             },
             (void *)this);
-        auto name = App::instance().name();
+        auto name = App::instance().hostname();
         if (asprintf(&_commandTopic, "esp32m/request/%s/#", name) < 0)
           _commandTopic = nullptr;
         if (asprintf(&_sensorsTopic, "esp32m/sensor/%s", name) < 0)
@@ -129,13 +150,13 @@ namespace esp32m {
           _enabled = false;
           disconnect();
           logD("stopping...");
-          waitState([this] { return _state == State::Initial; }, 500);
+          waitState([this] { return _status == Status::Initial; }, 500);
           logD("stopped");
         }
       } else if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
         xTaskNotifyGive(_task);
       else if (sleep::Event::is(ev, &slev)) {
-        if (_state != State::Ready)
+        if (_status != Status::Ready)
           slev->block();
       } else if (isConnected()) {
         Broadcast *b = nullptr;
@@ -143,7 +164,7 @@ namespace esp32m {
         if (EventSensor::is(ev)) {
           auto e = ((EventSensor &)ev);
           char *devProps, *props;
-          auto unitName = App::instance().name();
+          auto unitName = App::instance().hostname();
           auto devName = e.device().name();
           auto dpl = serializeProps(e.device().props(), &devProps);
           auto pl = serializeProps(e.props(), &props);
@@ -210,61 +231,73 @@ namespace esp32m {
         esp_task_wdt_reset();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
         if (!_enabled) {
-          if (_state != State::Initial)
+          if (_status != Status::Initial)
             disconnect();
           continue;
         }
         if (_configChanged)
           disconnect();
         _configChanged = false;
-        switch (_state) {
-          case State::Initial:
+        switch (_status) {
+          case Status::Initial:
             _timer = 0;
-            if (Wifi::instance().isConnected() && _cfg.broker.address.uri &&
-                strlen(_cfg.broker.address.uri)) {
-              setState(State::Connecting);
-              logI("connecting to %s", _cfg.broker.address.uri);
-              ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  esp_mqtt_client_set_uri(_handle, _cfg.broker.address.uri));
+            if (Wifi::instance().isConnected() && !_uri.empty()) {
+              setState(Status::Connecting);
+              logI("connecting to %s", _uri.c_str());
+              /*ESP_ERROR_CHECK_WITHOUT_ABORT(
+                  esp_mqtt_client_set_uri(_handle, _cfg.broker.address.uri));*/
+              prepareCfg();
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_set_config(_handle, &_cfg));
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_start(_handle));
               _timer = millis();
             }
             break;
-          case State::Connecting:
+          case Status::Connecting:
             if (millis() - _timer > _timeout * 1000) {
-              logW("timeout connecting to %s", _cfg.broker.address.uri);
-              setState(State::Initial);
+              logW("timeout connecting to %s", _uri.c_str());
+              setState(Status::Initial);
             }
             break;
-          case State::Connected:
+          case Status::Connected:
+            logI("connected");
             if (_listen) {
-              setState(State::Subscribing);
-              logI("connected, subscribing to %s : %d", _commandTopic,
-                   esp_mqtt_client_subscribe(_handle, _commandTopic, 0));
+              setState(Status::Subscribing);
+              std::map<std::string, int> toSubscribe;
+              toSubscribe[std::string(_commandTopic)] = 0;
+              {
+                std::lock_guard guard(_mutex);
+                for (auto const &[topic, map] : _subscriptions) {
+                  int qos = 0;
+                  for (auto const &[id, sub] : map)
+                    if (sub->qos() > qos)
+                      qos = sub->qos();
+                  toSubscribe[topic] = qos;
+                }
+              }
+              for (auto const &[topic, qos] : toSubscribe)
+                this->intSubscribe(topic, qos);
               _timer = millis();
             } else {
-              setState(State::Ready);
+              setState(Status::Ready);
               _timer = 0;
-              logI("connected");
             }
             break;
-          case State::Subscribing:
+          case Status::Subscribing:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout subscribing to %s", _commandTopic);
-              setState(State::Connected);
+              setState(Status::Connected);
             }
             break;
-          case State::Disconnecting:
+          case Status::Disconnecting:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout disconnecting");
-              setState(State::Initial);
+              setState(Status::Initial);
             }
             break;
-          case State::Disconnected:
+          case Status::Disconnected:
             logI("disconnected");
-            setState(State::Initial);
+            setState(Status::Initial);
             break;
           default:
             break;
@@ -272,24 +305,34 @@ namespace esp32m {
       }
     }
 
+    const char *Mqtt::effectiveClient() {
+      if (_client.empty())
+        return App::instance().hostname();
+      return _client.c_str();
+    }
+
     DynamicJsonDocument *Mqtt::getState(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(5);
+      char *client = (char *)effectiveClient();
+      size_t size = JSON_OBJECT_SIZE(5 + 1) + JSON_STRING_SIZE(_uri.size()) +
+                    JSON_STRING_SIZE(strlen(client));
       auto doc = new DynamicJsonDocument(size);
       auto cr = doc->to<JsonObject>();
-      bool ready = _state == State::Ready;
+      bool ready = _status == Status::Ready;
       cr["ready"] = ready;
       if (ready) {
-        if (_cfg.broker.address.uri)
+        json::to(cr, "uri", _uri);
+        json::to(cr, "client", client);
+        /*if (_cfg.broker.address.uri)
           cr["uri"] = _cfg.broker.address.uri;
         if (_cfg.credentials.client_id)
-          cr["client"] = _cfg.credentials.client_id;
+          cr["client"] = _cfg.credentials.client_id;*/
       }
       cr["pubcnt"] = _pubcnt;
       cr["cmdcnt"] = _cmdcnt;
       return doc;
     }
 
-    DynamicJsonDocument *Mqtt::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Mqtt::getConfig(RequestContext &ctx) {
       size_t size = JSON_OBJECT_SIZE(1 + 8) +
                     (64 * 4);  // mqtt: enabled, control, uri, username,
                                // password, client, keepalive, timeout
@@ -298,35 +341,50 @@ namespace esp32m {
       auto cr = doc->to<JsonObject>();
       if (_enabled)
         cr["enabled"] = _enabled;
-      if (_cfg.broker.address.uri && strlen(_cfg.broker.address.uri))
+      json::to(cr, "uri", _uri);
+      json::to(cr, "username", _username);
+      json::to(cr, "password", _password);
+      if (_client != App::instance().hostname())
+        json::to(cr, "client", _client);
+      /*if (_cfg.broker.address.uri && strlen(_cfg.broker.address.uri))
         cr["uri"] = (char *)_cfg.broker.address.uri;
       if (_cfg.credentials.username && strlen(_cfg.credentials.username))
         cr["username"] = (char *)_cfg.credentials.username;
-      if (_cfg.credentials.authentication.password && strlen(_cfg.credentials.authentication.password))
+      if (_cfg.credentials.authentication.password &&
+          strlen(_cfg.credentials.authentication.password))
         cr["password"] = (char *)_cfg.credentials.authentication.password;
       if (_cfg.credentials.client_id && strlen(_cfg.credentials.client_id) &&
-          strcmp(_cfg.credentials.client_id, App::instance().name()))
-        cr["client"] = (char *)_cfg.credentials.client_id;
+          strcmp(_cfg.credentials.client_id, App::instance().hostname()))
+        cr["client"] = (char *)_cfg.credentials.client_id;*/
       cr["keepalive"] = _cfg.session.keepalive;
       cr["timeout"] = _timeout;
       return doc;
+    }
+
+    void Mqtt::prepareCfg() {
+      _cfg.broker.address.uri = _uri.c_str();
+      _cfg.credentials.username = _username.c_str();
+      _cfg.credentials.authentication.password = _password.c_str();
+      _cfg.credentials.client_id = effectiveClient();
     }
 
     bool Mqtt::setConfig(const JsonVariantConst ca,
                          DynamicJsonDocument **result) {
       bool changed = false;
       json::from(ca["enabled"], _enabled, &changed);
-      // _sleepBlocker.enable(_enabled);
-      setCfgStr(&_cfg.broker.address.uri, ca["uri"].as<const char *>(),
-                changed);
-      setCfgStr(&_cfg.credentials.username, ca["username"].as<const char *>(),
-                changed);
-      setCfgStr(&_cfg.credentials.authentication.password,
-                ca["password"].as<const char *>(), changed);
-      const char *client = ca["client"].as<const char *>();
-      if (!client)
-        client = App::instance().name();
-      setCfgStr(&_cfg.credentials.client_id, client, changed);
+      json::from(ca["uri"], _uri, &changed);
+      json::from(ca["username"], _username, &changed);
+      json::from(ca["password"], _password, &changed);
+      json::from(ca["client"], _client, &changed);
+      /*      setCfgStr(&_cfg.broker.address.uri, ca["uri"].as<const char *>(),
+                      changed);
+            setCfgStr(&_cfg.credentials.username, ca["username"].as<const char
+         *>(), changed); setCfgStr(&_cfg.credentials.authentication.password,
+                      ca["password"].as<const char *>(), changed);
+            const char *client = ca["client"].as<const char *>();
+            if (!client)
+              client = App::instance().hostname();
+            setCfgStr(&_cfg.credentials.client_id, client, changed);*/
       json::from(ca["keepalive"], _cfg.session.keepalive, &changed);
       json::from(ca["timeout"], _timeout, &changed);
       if (_timeout < 1)
@@ -337,16 +395,82 @@ namespace esp32m {
       return changed;
     }
 
-    bool Mqtt::publish(const char *topic, const char *message) {
-      if (!isConnected() || !topic || !message)
+    bool Mqtt::publish(const char *topic, const char *message, int qos,
+                       bool retain) {
+      if (!_handle || !isConnected() || !topic || !message)
         return false;
       // logD("publish %s %s", topic, message);
-      bool result =
-          ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_publish(
-              _handle, topic, message, strlen(message), 0, false)) == ESP_OK;
-      if (result)
+      auto id = esp_mqtt_client_publish(_handle, topic, message,
+                                        strlen(message), qos, retain);
+      if (id >= 0)
         _pubcnt++;
-      return result;
+      return id >= 0;
+    }
+    bool Mqtt::enqueue(const char *topic, const char *message, int qos,
+                       bool retain, bool store) {
+      if (!_handle || !isConnected() || !topic || !message)
+        return false;
+      // logD("publish %s %s", topic, message);
+      auto id = esp_mqtt_client_enqueue(_handle, topic, message,
+                                        strlen(message), qos, retain, store);
+      if (id >= 0)
+        _pubcnt++;
+      return id >= 0;
+    }
+
+    bool Mqtt::intSubscribe(std::string topic, int qos) {
+      auto id = esp_mqtt_client_subscribe(_handle, topic.c_str(), qos);
+      if (id >= 0) {
+        logI("subscribed to %s (qos=%d): %d", topic.c_str(), qos, id);
+        return true;
+      }
+      logW("failed to subscribe to %s (qos=%d)", topic.c_str(), qos);
+      return false;
+    }
+
+    Subscription *Mqtt::subscribe(const char *topic, int qos) {
+      return this->subscribe(topic, nullptr, qos);
+    }
+    Subscription *Mqtt::subscribe(const char *topic, HandlerFunction handler,
+                                  int qos) {
+      if (!topic)
+        return nullptr;
+      std::string t(topic);
+      auto id = ++subscriptionIdCounter;
+      auto sub = new Subscription(this, id, t, qos, handler);
+      bool sendSubscribe;
+      {
+        std::lock_guard guard(_mutex);
+        auto &subs = _subscriptions[t];
+        sendSubscribe = subs.size() == 0 && isConnected();
+        subs[id] = sub;
+      }
+      if (sendSubscribe)
+        intSubscribe(t, qos);
+      return sub;
+    }
+
+    void Mqtt::unsubscribe(Subscription *sub) {
+      if (!sub)
+        return;
+      bool sendUnsubscribe = false;
+      {
+        std::lock_guard guard(_mutex);
+        auto subsIt = _subscriptions.find(sub->topic());
+        if (subsIt == _subscriptions.end())
+          return;
+        auto subsByid = subsIt->second;
+        auto subIt = subsByid.find(sub->id());
+        if (subIt == subsByid.end())
+          return;
+        subsByid.erase(subIt);
+        if (subsByid.size() == 0) {
+          _subscriptions.erase(subsIt);
+          sendUnsubscribe = isConnected();
+        }
+      }
+      if (sendUnsubscribe)
+        esp_mqtt_client_unsubscribe(_handle, sub->topic().c_str());
     }
 
     void Mqtt::respond(const char *source, int seq, const JsonVariantConst data,
@@ -378,60 +502,81 @@ namespace esp32m {
     esp_err_t Mqtt::handle(int32_t event_id, void *event_data) {
       esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
       size_t ctl;
+      bool handled = false;
       switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_ERROR:
           logE("error %i", event->error_handle->error_type);
           break;
         case MQTT_EVENT_CONNECTED:
-          setState(State::Connected);
+          setState(Status::Connected);
           _timer = 0;
           break;
         case MQTT_EVENT_DISCONNECTED:
-          setState(State::Disconnected);
+          setState(Status::Disconnected);
           _timer = 0;
           break;
         case MQTT_EVENT_SUBSCRIBED:
-          setState(State::Ready);
+          setState(Status::Ready);
           _timer = 0;
           break;
         case MQTT_EVENT_UNSUBSCRIBED:
-          setState(State::Connected);
+          setState(Status::Connected);
           _timer = 0;
           break;
         case MQTT_EVENT_DATA:
-          if (!_commandTopic)
-            break;
-          ctl = strlen(_commandTopic);
-          if ((event->topic_len >= ctl) &&
-              !strncmp(event->topic, _commandTopic, ctl - 1)) {
-            auto devlen = event->topic_len - ctl + 1 /* / */ + 1 /* # */;
-            auto cmdStart = event->topic + ctl - 1 /* # */;
-            auto firstSlash = (char *)memchr(cmdStart, '/', devlen - 1);
-            if (!firstSlash)
-              break;
+          if (_commandTopic) {
+            ctl = strlen(_commandTopic);
+            if ((event->topic_len >= ctl) &&
+                !strncmp(event->topic, _commandTopic, ctl - 1)) {
+              auto devlen = event->topic_len - ctl + 1 /* / */ + 1 /* # */;
+              auto cmdStart = event->topic + ctl - 1 /* # */;
+              auto firstSlash = (char *)memchr(cmdStart, '/', devlen - 1);
+              if (!firstSlash)
+                break;
 
-            char *devname = strndup(cmdStart, firstSlash - cmdStart);
-            char *command = strndup(firstSlash + 1,
-                                    devlen - 1 - (firstSlash - cmdStart + 1));
-            DynamicJsonDocument *doc = nullptr;
-            char *data = nullptr;
-            if (event->data_len) {
-              data = (char *)malloc(event->data_len + 1);
-              strlcpy(data, event->data, event->data_len + 1);
-              doc = json::parse(data);
+              char *devname = strndup(cmdStart, firstSlash - cmdStart);
+              char *command = strndup(firstSlash + 1,
+                                      devlen - 1 - (firstSlash - cmdStart + 1));
+              DynamicJsonDocument *doc = nullptr;
+              char *data = nullptr;
+              if (event->data_len) {
+                data = (char *)malloc(event->data_len + 1);
+                strlcpy(data, event->data, event->data_len + 1);
+                doc = json::parse(data);
+              }
+              _cmdcnt++;
+              MqttRequest req(command, 0, devname,
+                              doc ? doc->as<JsonVariantConst>()
+                                  : json::null<JsonVariantConst>());
+              req.publish();
+              free(devname);
+              free(command);
+              if (data)
+                free(data);
+              if (doc)
+                free(doc);
+              handled = true;
             }
-            _cmdcnt++;
-            MqttRequest req(command, 0, devname,
-                            doc ? doc->as<JsonVariantConst>()
-                                : json::null<JsonVariantConst>());
-            req.publish();
-            free(devname);
-            free(command);
-            if (data)
-              free(data);
-            if (doc)
-              free(doc);
           }
+          if (!handled) {
+            std::string topic = std::string(event->topic, event->topic_len);
+            std::string payload = std::string(event->data, event->data_len);
+            Incoming ev(topic, payload);
+            ev.publish();
+            std::vector<HandlerFunction> handlers;
+            {
+              std::lock_guard guard(_mutex);
+              auto it = _subscriptions.find(topic);
+              if (it != _subscriptions.end())
+                for (auto const &[id, sub] : it->second) {
+                  auto fn = sub->_function;
+                  if (fn)
+                    handlers.push_back(fn);
+                }
+            }
+            for (auto fn : handlers) fn(topic, payload);
+          }
+
           break;
         default:
           break;
@@ -440,9 +585,9 @@ namespace esp32m {
     }
 
     void Mqtt::disconnect() {
-      if (_state == State::Disconnecting || _state == State::Initial)
+      if (_status == Status::Disconnecting || _status == Status::Initial)
         return;
-      setState(State::Disconnecting);
+      setState(Status::Disconnecting);
       _timer = millis();
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_stop(_handle));
     }

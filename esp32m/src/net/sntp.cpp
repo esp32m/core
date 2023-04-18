@@ -7,13 +7,22 @@
 
 #include "esp32m/json.hpp"
 #include "esp32m/net/ip_event.hpp"
-#include "esp32m/net/sntp.hpp"
 #include "esp32m/net/net.hpp"
+#include "esp32m/net/sntp.hpp"
 
 namespace esp32m {
   namespace net {
 
     const char *DefaultNtpHost = "pool.ntp.org";
+
+    void sync_time_cb(struct timeval *tv) {
+      Sntp::instance().synced(tv);
+    }
+
+    Sntp::Sntp() {
+      _interval = sntp_get_sync_interval() / 1000.0;
+      sntp_set_time_sync_notification_cb(sync_time_cb);
+    }
 
     bool Sntp::handleEvent(Event &ev) {
       if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
@@ -25,19 +34,25 @@ namespace esp32m {
       return true;
     }
 
+    void Sntp::synced(struct timeval *tv) {
+      _syncedAt = millis();
+    }
+
     DynamicJsonDocument *Sntp::getState(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(2);
+      size_t size = JSON_OBJECT_SIZE(3);
       auto doc = new DynamicJsonDocument(size);
       auto root = doc->to<JsonObject>();
       json::to(root, "status", (int)sntp_get_sync_status());
+      if (_syncedAt)
+        json::to(root, "synced", millis() - _syncedAt);
       time_t t;
       time(&t);
       json::to(root, "time", t);
       return doc;
     }
 
-    DynamicJsonDocument *Sntp::getConfig(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(4 /*enabled, host, tz, dst*/) +
+    DynamicJsonDocument *Sntp::getConfig(RequestContext &ctx) {
+      size_t size = JSON_OBJECT_SIZE(5 /*enabled, host, tz, dst*/) +
                     JSON_STRING_SIZE(_host.size());
       auto doc = new DynamicJsonDocument(size);
       auto root = doc->to<JsonObject>();
@@ -46,10 +61,9 @@ namespace esp32m {
         json::to(root, "host", _host);
       else
         json::to(root, "host", DefaultNtpHost);
-      if (_tzOfs)
-        json::to(root, "tz", _tzOfs);
-      if (_dstOfs)
-        json::to(root, "dst", _dstOfs);
+      json::to(root, "tz", _tzOfs, 0);
+      json::to(root, "dst", _dstOfs, 0);
+      json::to(root, "interval", _interval);
       return doc;
     }
 
@@ -65,6 +79,7 @@ namespace esp32m {
       }
       json::from(obj["tz"], _tzOfs, &changed);
       json::from(obj["dst"], _dstOfs, &changed);
+      json::from(obj["interval"], _interval, &changed);
       if (changed)
         update();
       return changed;
@@ -78,6 +93,7 @@ namespace esp32m {
         esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
         esp_sntp_setservername(0,
                                _host.size() ? _host.c_str() : DefaultNtpHost);
+        sntp_set_sync_interval((uint32_t)(_interval * 1000));
         esp_sntp_init();
         char cst[17] = {0};
         char cdt[17] = "DST";

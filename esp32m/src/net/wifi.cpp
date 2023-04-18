@@ -6,8 +6,8 @@
 #include "esp32m/events/response.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
-#include "esp32m/props.hpp"
 #include "esp32m/net/wifi_utils.hpp"
+#include "esp32m/props.hpp"
 
 #include <dhcpserver/dhcpserver.h>
 #include <dhcpserver/dhcpserver_options.h>
@@ -18,24 +18,188 @@
 #include <esp_rrm.h>
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
-#include <lwip/apps/netbiosns.h>
 #include <lwip/dns.h>
 #include <mdns.h>
 #include <algorithm>
 
 namespace esp32m {
   namespace net {
-    const esp_ip4_addr_t DefaultNetmask = {
-        PP_HTONL(LWIP_MAKEU32(255, 255, 255, 0))};
-    const esp_ip4_addr_t DefaultApIp = {PP_HTONL(LWIP_MAKEU32(192, 168, 4, 1))};
 
-    const char *StaStateNames[]{
-        "Initial",
-        "Connecting",
-        "Connected",
-        "ConnectionFailed",
-    };
-    const char *ApStateNames[]{"Initial", "Starting", "Running", "Stopped"};
+    static bool sta_config_equal(const wifi_config_t &lhs,
+                                 const wifi_config_t &rhs) {
+      return memcmp(&lhs, &rhs, sizeof(wifi_config_t)) == 0;
+    }
+
+    namespace wifi {
+
+      Sta::Sta() {
+        _persistent = true;
+        _role = Role::DhcpClient;
+      };
+
+      esp_err_t Sta::enable(bool enable) {
+        wifi_mode_t m = WIFI_MODE_NULL;
+        ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
+        return _wifi->mode(m, enable ? (wifi_mode_t)(m | WIFI_MODE_STA)
+                                     : (wifi_mode_t)(m & ~WIFI_MODE_STA));
+      }
+
+      void Sta::getInfo(JsonObject info) {
+        if (_wifi->isConnected()) {
+          auto infoSta = info.createNestedObject("sta");
+          wifi_ap_record_t info;
+          if (!esp_wifi_sta_get_ap_info(&info)) {
+            char sbssid[18] = {0};
+            infoSta["ssid"] = info.ssid;
+            if (formatBssid(info.bssid, sbssid))
+              infoSta["bssid"] = sbssid;
+            uint8_t mac[6];
+            if (!esp_wifi_get_mac(WIFI_IF_STA, mac) && formatBssid(mac, sbssid))
+              infoSta["mac"] = sbssid;
+            infoSta["rssi"] = info.rssi;
+          }
+          esp_netif_ip_info_t ip;
+          if (!ESP_ERROR_CHECK_WITHOUT_ABORT(getIpInfo(ip)))
+            ip2json(infoSta, ip);
+        }
+      }
+
+      const char *StaStatusNames[]{
+          "initial",
+          "connecting",
+          "connected",
+          "connection-failed",
+      };
+
+      void Sta::setStatus(StaStatus state) {
+        if (state == _status)
+          return;
+        logI("%s -> %s", StaStatusNames[(int)_status],
+             StaStatusNames[(int)state]);
+        int diagCode = -1;
+        switch (state) {
+          case StaStatus::Connecting:
+            diagCode = Wifi::DiagConnecting;
+            break;
+          case StaStatus::Connected:
+            diagCode = Wifi::DiagConnected;
+            break;
+          default:
+            break;
+        }
+        if (diagCode > 0)
+          event::Diag::publish(Wifi::DiagId, diagCode);
+        _status = state;
+      }
+
+      const esp_ip4_addr_t DefaultNetmask = {
+          PP_HTONL(LWIP_MAKEU32(255, 255, 255, 0))};
+      const esp_ip4_addr_t DefaultApIp = {
+          PP_HTONL(LWIP_MAKEU32(192, 168, 4, 1))};
+
+      Ap::Ap() {
+        _persistent = true;
+        _role = Role::DhcpServer;
+        _ip = {DefaultApIp, DefaultNetmask, DefaultApIp};
+        _dhcpsLease.enable = true;
+        _dhcpsLease.start_ip.addr =
+            static_cast<uint32_t>(_ip.ip.addr) + (1 << 24);
+        _dhcpsLease.end_ip.addr =
+            static_cast<uint32_t>(_ip.ip.addr) + (11 << 24);
+        esp_netif_dns_info_t dns;
+        dns.ip.u_addr.ip4.addr = _ip.ip.addr;
+        dns.ip.type = IPADDR_TYPE_V4;
+        _dns[ESP_NETIF_DNS_MAIN] = dns;
+      };
+
+      esp_err_t Ap::enable(bool enable) {
+        wifi_mode_t m = WIFI_MODE_NULL;
+        ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
+        if (enable) {
+          /*if (m & WIFI_MODE_AP)
+            return ESP_OK;*/
+          _wifi->_apTimer = millis();
+          // vTaskDelay(pdMS_TO_TICKS(100)); // allow some time for the
+          // events to fire
+          setStatus(ApStatus::Starting);
+        }
+        esp_err_t result =
+            _wifi->mode(m, enable ? (wifi_mode_t)(m | WIFI_MODE_AP)
+                                  : (wifi_mode_t)(m & ~WIFI_MODE_AP));
+        if (result != ESP_OK)
+          return result;
+        ErrorList errl;
+        stopDhcp();
+        if (enable) {
+          apply(errl);
+          /*apply(ConfigItem::Ip, errl);
+          apply(ConfigItem::DhcpsLease, errl);
+          apply(ConfigItem::Dns, errl);
+          apply(ConfigItem::Role, errl);*/
+
+          wifi_config_t current_conf;
+          ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_AP, &current_conf));
+
+          wifi_config_t conf;
+          memset(&conf, 0, sizeof(wifi_config_t));
+          strlcpy(reinterpret_cast<char *>(conf.ap.ssid),
+                  App::instance().hostname(), sizeof(conf.ap.ssid));
+          conf.ap.channel = 1;
+          conf.ap.authmode = WIFI_AUTH_OPEN;
+          conf.ap.ssid_len = strlen(reinterpret_cast<char *>(conf.ap.ssid));
+          conf.ap.max_connection = 4;
+          conf.ap.beacon_interval = 100;
+          if (!sta_config_equal(current_conf, conf)) {
+            logI("setting AP config");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(
+                esp_wifi_set_config(WIFI_IF_AP, &conf));
+          }
+        } else
+          setStatus(ApStatus::Stopped);
+        return ESP_OK;
+      }
+
+      void Ap::getInfo(JsonObject info) {
+        auto infoAp = info.createNestedObject("ap");
+        const char *hostname = NULL;
+        if (!esp_netif_get_hostname(handle(), &hostname))
+          infoAp["ssid"] = (char *)hostname;
+        uint8_t mac[6];
+        char sbssid[18] = {0};
+        if (!esp_wifi_get_mac(WIFI_IF_AP, mac) && formatBssid(mac, sbssid))
+          infoAp["mac"] = sbssid;
+        wifi_sta_list_t clients;
+        if (!esp_wifi_ap_get_sta_list(&clients))
+          infoAp["cli"] = clients.num;
+
+        esp_netif_ip_info_t ip;
+        if (!ESP_ERROR_CHECK_WITHOUT_ABORT(getIpInfo(ip)))
+          ip2json(infoAp, ip);
+      }
+
+      const char *ApStateNames[]{"initial", "starting", "running", "stopped"};
+
+      void Ap::setStatus(ApStatus state) {
+        if (state == _status)
+          return;
+        logI("%s -> %s", ApStateNames[(int)_status], ApStateNames[(int)state]);
+        int diagCode = -1;
+        switch (state) {
+          case ApStatus::Starting:
+            diagCode = Wifi::DiagApStarting;
+            break;
+          case ApStatus::Running:
+            diagCode = Wifi::DiagApRunning;
+            break;
+          default:
+            break;
+        }
+        if (diagCode > 0)
+          event::Diag::publish(Wifi::DiagId, diagCode);
+        _status = state;
+      }
+
+    }  // namespace wifi
 
     const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
 
@@ -161,12 +325,7 @@ namespace esp32m {
       return result;
     }
 
-    Wifi::Wifi()
-        : Device(Flags::HasSensors),
-          _apIp{DefaultApIp, DefaultNetmask, DefaultApIp} {
-      /*_scanConfig.scan_time.active.min = 100;
-      _scanConfig.scan_time.active.max = 300;*/
-    }
+    Wifi::Wifi() : Device(Flags::HasSensors) {}
 
     bool Wifi::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
@@ -479,8 +638,8 @@ namespace esp32m {
       ESP_CHECK_RETURN(useNetif());
       ESP_CHECK_RETURN(useEventLoop());
       _eventGroup = xEventGroupCreate();
-      _ifap = esp_netif_create_default_wifi_ap();
-      _ifsta = esp_netif_create_default_wifi_sta();
+      auto ifap = esp_netif_create_default_wifi_ap();
+      auto ifsta = esp_netif_create_default_wifi_sta();
       wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
       ESP_CHECK_RETURN(esp_wifi_init(&cfg));
       ESP_CHECK_RETURN(esp_wifi_set_storage(WIFI_STORAGE_RAM));
@@ -494,23 +653,26 @@ namespace esp32m {
       WifiEvent::publish(WIFI_EVENT_WIFI_READY,
                          nullptr);  // this event is never sent by esp-idf, so
                                     // we do it in case someone wants it
+
+      _ap.init(this, esp_netif_get_ifkey(ifap));
+      _sta.init(this, esp_netif_get_ifkey(ifsta));
+
       if (_txp)
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_max_tx_power(_txp));
       else
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_get_max_tx_power(&_txp));
       if (_task)
         xTaskNotifyGive(_task);
-      return ap(false);
+      return _ap.enable(false);
     }
 
     esp_err_t Wifi::checkNameChanged() {
-      if (!(_appNameChanged && isInitialized()))
+      if (!(_hostnameChanged && isInitialized()))
         return ESP_OK;
-      _appNameChanged = false;
-      const char *hostname = App::instance().name();
-      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifsta, hostname));
-      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_ifap, hostname));
-      netbiosns_set_name(hostname);
+      _hostnameChanged = false;
+      ErrorList errl;
+      _ap.apply(Interface::ConfigItem::Hostname, errl);
+      _sta.apply(Interface::ConfigItem::Hostname, errl);
       return ESP_OK;
     }
 
@@ -544,8 +706,8 @@ namespace esp32m {
       } else if (EventDone::is(ev, &reason)) {
         stop();
         return true;
-      } else if (EventPropChanged::is(ev, "app", "name")) {
-        _appNameChanged = true;
+      } else if (EventPropChanged::is(ev, "app", "hostname")) {
+        _hostnameChanged = true;
         if (_task)
           xTaskNotifyGive(_task);
       }
@@ -575,14 +737,14 @@ namespace esp32m {
         }
         switch (wfm) {
           case WIFI_MODE_STA:
-            staInfo(info);
+            _sta.getInfo(info);
             break;
           case WIFI_MODE_AP:
-            apInfo(info);
+            _ap.getInfo(info);
             break;
           case WIFI_MODE_APSTA:
-            apInfo(info);
-            staInfo(info);
+            _ap.getInfo(info);
+            _sta.getInfo(info);
             break;
           default:
             break;
@@ -605,12 +767,12 @@ namespace esp32m {
 
     void setIfcfg(wifi_interface_t ifx, JsonObjectConst source) {}
 
-    DynamicJsonDocument *Wifi::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Wifi::getConfig(RequestContext &ctx) {
       size_t size = JSON_OBJECT_SIZE(1) +      // txp
                     JSON_OBJECT_SIZE(1 + 3) +  // sta: proto, bw, inact
                     JSON_OBJECT_SIZE(1 + 3);   // ap:  proto, bw, inact,
 
-      bool maskSensitive = !config::isInternalRequest();
+      bool maskSensitive = !ctx.request.isInternal();
       size_t apsCount = _aps.size();
       if (apsCount) {
         size += JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(apsCount);
@@ -663,15 +825,10 @@ namespace esp32m {
       return changed;
     }
 
-    static bool sta_config_equal(const wifi_config_t &lhs,
-                                 const wifi_config_t &rhs) {
-      return memcmp(&lhs, &rhs, sizeof(wifi_config_t)) == 0;
-    }
-
     bool Wifi::tryConnect(ApInfo *ap, bool noBssid) {
       esp_task_wdt_reset();
       disconnect();
-      if (sta(true) != ESP_OK)
+      if (_sta.enable(true) != ESP_OK)
         return false;
       if (ap) {
         wifi_config_t conf;
@@ -707,23 +864,16 @@ namespace esp32m {
           ESP_ERROR_CHECK_WITHOUT_ABORT(
               esp_wifi_set_config(WIFI_IF_STA, &conf));
         }
-        esp_netif_dhcpc_stop(_ifsta);
-        if (!_staDhcp && !ip4_addr_isany_val(_staIp.ip)) {
-          if (ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  esp_netif_set_ip_info(_ifsta, &_staIp)) != ESP_OK)
-            return false;
-        } else if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcpc_start(
-                       _ifsta)) == ESP_ERR_ESP_NETIF_DHCPC_START_FAILED)
+        ErrorList errl;
+        _sta.apply(errl);
+        /*_sta.stopDhcp();
+        _sta.apply(Interface::ConfigItem::Ip, errl);
+        _sta.apply(Interface::ConfigItem::Dns, errl);
+        _sta.apply(Interface::ConfigItem::Role, errl);*/
+        if (!errl.empty())
           return false;
         logI("connecting to %s [%s]...", ssid, bssidStr);
       }
-
-      if (!ip_addr_isany(&_dns1))
-        dns_setserver(0, &_dns1);
-
-      if (!ip_addr_isany(&_dns2))
-        dns_setserver(1, &_dns2);
-
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_connect()) != ESP_OK)
         return false;
       int i = 30;
@@ -740,7 +890,7 @@ namespace esp32m {
       bool ok = isConnected();
       if (!ok) {
         logW("connection failed: %u", (int)_errReason);
-        if (_apState == ApState::Running)
+        if (_ap._status == ApStatus::Running)
           delay(5000);
         else
           delay(1000);
@@ -779,7 +929,7 @@ namespace esp32m {
           }
       }
       if (connected) {
-        setState(StaState::Connected);
+        _sta.setStatus(StaStatus::Connected);
         _connectFailures = 0;
         // updateTimeConfig();
       } else {
@@ -797,130 +947,9 @@ namespace esp32m {
       return ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_mode(next));
     }
 
-    esp_err_t Wifi::sta(bool enable) {
-      wifi_mode_t m = WIFI_MODE_NULL;
-      ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
-      return mode(m, enable ? (wifi_mode_t)(m | WIFI_MODE_STA)
-                            : (wifi_mode_t)(m & ~WIFI_MODE_STA));
-    }
-
-    esp_err_t Wifi::ap(bool enable) {
-      wifi_mode_t m = WIFI_MODE_NULL;
-      ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
-      if (enable) {
-        /*if (m & WIFI_MODE_AP)
-          return ESP_OK;*/
-        _apTimer = millis();
-        // vTaskDelay(pdMS_TO_TICKS(100)); // allow some time for the
-        // events to fire
-        setState(ApState::Starting);
-      }
-      esp_err_t result = mode(m, enable ? (wifi_mode_t)(m | WIFI_MODE_AP)
-                                        : (wifi_mode_t)(m & ~WIFI_MODE_AP));
-      if (result != ESP_OK)
-        return result;
-      esp_netif_dhcps_stop(_ifap);
-      if (enable) {
-        if (ESP_ERROR_CHECK_WITHOUT_ABORT(
-                esp_netif_set_ip_info(_ifap, &_apIp)) == ESP_OK) {
-          dhcps_lease_t lease;
-          lease.enable = true;
-          lease.start_ip.addr =
-              static_cast<uint32_t>(_apIp.ip.addr) + (1 << 24);
-          lease.end_ip.addr = static_cast<uint32_t>(_apIp.ip.addr) + (11 << 24);
-
-          ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_option(
-              _ifap, ESP_NETIF_OP_SET,
-              (esp_netif_dhcp_option_id_t)REQUESTED_IP_ADDRESS, (void *)&lease,
-              sizeof(dhcps_lease_t)));
-          esp_netif_dns_info_t dns;
-          dns.ip.u_addr.ip4.addr = _apIp.ip.addr;
-          dns.ip.type = IPADDR_TYPE_V4;
-          dhcps_offer_t dhcps_dns_value = OFFER_DNS;
-          ESP_ERROR_CHECK(esp_netif_dhcps_option(
-              _ifap, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
-              &dhcps_dns_value, sizeof(dhcps_dns_value)));
-          ESP_ERROR_CHECK(
-              esp_netif_set_dns_info(_ifap, ESP_NETIF_DNS_MAIN, &dns));
-
-          /*char ips[16];
-      esp_ip4addr_ntoa(&_apIp.ip, ips, sizeof(ips));
-      char url[16 + 11];
-      auto ul = snprintf(url, sizeof(url), "http://%s/cp", ips);
-
-      ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_option(_ifap,
-                                                           ESP_NETIF_OP_SET,
-                                                           (esp_netif_dhcp_option_id_t)160,
-      // see https://tools.ietf.org/html/rfc7710 url, ul));*/
-
-          ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_dhcps_start(_ifap));
-        }
-        wifi_config_t current_conf;
-        ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_AP, &current_conf));
-
-        wifi_config_t conf;
-        memset(&conf, 0, sizeof(wifi_config_t));
-        strlcpy(reinterpret_cast<char *>(conf.ap.ssid), App::instance().name(),
-                sizeof(conf.ap.ssid));
-        conf.ap.channel = 1;
-        conf.ap.authmode = WIFI_AUTH_OPEN;
-        conf.ap.ssid_len = strlen(reinterpret_cast<char *>(conf.ap.ssid));
-        conf.ap.max_connection = 4;
-        conf.ap.beacon_interval = 100;
-        if (!sta_config_equal(current_conf, conf)) {
-          logI("setting AP config");
-          ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_config(WIFI_IF_AP, &conf));
-        }
-      } else
-        setState(ApState::Stopped);
-      return ESP_OK;
-    }
-
     Wifi &Wifi::instance() {
       static Wifi i;
       return i;
-    }
-
-    void Wifi::setState(StaState state) {
-      if (state == _staState)
-        return;
-      logI("Sta%s -> Sta%s", StaStateNames[(int)_staState],
-           StaStateNames[(int)state]);
-      int diagCode = -1;
-      switch (state) {
-        case StaState::Connecting:
-          diagCode = DiagConnecting;
-          break;
-        case StaState::Connected:
-          diagCode = DiagConnected;
-          break;
-        default:
-          break;
-      }
-      if (diagCode > 0)
-        event::Diag::publish(DiagId, diagCode);
-      _staState = state;
-    }
-
-    void Wifi::setState(ApState state) {
-      if (state == _apState)
-        return;
-      logI("Ap%s -> Ap%s", ApStateNames[(int)_apState],
-           ApStateNames[(int)state]);
-      int diagCode = -1;
-      switch (state) {
-        case ApState::Starting:
-          diagCode = DiagApStarting;
-          break;
-        case ApState::Running:
-          diagCode = DiagApRunning;
-          break;
-        default:
-          break;
-      }
-      if (diagCode > 0)
-        event::Diag::publish(DiagId, diagCode);
-      _apState = state;
     }
 
     bool compareAps(ApInfo *i1, ApInfo *i2) {
@@ -1002,61 +1031,61 @@ namespace esp32m {
       for (;;) {
         esp_task_wdt_reset();
         auto curtime = millis();
-        switch (_staState) {
-          case StaState::Initial:
+        switch (_sta._status) {
+          case StaStatus::Initial:
             if (_stopped)
               break;
             if (!_connect && !_aps.size()) {  // no APs to connect to
-              if (_apState == ApState::Initial) {
+              if (_ap._status == ApStatus::Initial) {
                 logW("no APs to connect to, switching to AP mode");
-                ap(true);
+                _ap.enable(true);
               }
               break;
             }
-            setState(StaState::Connecting);
+            _sta.setStatus(StaStatus::Connecting);
             _staTimer = curtime;
             break;
-          case StaState::Connecting:
+          case StaStatus::Connecting:
             if (!tryConnect()) {
-              setState(StaState::ConnectionFailed);
+              _sta.setStatus(StaStatus::ConnectionFailed);
               _staTimer = curtime;
             }
             break;
-          case StaState::ConnectionFailed:
+          case StaStatus::ConnectionFailed:
             if (_connectFailures > 10) {
               logW("too many connection failures, restarting...");
               App::restart();
             }
-            if (_apState == ApState::Initial) {
+            if (_ap._status == ApStatus::Initial) {
               logW("connection failed, switching to AP+STA");
-              ap(true);
+              _ap.enable(true);
             }
             if (_connect ||
                 (curtime - _staTimer > 10000 && apClientsCount() == 0))
-              setState(StaState::Initial);
+              _sta.setStatus(StaStatus::Initial);
             break;
-          case StaState::Connected:
+          case StaStatus::Connected:
             if (!isConnected())
-              setState(StaState::Initial);
+              _sta.setStatus(StaStatus::Initial);
             break;
         }
-        switch (_apState) {
-          case ApState::Starting:
+        switch (_ap._status) {
+          case ApStatus::Starting:
             if (xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning) {
-              setState(ApState::Running);
+              _ap.setStatus(ApStatus::Running);
               _apTimer = curtime;
               break;
             }
             if (curtime - _apTimer <= 5000)
               break;
             logI("could not start AP, falling back to STA");
-            setState(ApState::Initial);
+            _ap.setStatus(ApStatus::Initial);
             break;
-          case ApState::Running: {
+          case ApStatus::Running: {
             /*if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning)) {
               // we can't rely on ApRunning status because AP_STOP/AP_START
             events may be fired multiple times during AP startup
-              setState(ApState::Stopped);
+              _ap.setStatus(ApStatus::Stopped);
               break;
             }*/
             if (apClientsCount() > 0)
@@ -1064,7 +1093,7 @@ namespace esp32m {
             if (curtime - _apTimer >= 60000) {
               if (isConnected()) {
                 logW("disabling AP because STA is connected");
-                ap(false);
+                _ap.enable(false);
               } else {
                 logW("no clients connected within 60s, restarting...");
                 App::restart();
@@ -1073,13 +1102,13 @@ namespace esp32m {
               break;
             }
             if (!_captivePortal)
-              _captivePortal = new CaptiveDns(_apIp.ip);
+              _captivePortal = new CaptiveDns(_ap._ip.ip);
             _captivePortal->enable(true);
           } break;
-          case ApState::Stopped:
+          case ApStatus::Stopped:
             if (_captivePortal)
               _captivePortal->enable(false);
-            setState(ApState::Initial);
+            _ap.setStatus(ApStatus::Initial);
             break;
           default:
             break;
@@ -1172,44 +1201,6 @@ namespace esp32m {
       }
       return true;
     };
-
-    void Wifi::staInfo(JsonObject info) {
-      if (isConnected()) {
-        auto infoSta = info.createNestedObject("sta");
-        wifi_ap_record_t info;
-        if (!esp_wifi_sta_get_ap_info(&info)) {
-          char sbssid[18] = {0};
-          infoSta["ssid"] = info.ssid;
-          if (formatBssid(info.bssid, sbssid))
-            infoSta["bssid"] = sbssid;
-          uint8_t mac[6];
-          if (!esp_wifi_get_mac(WIFI_IF_STA, mac) && formatBssid(mac, sbssid))
-            infoSta["mac"] = sbssid;
-          infoSta["rssi"] = info.rssi;
-        }
-        esp_netif_ip_info_t ip;
-        if (!ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_get_ip_info(_ifsta, &ip)))
-          ip2json(infoSta, ip);
-      }
-    }
-
-    void Wifi::apInfo(JsonObject info) {
-      auto infoAp = info.createNestedObject("ap");
-      const char *hostname = NULL;
-      if (!esp_netif_get_hostname(_ifap, &hostname))
-        infoAp["ssid"] = (char *)hostname;
-      uint8_t mac[6];
-      char sbssid[18] = {0};
-      if (!esp_wifi_get_mac(WIFI_IF_AP, mac) && formatBssid(mac, sbssid))
-        infoAp["mac"] = sbssid;
-      wifi_sta_list_t clients;
-      if (!esp_wifi_ap_get_sta_list(&clients))
-        infoAp["cli"] = clients.num;
-
-      esp_netif_ip_info_t ip;
-      if (!ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_get_ip_info(_ifap, &ip)))
-        ip2json(infoAp, ip);
-    }
 
     Wifi *useWifi() {
       return &Wifi::instance();

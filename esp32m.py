@@ -87,7 +87,7 @@ class Cml:
                 line = f.readline()
                 if not line:
                     break
-                m = re.search('^project\(([^ ]+)(?: VERSION (\d+))?\)$', line)
+                m = re.search('^project\(([^ ]+)(?: VERSION ([^ ]+))?\)$', line)
                 if m:
                     self.name = m.group(1)
                     version = m.group(2)

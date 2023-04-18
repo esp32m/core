@@ -1,8 +1,9 @@
-#include <stdio.h>
-#include <sys/stat.h>
-
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/json.hpp"
+
+#include <esp_rom_crc.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 namespace esp32m {
 
@@ -17,7 +18,7 @@ namespace esp32m {
       return 0;
     }
     if (st.st_size <= 4) {
-      logW("file is too small (%d bytes)", st.st_size);
+      logW("file %s is too small (%d bytes)", _path, st.st_size);
       return 0;
     }
     FILE *file = fopen(_path, "r");
@@ -57,6 +58,7 @@ namespace esp32m {
     char *buf;
     size_t mu;
     size_t r = read(&buf, &mu);
+    _crc = 0;
     if (r) {
       doc = new DynamicJsonDocument(mu);
       const char *json = buf + sizeof(size_t);
@@ -66,8 +68,10 @@ namespace esp32m {
              mu);
         delete doc;
         doc = nullptr;
-      } else
+      } else {
         logD("%d bytes loaded", r);
+        _crc = esp_rom_crc32_le(mu, (const uint8_t *)json, strlen(json));
+      }
       free(buf);
     }
     return doc;
@@ -81,23 +85,34 @@ namespace esp32m {
   }
 
   void ConfigVfs::write(const DynamicJsonDocument &config) {
-    FILE *file = fopen(_path, "w");
-    if (file) {
-      size_t mu = json::measure(config.as<JsonVariantConst>());
-      size_t bufsize = measureJson(config) + 1;
-      char *buf = (char *)malloc(bufsize);
-      size_t ss = serializeJson(config, buf, bufsize);
-      if (bufsize - ss != 1)
-        logW("buffer size (%d) != serialized size (%d)", bufsize, ss);
-      if (check(fwrite(&mu, sizeof(mu), 1, file) == 1, file,
-                "error writing config header"))
-        if (check(fwrite(buf, 1, ss, file) == ss, file, "error writing config"))
-          logD("%d bytes saved, mu=%d, data=%s", ss, mu, buf);
-      free(buf);
-      fflush(file);
-      fclose(file);
+    size_t mu = json::measure(config.as<JsonVariantConst>());
+    size_t ss;
+    char *buf = json::allocSerialize(config, &ss);
+
+    /*size_t bufsize = measureJson(config) + 1;
+    char *buf = (char *)malloc(bufsize);
+    size_t ss = serializeJson(config, buf, bufsize);*/
+
+    uint32_t crc = esp_rom_crc32_le(mu, (const uint8_t *)buf, ss);
+
+    if (crc != _crc) {
+      FILE *file = fopen(_path, "w");
+      if (file) {
+        if (check(fwrite(&mu, sizeof(mu), 1, file) == 1, file,
+                  "error writing config header"))
+          if (check(fwrite(buf, 1, ss, file) == ss, file,
+                    "error writing config")) {
+            logD("%d bytes saved, mu=%d, data=%s", ss, mu, buf);
+            _crc = crc;
+          }
+        fflush(file);
+        fclose(file);
+      } else
+        logW("could not open %s for writing: %d", _path, errno);
     } else
-      logW("could not open %s for writing: %d", _path, errno);
+      logD("config not changed, ignoring save request");
+
+    free(buf);
   }
 
   void ConfigVfs::dump() {

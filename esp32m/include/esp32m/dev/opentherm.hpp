@@ -420,6 +420,7 @@ namespace esp32m {
     };
 
     struct Recv {
+      Recv() {}
       Recv(const Recv &) = delete;
       void init();
       void consume(bool bit);
@@ -483,7 +484,7 @@ namespace esp32m {
       std::mutex _mutex;
       Message _outgoing = {};
       TaskHandle_t _task = nullptr;
-      Recv _recv = {};
+      Recv _recv;
       bool _logTraffic = false;
       Hvac _hvac;
       esp_err_t send(MessageType type, DataId id, uint16_t value);
@@ -785,7 +786,7 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       bool pollSensors() override;
 
      private:
@@ -806,7 +807,7 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
     };
 
     OpenthermMaster *useOpenthermMaster(

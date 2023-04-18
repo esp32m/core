@@ -6,11 +6,19 @@
 namespace esp32m {
   namespace net {
 
-    Interface::Interface(const char *key) : _key(key) {
+    Interface::Interface() {}
+    Interface::~Interface() {}
+
+    void Interface::init(const char *key) {
+      _key = key;
+      Interfaces::instance().reg(this);
       ErrorList el;
       syncHandle(el);
     }
-    Interface::~Interface() {}
+
+    esp_err_t Interface::getIpInfo(esp_netif_ip_info_t &info) {
+      return esp_netif_get_ip_info(_handle, &_ip);
+    }
 
     void Interface::syncHandle(ErrorList &errl) {
       _handle = esp_netif_get_handle_from_ifkey(_key.c_str());
@@ -34,11 +42,20 @@ namespace esp32m {
                 _dns[(esp_netif_dns_type_t)i] = dns;
             }
           }
-        } else {
-          for (auto i = 0; i < (int)ConfigItem::MAX; i++)
-            apply((ConfigItem)i, errl);
-        }
+        } else
+          apply(errl);
       }
+    }
+
+    void Interface::apply(ErrorList &errl) {
+      stopDhcp();
+      for (auto i = 0; i < (int)ConfigItem::MAX; i++)
+        apply((ConfigItem)i, errl);
+    }
+
+    void Interface::stopDhcp() {
+      esp_netif_dhcpc_stop(_handle);
+      esp_netif_dhcps_stop(_handle);
     }
 
     void Interface::apply(ConfigItem item, ErrorList &errl) {
@@ -59,10 +76,6 @@ namespace esp32m {
               break;
             case Role::DhcpServer: {
               esp_netif_dhcpc_stop(_handle);
-              dhcps_offer_t offer = OFFER_DNS;
-              errl.check(esp_netif_dhcps_option(_handle, ESP_NETIF_OP_SET,
-                                                ESP_NETIF_DOMAIN_NAME_SERVER,
-                                                &offer, sizeof(offer)));
               errl.check(esp_netif_dhcps_start(_handle));
               break;
             }
@@ -103,9 +116,16 @@ namespace esp32m {
         case ConfigItem::Dns:
           if (_role != Role::DhcpClient) {
             for (auto &kv : _dns) {
-              // logi("%s set DNS: %d, %d", _key.c_str(), kv.first, kv.second.ip.u_addr.ip4.addr);
+              // logi("%s set DNS: %d, %d", _key.c_str(), kv.first,
+              // kv.second.ip.u_addr.ip4.addr);
               errl.check(esp_netif_set_dns_info(_handle, kv.first, &kv.second));
             }
+          }
+          if (_role == Role::DhcpServer) {
+            dhcps_offer_t offer = OFFER_DNS;
+            errl.check(esp_netif_dhcps_option(_handle, ESP_NETIF_OP_SET,
+                                              ESP_NETIF_DOMAIN_NAME_SERVER,
+                                              &offer, sizeof(offer)));
           }
           break;
         case ConfigItem::DhcpsLease:
@@ -115,6 +135,10 @@ namespace esp32m {
                 &_dhcpsLease, sizeof(dhcps_lease_t)));
           }
           break;
+        case ConfigItem::Hostname: {
+          const char *hostname = App::instance().hostname();
+          errl.check(esp_netif_set_hostname(_handle, hostname));
+        } break;
         default:
           break;
       }
@@ -202,7 +226,7 @@ namespace esp32m {
       _configLoaded = true;
       return changed;
     }
-    DynamicJsonDocument *Interface::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Interface::getConfig(RequestContext &ctx) {
       auto hasIp = _ip.ip.addr || _ip.gw.addr || _ip.netmask.addr;
       auto hasMac = !isEmptyMac(_mac);
       auto ip6count = _ipv6.size();
@@ -265,10 +289,10 @@ namespace esp32m {
       }
       return changed;
     }
-    DynamicJsonDocument *Interfaces::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Interfaces::getConfig(RequestContext &ctx) {
       json::ConcatToObject c;
       for (const auto &i : _map) {
-        auto config = i.second->getConfig(args);
+        auto config = i.second->getConfig(ctx);
         if (config) {
           json::check(this, config, "getConfig()");
           c.add(i.first.c_str(), config);
@@ -307,11 +331,28 @@ namespace esp32m {
       }
     }
     Interface *Interfaces::getOrAddInterface(const char *key) {
+      {
+        std::lock_guard guard(_mapMutex);
+        auto i = _map.find(key);
+        if (i != _map.end())
+          return i->second;
+      }
+      auto newIface = new Interface();
+      newIface->init(key);
+      return newIface;
+    }
+
+    void Interfaces::reg(Interface *i) {
+      auto key = i->key();
       std::lock_guard guard(_mapMutex);
-      auto i = _map.find(key);
-      if (i == _map.end())
-        return _map[key] = new Interface(key);
-      return i->second;
+      auto old = _map.find(key);
+      if (old != _map.end() && old->second) {
+        logw("deleting orphaned interface %s", key.c_str());
+        if (!old->second->_persistent)
+          delete old->second;
+        old->second = i;
+      } else
+        _map[key] = i;
     }
 
     Interfaces &useInterfaces() {

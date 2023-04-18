@@ -126,7 +126,8 @@ namespace esp32m {
       if (!found) {
         if (!strcmp(req->uri, "/generate_204")) {
           char location[32];
-          auto &info = net::Wifi::instance().apIp();
+          esp_netif_ip_info_t info;
+          net::Wifi::instance().ap().getIpInfo(info);
           sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
           ESP_ERROR_CHECK_WITHOUT_ABORT(
               httpd_resp_set_status(req, "302"));  // 307 ???

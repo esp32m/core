@@ -16,7 +16,7 @@ namespace esp32m {
         }
 
        protected:
-        DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+        DynamicJsonDocument *getConfig(RequestContext &ctx) override;
         bool setConfig(const JsonVariantConst cfg,
                        DynamicJsonDocument **result) override;
         bool handleRequest(Request &req) override;

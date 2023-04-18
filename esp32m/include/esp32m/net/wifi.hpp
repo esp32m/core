@@ -8,10 +8,73 @@
 #include "esp32m/device.hpp"
 #include "esp32m/events.hpp"
 #include "esp32m/net/captive_dns.hpp"
+#include "esp32m/net/interfaces.hpp"
 #include "esp32m/sleep.hpp"
 
 namespace esp32m {
   namespace net {
+
+    class Wifi;
+
+    namespace wifi {
+      class Iface : public Interface {
+       protected:
+        net::Wifi *_wifi = nullptr;
+        void init(net::Wifi *wifi, const char *key) {
+          _wifi = wifi;
+          Interface::init(key);
+        }
+        friend class Wifi;
+      };
+
+      enum class StaStatus {
+        Initial,
+        Connecting,
+        Connected,
+        ConnectionFailed,
+      };
+
+      class Sta : public Iface {
+       public:
+        Sta(const Sta &) = delete;
+        esp_err_t enable(bool enable);
+        StaStatus status() const {
+          return _status;
+        }
+
+       private:
+        Sta();
+        StaStatus _status = StaStatus::Initial;
+        void setStatus(StaStatus state);
+        void getInfo(JsonObject);
+        friend class net::Wifi;
+      };
+
+      enum class ApStatus {
+        Initial,
+        Starting,
+        Running,
+        Stopped,
+      };
+
+      class Ap : public Iface {
+       public:
+        Ap(const Ap &) = delete;
+        esp_err_t enable(bool enable);
+        ApStatus status() const {
+          return _status;
+        }
+
+       private:
+        Ap();
+        ApStatus _status = ApStatus::Initial;
+        void setStatus(ApStatus status);
+        void getInfo(JsonObject);
+        friend class net::Wifi;
+      };
+    }  // namespace wifi
+
+    using namespace wifi;
 
     class WifiEvent : public Event {
      public:
@@ -100,19 +163,6 @@ namespace esp32m {
     class Wifi : public Device {
      public:
       Wifi(const Wifi &) = delete;
-      enum class StaState {
-        Initial,
-        Connecting,
-        Connected,
-        ConnectionFailed,
-      };
-
-      enum class ApState {
-        Initial,
-        Starting,
-        Running,
-        Stopped,
-      };
 
       static Wifi &instance();
       const char *name() const override {
@@ -126,35 +176,14 @@ namespace esp32m {
       bool isInitialized() const;
       bool isConnected() const;
       int apClientsCount();
-      esp_err_t sta(bool enable);
-      esp_err_t ap(bool enable);
+      Sta &sta() {
+        return _sta;
+      }
+      Ap &ap() {
+        return _ap;
+      }
       esp_err_t disconnect();
       void stop();
-      const esp_netif_ip_info_t &apIp() const {
-        return _apIp;
-      }
-      const esp_netif_ip_info_t &staIp() const {
-        return _staIp;
-      }
-      StaState staState() const {
-        return _staState;
-      }
-      ApState apState() const {
-        return _apState;
-      }
-      void configureAp(const esp_netif_ip_info_t &ip) {
-        _apIp = ip;
-      }
-      void configureSta(const esp_netif_ip_info_t &ip) {
-        _staIp = ip;
-      }
-      void configureDns(const esp_ip4_addr_t &dns1,
-                        const esp_ip4_addr_t &dns2) {
-        _dns1.type = ESP_IPADDR_TYPE_V4;
-        _dns1.u_addr.ip4.addr = dns1.addr;
-        _dns2.type = ESP_IPADDR_TYPE_V4;
-        _dns2.u_addr.ip4.addr = dns2.addr;
-      }
 
       static const uint8_t DiagId = 10;
       static const uint8_t DiagConnected = 1;
@@ -166,28 +195,27 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       bool pollSensors() override;
       bool handleRequest(Request &req) override;
       bool handleEvent(Event &ev) override;
 
      private:
+      Ap _ap;
+      Sta _sta;
       Wifi();
+
       bool _stopped = false;
-      esp_netif_t *_ifsta = nullptr, *_ifap = nullptr;
       TaskHandle_t _task = nullptr;
       EventGroupHandle_t _eventGroup = nullptr;
       std::vector<ApInfo *> _aps;
-      bool _staDhcp = true;
       wifi_err_reason_t _errReason = (wifi_err_reason_t)0;
-      esp_netif_ip_info_t _staIp = {}, _apIp;
-      ip_addr_t _dns1 = {}, _dns2 = {};
       int8_t _txp = 0;
 
       unsigned long _staTimer = 0, _apTimer = 0, _scanStarted = 0;
       int _connectFailures = 0;
       int _maxAps = 5;
-      bool _appNameChanged = true;
+      bool _hostnameChanged = true;
       wifi_scan_config_t _scanConfig = {.ssid = nullptr,
                                         .bssid = nullptr,
                                         .channel = 0,
@@ -195,15 +223,11 @@ namespace esp32m {
                                         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
                                         .scan_time = {}};
 
-      StaState _staState = StaState::Initial;
-      ApState _apState = ApState::Initial;
       Response *_pendingResponse = nullptr;
       CaptiveDns *_captivePortal = nullptr;
       std::unique_ptr<ApInfo> _connect;
       esp_err_t init();
       esp_err_t mode(wifi_mode_t prev, wifi_mode_t next);
-      void setState(StaState state);
-      void setState(ApState state);
       void checkScan();
       esp_err_t checkNameChanged();
       void run();
@@ -212,11 +236,11 @@ namespace esp32m {
       ApInfo *addOrUpdateAp(ApInfo *ap);
       ApInfo *addOrUpdateAp(JsonArrayConst source, bool &changed);
       void ensureId(ApInfo *ap);
-      void staInfo(JsonObject);
-      void apInfo(JsonObject);
       char *btmNeighborList(uint8_t *report, size_t report_len);
       friend void neighbor_report_recv_cb(void *ctx, const uint8_t *report,
                                           size_t report_len);
+      friend class wifi::Ap;
+      friend class wifi::Sta;
     };
 
     Wifi *useWifi();

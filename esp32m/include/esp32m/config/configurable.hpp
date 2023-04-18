@@ -7,22 +7,18 @@
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
-  namespace config {
-    /*    bool getMaskSensitive(JsonVariantConst args);
-        void setMaskSensitive(JsonVariant args, bool mask = true);
-        DynamicJsonDocument* addMaskSensitive(JsonVariantConst args,
-                                              bool mask = true);*/
-                                              
-    // TODO: this must be FIXED to maybe an additional parameter passed to getConfig()
-    // This is dangerous in case internal getConfig request runs in parallel with UI getConfig, all sensitive info will be revealed
-    bool isInternalRequest();
-  }  // namespace config
 
   class Configurable : public virtual log::Loggable {
    public:
     Configurable(const Configurable&) = delete;
     virtual const char* configName() const {
       return name();
+    }
+
+    /** Returns true if this object's configuration was either read and applied
+     * from config store or via UI */
+    bool isConfigured() {
+      return _configured;
     }
 
    protected:
@@ -32,9 +28,12 @@ namespace esp32m {
                            DynamicJsonDocument** result) {
       return false;
     }
-    virtual DynamicJsonDocument* getConfig(const JsonVariantConst args) {
+    virtual DynamicJsonDocument* getConfig(RequestContext &ctx) {
       return nullptr;
     }
+
+   private:
+    bool _configured = false;
   };
 
 }  // namespace esp32m

@@ -86,6 +86,7 @@ namespace esp32m {
             &_lostIpHandle));
         ESP_CHECK_RETURN(esp_eth_start(_handle));
         _ready = true;
+        updateHostname();
       }
       return ESP_OK;
     }
@@ -156,9 +157,20 @@ namespace esp32m {
       else if (EventInit::is(ev, 0)) {
         ensureReady();
         return true;
+      } else if (EventPropChanged::is(ev, "app", "hostname")) {
+        updateHostname();
       }
       return false;
     }
+
+    esp_err_t Ethernet::updateHostname() {
+      if (_ready) {
+        const char *hostname = App::instance().hostname();
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_netif_set_hostname(_if, hostname));
+      }
+      return ESP_OK;
+    }
+
 #if CONFIG_ETH_USE_ESP32_EMAC
     Ethernet *useOlimexEthernet(const char *name) {
       // power up LAN8710 chip

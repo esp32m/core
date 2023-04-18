@@ -320,7 +320,7 @@ namespace esp32m {
                             DynamicJsonDocument **result) {
       return false;
     }
-    DynamicJsonDocument *Ina3221::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Ina3221::getConfig(RequestContext &ctx) {
       return nullptr;
     }
 

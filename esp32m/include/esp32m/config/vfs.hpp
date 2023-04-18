@@ -19,6 +19,7 @@ namespace esp32m {
 
    private:
     const char* _path;
+    uint32_t _crc = 0;
     bool check(bool ok, FILE* stream, const char* msg);
     size_t read(char** buf, size_t* mu);
     void dump();

@@ -70,6 +70,7 @@ namespace esp32m {
       esp_event_handler_instance_t _gotIpHandle = nullptr,
                                    _lostIpHandle = nullptr;
       esp_err_t ensureReady();
+      esp_err_t updateHostname();
       esp_err_t stop();
     };
 

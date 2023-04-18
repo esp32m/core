@@ -1,19 +1,20 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/logging.hpp"
 
 #include <dhcpserver/dhcpserver.h>
 #include <dhcpserver/dhcpserver_options.h>
 #include <esp_netif.h>
 #include <map>
 #include <mutex>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace esp32m {
   namespace net {
 
-    class Interface : public INamed {
+    class Interface : public virtual log::Loggable {
      public:
       enum class Role {
         Default,
@@ -21,26 +22,28 @@ namespace esp32m {
         DhcpClient,
         DhcpServer,
       };
-      enum class ConfigItem { Role, Mac, Ip, Ipv6, Dns, DhcpsLease, MAX = Dns };
-      Interface(const char *key);
+      enum class ConfigItem { Mac, Ip, Ipv6, Dns, DhcpsLease, Hostname, Role, MAX };
+      Interface();
       Interface(const Interface &) = delete;
       virtual ~Interface();
       const char *name() const override {
         return _key.c_str();
       }
+      std::string key() const {
+        return _key;
+      }
       esp_netif_t *handle() {
         return _handle;
       }
+      esp_err_t getIpInfo(esp_netif_ip_info_t &info);
+
       void syncHandle(ErrorList &errl);
       void apply(ConfigItem item, ErrorList &errl);
+      void apply(ErrorList &errl);
+      void stopDhcp();
 
-      DynamicJsonDocument *getState(const JsonVariantConst args);
-      bool setConfig(const JsonVariantConst cfg, DynamicJsonDocument **result);
-      DynamicJsonDocument *getConfig(const JsonVariantConst args);
-
-     private:
-      std::string _key;
-      esp_netif_t *_handle;
+     protected:
+      bool _persistent = false;
       // config
       bool _configLoaded = false;
       Role _role = Role::Default;
@@ -49,6 +52,15 @@ namespace esp32m {
       std::vector<esp_ip6_addr_t> _ipv6;
       std::map<esp_netif_dns_type_t, esp_netif_dns_info_t> _dns;
       dhcps_lease_t _dhcpsLease = {};
+      void init(const char *key);
+      DynamicJsonDocument *getState(const JsonVariantConst args);
+      bool setConfig(const JsonVariantConst cfg, DynamicJsonDocument **result);
+      DynamicJsonDocument *getConfig(RequestContext &ctx);
+
+     private:
+      std::string _key;
+      esp_netif_t *_handle;
+      friend class Interfaces;
     };
 
     class Interfaces : public AppObject {
@@ -64,7 +76,7 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
 
      private:
       bool _mapValid = false;
@@ -73,6 +85,8 @@ namespace esp32m {
       Interfaces() {}
       void syncMap();
       Interface *getOrAddInterface(const char *key);
+      void reg(Interface *i);
+      friend class Interface;
     };
 
     Interfaces &useInterfaces();

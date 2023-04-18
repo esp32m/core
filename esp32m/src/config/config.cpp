@@ -8,18 +8,12 @@ namespace esp32m {
   const char *Config::KeyConfigGet = "config-get";
   const char *Config::KeyConfigSet = "config-set";
   const char *EventConfigChanged::NAME = "config-changed";
-  namespace config {
-    int _internalRequest = 0;
-    bool isInternalRequest() {
-      return _internalRequest > 0;
-    }
 
-  }  // namespace config
   class ConfigRequest : public Request {
    public:
     ConfigRequest()
         : Request(Config::KeyConfigGet, 0, nullptr,
-                  json::null<JsonVariantConst>()) {}
+                  json::null<JsonVariantConst>(), nullptr) {}
 
     void respondImpl(const char *source, const JsonVariantConst data,
                      bool isError) override {
@@ -28,34 +22,21 @@ namespace esp32m {
       auto doc = new DynamicJsonDocument(data.memoryUsage());
       doc->set(data);
       _responses.add(source, doc);
-
-      /*      auto mu = data.memoryUsage();
-            mu += JSON_OBJECT_SIZE(1);
-            auto doc = new DynamicJsonDocument(mu);
-            doc->to<JsonObject>()[source] = data;
-            _documents.push_back(std::unique_ptr<DynamicJsonDocument>(doc));*/
+      json::checkEqual(data, doc->as<JsonVariantConst>());
     }
 
     DynamicJsonDocument *merge() {
       return _responses.concat();
-      /*size_t mu = 0;
-      for (auto &d : _documents) mu += d->memoryUsage();
-      auto doc = new DynamicJsonDocument(mu);
-      for (auto &d : _documents)
-        for (auto kvp : d->as<JsonObjectConst>())
-          (*doc)[kvp.key()] = kvp.value();
-      return doc;*/
     }
 
    private:
-    // std::vector<std::unique_ptr<DynamicJsonDocument> > _documents;
     json::ConcatToObject _responses;
   };
 
   class ConfigApply : public Request {
    public:
     ConfigApply(const JsonVariantConst data)
-        : Request(Config::KeyConfigSet, 0, nullptr, data) {}
+        : Request(Config::KeyConfigSet, 0, nullptr, data, nullptr) {}
     void respondImpl(const char *source, const JsonVariantConst data,
                      bool isError) override {}
   };
@@ -64,9 +45,7 @@ namespace esp32m {
     if (!_store)
       return;
     ConfigRequest ev;
-    config::_internalRequest++;
     ev.publish();
-    config::_internalRequest--;
     auto doc = ev.merge();
     if (doc) {
       json::check(this, doc, "save()");
@@ -90,6 +69,19 @@ namespace esp32m {
     ConfigApply ev(doc->as<JsonVariantConst>());
     ev.publish();
     delete doc;
+  }
+
+  DynamicJsonDocument *Config::read() {
+    if (!_store)
+      return nullptr;
+    DynamicJsonDocument *doc;
+    {
+      std::lock_guard<std::mutex> guard(_mutex);
+      doc = _store->read();
+    }
+    if (doc)
+      json::check(this, doc, "load()");
+    return doc;
   }
 
   void Config::reset() {

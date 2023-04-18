@@ -59,7 +59,7 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *FlowSensor::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *FlowSensor::getConfig(RequestContext &ctx) {
       DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
       auto root = doc->to<JsonObject>();
       root["consumption"] = _consumption;

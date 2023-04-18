@@ -179,9 +179,9 @@ namespace esp32m {
       return false;
     }
 
-    DynamicJsonDocument *Relay::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Relay::getConfig(RequestContext &ctx) {
       if (isPersistent())
-        return getState(args);
+        return getState(ctx.request.data());
       return nullptr;
     }
 

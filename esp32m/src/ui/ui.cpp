@@ -71,7 +71,7 @@ namespace esp32m {
       uint32_t _clientId;
       Req(Ui *ui, const char *name, int seq, const char *target,
           const JsonVariantConst data, uint32_t clientId)
-          : Request(name, seq, target, data), _ui(ui), _clientId(clientId) {}
+          : Request(name, seq, target, data, "ui"), _ui(ui), _clientId(clientId) {}
     };
 
   }  // namespace ui

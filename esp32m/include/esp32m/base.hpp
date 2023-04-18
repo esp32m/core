@@ -7,20 +7,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <type_traits>
 #include <vector>
 
 namespace esp32m {
 
-#ifndef ARDUINO
   unsigned long micros();
   unsigned long millis();
   void delay(uint32_t ms);
   void delayUs(uint32_t us);
   long map(long x, long in_min, long in_max, long out_min, long out_max);
-#endif
 
   const char *makeTaskName(const char *name);
+  std::string string_printf(const char *format, ...);
 
   class INamed {
    public:
@@ -72,6 +72,9 @@ namespace esp32m {
       if (*result)
         *result = doc;
       return doc;
+    }
+    bool empty() {
+      return _list.empty();
     }
 
    private:

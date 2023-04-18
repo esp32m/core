@@ -31,7 +31,7 @@ namespace esp32m {
       };
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       virtual float compute(int pcnt, int ms);
 

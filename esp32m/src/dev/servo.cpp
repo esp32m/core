@@ -97,9 +97,9 @@ namespace esp32m {
       return false;
     }
 
-    DynamicJsonDocument *Servo::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Servo::getConfig(RequestContext &ctx) {
       if (isPersistent())
-        return getState(args);
+        return getState(ctx.request.data());
       return nullptr;
     }
 

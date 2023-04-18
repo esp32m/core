@@ -57,11 +57,32 @@ namespace esp32m {
       }
     }
 
-    char *allocSerialize(const JsonVariantConst v) {
+    char *allocSerialize(const JsonVariantConst v, size_t *length) {
+      // measureJson() excludes null terminator
       size_t dl = measureJson(v) + 1;
       char *ds = (char *)malloc(dl);
-      serializeJson(v, ds, dl);
+      size_t actual = serializeJson(v, ds, dl);
+      dl--;
+      if (actual != dl)
+        logw("size of serialized JSON is different from expected: %d!=%d",
+             actual, dl);
+      auto sl=strlen(ds);
+      if (actual != sl)
+        logw("size of serialized JSON is different from string length: %d!=%d",
+             actual, sl);
+      if (length) *length=actual;
       return ds;
+    }
+
+    bool checkEqual(const JsonVariantConst a, const JsonVariantConst b) {
+      auto sa = allocSerialize(a);
+      auto sb = allocSerialize(b);
+      bool result = strcmp(sa, sb) == 0;
+      if (!result)
+        logw("expected JSON variants to be equal: %s != %s", sa, sb);
+      free(sa);
+      free(sb);
+      return result;
     }
 
     size_t measure(const JsonVariantConst v) {
@@ -95,6 +116,21 @@ namespace esp32m {
 
     void to(JsonObject target, const char *key, const float value) {
       if (isnan(value))
+        return;
+      target[key] = value;
+    }
+    void to(JsonObject target, const char *key, std::string value) {
+      if (value.empty())
+        return;
+      target[key] = value;
+    }
+    void to(JsonObject target, const char *key, const char *value) {
+      if (!value || !strlen(value))
+        return;
+      target[key] = value;
+    }
+    void to(JsonObject target, const char *key, char *value) {
+      if (!value || !strlen(value))
         return;
       target[key] = value;
     }

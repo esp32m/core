@@ -18,7 +18,7 @@ namespace esp32m {
     namespace scanner {
       Modbus::Modbus() {}
 
-      DynamicJsonDocument *Modbus::getConfig(const JsonVariantConst args) {
+      DynamicJsonDocument *Modbus::getConfig(RequestContext &ctx) {
         DynamicJsonDocument *doc =
             new DynamicJsonDocument(JSON_OBJECT_SIZE(10));
         auto root = doc->to<JsonObject>();

@@ -387,7 +387,7 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *GPIO::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *GPIO::getConfig(RequestContext &ctx) {
       char numbuf[4];
       size_t capa = JSON_OBJECT_SIZE(3);  // root+pins+ledc-timer
       for (auto const &i : _config) {

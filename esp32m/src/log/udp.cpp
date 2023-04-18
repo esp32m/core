@@ -69,8 +69,11 @@ namespace esp32m {
                sizeof(_addr.sin_addr));
         freeaddrinfo(res);
       }
-      if (!_addr.sin_addr.s_addr)
-        _addr.sin_addr.s_addr = net::Wifi::instance().staIp().gw.addr;
+      if (!_addr.sin_addr.s_addr) {
+        esp_netif_ip_info_t info;
+        net::Wifi::instance().sta().getIpInfo(info);
+        _addr.sin_addr.s_addr = info.gw.addr;
+      }
       if (!_addr.sin_addr.s_addr)
         return false;
       if (!message)
@@ -124,7 +127,7 @@ namespace esp32m {
           if (!neg)
             timeinfo.tm_year = 0;
           strftime(strftime_buf, sizeof(strftime_buf), "%FT%T", &timeinfo);
-          const char *hostname = App::instance().name();
+          const char *hostname = App::instance().hostname();
           const char *name = message->name();
           auto ms = 1 /* < */ + 3 /* PRIVAL */ + 1 /* > */ + 1 /* version */ +
                     1 /* SP */ + strlen(strftime_buf) + 1 /* . */ + 4 /* MS */ +

@@ -23,8 +23,8 @@ namespace esp32m {
         return false;
       if (!message)
         return true;
-      if (!_topic && App::instance().name()) {
-        if (asprintf(&_topic, "esp32m/log/%s", App::instance().name()) < 0)
+      if (!_topic && App::instance().hostname()) {
+        if (asprintf(&_topic, "esp32m/log/%s", App::instance().hostname()) < 0)
           _topic = nullptr;
       }
       if (!_topic)

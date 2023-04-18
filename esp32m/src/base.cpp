@@ -12,7 +12,6 @@
 
 namespace esp32m {
 
-#ifndef ARDUINO
   unsigned long IRAM_ATTR micros() {
     return (unsigned long)(esp_timer_get_time());
   }
@@ -49,7 +48,6 @@ namespace esp32m {
     return (delta * dividend + (divisor / 2)) / divisor + out_min;
   }
 
-#endif
   const char *makeTaskName(const char *name) {
     if (!name)
       return "m/generic";
@@ -59,6 +57,22 @@ namespace esp32m {
     char *buf = (char *)calloc(l, 1);
     snprintf(buf, l, "m/%s", name);
     return buf;
+  }
+
+  std::string string_printf(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    size_t sz = vsnprintf(nullptr, 0, format, args);
+    size_t bufsize = sz + 1;
+    char *buf = (char *)malloc(bufsize);
+    std::string result;
+    if (buf) {
+      vsnprintf(buf, bufsize, format, args);
+      result = buf;
+      free(buf);
+    }
+    va_end(args);
+    return result;
   }
 
   namespace locks {

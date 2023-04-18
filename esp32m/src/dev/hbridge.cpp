@@ -83,9 +83,9 @@ namespace esp32m {
       return false;
     }
 
-    DynamicJsonDocument *HBridge::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *HBridge::getConfig(RequestContext &ctx) {
       if (_persistent)
-        return getState(args);
+        return getState(ctx.request.data());
       return nullptr;
     }
 

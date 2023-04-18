@@ -14,12 +14,12 @@ namespace esp32m {
   namespace json {
 
     DynamicJsonDocument *parse(const char *data, int len = -1);
-    char *allocSerialize(const JsonVariantConst v);
+    char *allocSerialize(const JsonVariantConst v, size_t *length = nullptr);
     size_t measure(const JsonVariantConst v);
+    bool checkEqual(const JsonVariantConst a, const JsonVariantConst b);
 
     void checkSetResult(esp_err_t err, DynamicJsonDocument **result);
 
-   
     JsonDocument &empty();
     JsonArrayConst emptyArray();
     JsonObjectConst emptyObject();
@@ -41,6 +41,9 @@ namespace esp32m {
     }
 
     void to(JsonObject target, const char *key, const float value);
+    void to(JsonObject target, const char *key, std::string value);
+    void to(JsonObject target, const char *key, const char *value);
+    void to(JsonObject target, const char *key, char *value);
 
     template <typename T>
     bool from(JsonVariantConst source, T &target, bool *changed = nullptr) {

@@ -1,4 +1,4 @@
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 idf_component_register(
     SRC_DIRS "src" "src/events" "src/log" "src/config" "src/bus" "src/net" "src/io" "src/bt" "src/ui" "src/dev" "src/dev/opentherm" "src/debug"

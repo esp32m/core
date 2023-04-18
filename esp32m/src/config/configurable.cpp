@@ -5,52 +5,42 @@
 #include "esp32m/json.hpp"
 
 namespace esp32m {
-  /*namespace config {
-    bool getMaskSensitive(JsonVariantConst args) {
-      return args["options"]["mask_sensitive"] | false;
-    }
-    void setMaskSensitive(JsonVariant args, bool mask) {
-      JsonObject options = args["options"];
-      if (!options)
-        options = args.createNestedObject("options");
-      options["mask_sensitive"] = mask;
-    }
-    DynamicJsonDocument *addMaskSensitive(JsonVariantConst args, bool mask) {
-      DynamicJsonDocument *doc =
-          new DynamicJsonDocument(args.memoryUsage() + JSON_OBJECT_SIZE(2));
-      JsonVariant root = doc->to<JsonObject>();
-      root.set(args);
-      setMaskSensitive(root, mask);
-      return doc;
-    }
-  }  // namespace config
-*/
+
   bool Configurable::handleConfigRequest(Request &req) {
     const char *name = req.name();
+    const char *cname = configName();
+    JsonVariantConst reqData = req.data();
+    bool internalRequest = !req.origin();
     if (!strcmp(name, Config::KeyConfigGet)) {
-      DynamicJsonDocument *config = getConfig(req.data());
+      // internal requests means request to save config
+      // we don't want to save default config (the one that never changed)
+      if (internalRequest && !_configured)
+        return true;
+      RequestContext ctx(req, reqData);
+      DynamicJsonDocument *config = getConfig(ctx);
       if (config) {
         json::check(this, config, "getConfig()");
-        req.respond(configName(), *config, false);
+        req.respond(cname, *config, false);
         delete config;
       }
       return true;
     } else if (!strcmp(name, Config::KeyConfigSet)) {
-      JsonVariantConst data =
-          req.isBroadcast() ? req.data()[configName()] : req.data();
+      JsonVariantConst data = req.isBroadcast() ? reqData[cname] : reqData;
       if (data.isUnbound())
         return true;
+      RequestContext ctx(req, data);
       DynamicJsonDocument *result = nullptr;
       if (setConfig(data, &result)) {
         EventConfigChanged::publish(this);
-        Broadcast::publish(configName(), "config-changed");
+        Broadcast::publish(cname, "config-changed");
+        _configured = true;
       }
       if (result) {
         json::check(this, result, "setConfig()");
-        req.respond(configName(), *result);
+        req.respond(cname, *result);
         delete result;
       } else
-        req.respond(configName(), json::null<JsonVariantConst>(), false);
+        req.respond(cname, json::null<JsonVariantConst>(), false);
       return true;
     }
     return false;

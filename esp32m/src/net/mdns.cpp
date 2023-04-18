@@ -51,7 +51,7 @@ namespace esp32m {
           EventManager::instance().publish(ev);
           updateServices();
         }
-      } else if (EventPropChanged::is(ev, "app", "name")) {
+      } else if (EventPropChanged::is(ev, "app", "hostname")) {
         updateHostname();
       } else
         return false;
@@ -61,7 +61,7 @@ namespace esp32m {
     void Mdns::updateHostname() {
       if (!_initialized)
         return;
-      const char *hostname = App::instance().name();
+      const char *hostname = App::instance().hostname();
       ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_hostname_set(hostname));
     }
 

@@ -104,7 +104,7 @@ namespace esp32m {
     }
   };
 
-  class Interactive : public virtual INamed {
+/*  class Interactive : public virtual INamed {
    public:
     Interactive(const Interactive &) = delete;
     virtual const char *interactiveName() const {
@@ -121,17 +121,26 @@ namespace esp32m {
       return json::emptyArray();
     };
   };
-
+*/
   class AppObject : public virtual log::Loggable,
-                    public virtual Interactive,
+//                    public virtual Interactive,
                     public virtual Configurable,
                     public virtual Stateful {
    public:
-    AppObject(const Interactive &) = delete;
+    AppObject(const AppObject &) = delete;
+    virtual const char *interactiveName() const {
+      return name();
+    };
 
    protected:
-    AppObject(){};
-    bool handleRequest(Request &req) override;
+    AppObject();
+    virtual bool handleRequest(Request &req);
+    virtual bool handleEvent(Event &ev) {
+      return false;
+    };
+    virtual const JsonVariantConst descriptor() const {
+      return json::emptyArray();
+    };
   };
 
   class App : public AppObject {
@@ -142,6 +151,7 @@ namespace esp32m {
       ~Init();
       void requestInitLevels(uint8_t maxInitLevels);
       void setConfigStore(ConfigStore *store);
+      void inferHostname(int limit = 15, int macDigits = 2);
     };
     App(const App &) = delete;
     static App &instance();
@@ -159,36 +169,36 @@ namespace esp32m {
     const char *stateName() const override {
       return "app";
     }
+    const char *configName() const override {
+      return "app";
+    }
+    const char *hostname() const {
+      return _hostname.c_str();
+    }
+    const char *version() const {
+      return _version;
+    }
     Props &props() {
       return _props;
     }
     uint32_t wdtTimeout() const {
       return _wdtTimeout;
     }
-    void setName(const char *name) {
-      if (!name)
-        return;
-      bool fire = false;
-      std::string prev = _name;
-      if (!_name.empty()) {
-        if (_name == name)
-          return;
-        fire = true;
-      }
-      _name = name;
-      if (fire) {  // don't fire event the first time the name is set
-        logI("my name is now %s", _name);
-        EventPropChanged::publish("app", "name", prev, _name);
-      }
-    }
+    void setHostname(const char *hostname);
+    void resetHostname();
 
    protected:
     DynamicJsonDocument *getState(const JsonVariantConst args) override;
+    bool setConfig(const JsonVariantConst cfg,
+                   DynamicJsonDocument **result) override;
+    DynamicJsonDocument *getConfig(RequestContext &ctx) override;
     bool handleEvent(Event &ev) override;
     bool handleRequest(Request &req) override;
 
    private:
     std::string _name;
+    std::string _hostname;
+    std::string _defaultHostname;
     const char *_version;
     Props _props;
     uint32_t _sketchSize, _wdtTimeout = 30;

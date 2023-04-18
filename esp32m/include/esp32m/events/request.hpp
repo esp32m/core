@@ -4,6 +4,7 @@
 
 #include <ArduinoJson.h>
 
+#include "esp32m/base.hpp"
 #include "esp32m/events.hpp"
 
 namespace esp32m {
@@ -29,6 +30,13 @@ namespace esp32m {
     bool isResponded() const {
       return _handled;
     }
+    const char *origin() const {
+      return _origin;
+    }
+    /** returns true if the request originated from within esp32m */
+    bool isInternal() const {
+      return _origin == nullptr;
+    }
 
     void publish() override;
 
@@ -49,8 +57,13 @@ namespace esp32m {
 
    protected:
     Request(const char *name, int seq, const char *target,
-            const JsonVariantConst data)
-        : Event(NAME), _name(name), _seq(seq), _target(target), _data(data) {}
+            const JsonVariantConst data, const char *origin)
+        : Event(NAME),
+          _name(name),
+          _seq(seq),
+          _target(target),
+          _data(data),
+          _origin(origin) {}
     virtual void respondImpl(const char *source, const JsonVariantConst data,
                              bool error) = 0;
     virtual Response *makeResponseImpl() {
@@ -62,8 +75,18 @@ namespace esp32m {
     const char *_name;
     int _seq;
     const char *_target;
-    bool _handled = false;
     const JsonVariantConst _data;
+    const char *_origin;
+    bool _handled = false;
+  };
+  class RequestContext {
+   public:
+    RequestContext(const Request &request, const JsonVariantConst data)
+        : request(request), data(data) {}
+    const Request &request;
+    const JsonVariantConst data;
+    ErrorList errl;
+    DynamicJsonDocument *result = nullptr;
   };
 
 }  // namespace esp32m

@@ -146,9 +146,9 @@ namespace esp32m {
       return false;
     }
 
-    DynamicJsonDocument *Valve::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Valve::getConfig(RequestContext &ctx) {
       if (_persistent)
-        return getState(args);
+        return getState(ctx.request.data());
       return nullptr;
     }
 

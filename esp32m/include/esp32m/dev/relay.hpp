@@ -43,6 +43,9 @@ namespace esp32m {
       }
       const char *stateName();
       esp_err_t turn(bool on);
+      bool isOn() {
+        return state() == State::On;
+      }
       esp_err_t turn(const char *action);
       void setPersistent(bool p) {
         _persistent = p;
@@ -67,7 +70,7 @@ namespace esp32m {
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
 
      private:
       const char *_name;

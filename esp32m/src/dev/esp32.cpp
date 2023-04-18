@@ -170,7 +170,7 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *Esp32::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Esp32::getConfig(RequestContext &ctx) {
       auto doc = new DynamicJsonDocument(
           JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3)  // pm
       );

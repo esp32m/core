@@ -3,13 +3,13 @@
 #include "esp32m/io/pins.hpp"
 #include "esp32m/io/utils.hpp"
 
-// #include <driver/adc.h>
 #include <driver/dac_oneshot.h>
 #include <driver/gpio.h>
 #include <driver/pulse_cnt.h>
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
 #include <esp_adc/adc_oneshot.h>
+#include <esp_timer.h>
 #include <limits.h>
 #include <sdkconfig.h>
 #include <soc/sens_reg.h>
@@ -35,6 +35,7 @@ namespace esp32m {
     };
 
     ENUM_FLAG_OPERATORS(ADCFlags)
+    class ISRArg;
 
     class Pin : public io::IPin {
      public:
@@ -60,7 +61,7 @@ namespace esp32m {
       esp_err_t digitalWrite(bool value) override {
         return gpio_set_level(num(), value);
       }
-      esp_err_t attach(io::pin::ISR isr, gpio_int_type_t type) override;
+      esp_err_t attach(QueueHandle_t queue, gpio_int_type_t type) override;
       esp_err_t detach() override;
 
      protected:
@@ -69,8 +70,24 @@ namespace esp32m {
      private:
       Features _features;
       char _name[5];
-      io::pin::ISR _isr = nullptr;
-      void isr();
+      ISRArg *_isr = nullptr;
+    };
+
+    class ISRArg {
+     public:
+      ISRArg(Pin *pin, QueueHandle_t queue) : _pin(pin), _queue(queue) {
+        _num = pin->num();
+        _stamp = esp_timer_get_time();
+        _level = gpio_get_level(_num) != 0;
+      }
+
+     private:
+      Pin *_pin;
+      gpio_num_t _num;
+      QueueHandle_t _queue;
+      bool _level;
+      int64_t _stamp;
+      friend IRAM_ATTR void gpio_isr_handler(void *self);
     };
 
     class ADC : public io::pin::IADC {
@@ -556,19 +573,48 @@ namespace esp32m {
       ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num()));
     };
 
-    esp_err_t Pin::attach(io::pin::ISR isr, gpio_int_type_t type) {
+    void IRAM_ATTR gpio_isr_handler(void *self) {
+      int64_t stamp = esp_timer_get_time();
+      auto arg = (ISRArg *)self;
+      bool level = gpio_get_level(arg->_num) != 0;
+      if (arg->_level == level)
+        return;
+      int64_t diff = stamp - arg->_stamp;
+      if (diff > 0x7FFFFFFF)
+        diff = 0x7FFFFFFF;
+      if (level)
+        diff = -diff;
+      arg->_level = level;
+      arg->_stamp = stamp;
+      BaseType_t high_task_wakeup = pdFALSE;
+      xQueueSendFromISR(arg->_queue, &diff, &high_task_wakeup);
+      if (high_task_wakeup != pdFALSE) // TODO: should we do this? many examples seem to work without it
+        portYIELD_FROM_ISR();
+    }
+
+    esp_err_t Pin::attach(QueueHandle_t queue, gpio_int_type_t type) {
+      if (!queue)
+        return ESP_FAIL;
       std::lock_guard guard(_mutex);
       if (_isr)
         return ESP_ERR_INVALID_STATE;
       esp_err_t err = gpio_install_isr_service(0);
       if (err != ESP_ERR_INVALID_STATE)
         ESP_CHECK_RETURN(err);
-      ESP_CHECK_RETURN(gpio_set_intr_type(num(), type));
-      ESP_CHECK_RETURN(gpio_intr_enable(num()));
-      _isr = isr;
-      err = gpio_isr_handler_add(
-          num(), [](void *self) { ((Pin *)self)->isr(); }, this);
+      gpio_config_t gpio_conf;
+      gpio_conf.intr_type = type;
+      gpio_conf.mode = GPIO_MODE_INPUT;
+      gpio_conf.pin_bit_mask = (1ULL << num());
+      gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+      gpio_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+      gpio_config(&gpio_conf);
+
+      // ESP_CHECK_RETURN(gpio_set_intr_type(num(), type));
+      // ESP_CHECK_RETURN(gpio_intr_enable(num()));
+      _isr = new ISRArg(this, queue);
+      err = gpio_isr_handler_add(num(), gpio_isr_handler, _isr);
       if (err != ESP_OK) {
+        delete _isr;
         _isr = nullptr;
         return err;
       }
@@ -581,18 +627,9 @@ namespace esp32m {
       if (!_isr)
         return ESP_ERR_INVALID_STATE;
       ESP_CHECK_RETURN(gpio_isr_handler_remove(num()));
+      delete _isr;
       _isr = nullptr;
       return ESP_OK;
-    }
-
-    void Pin::isr() {
-      io::pin::ISR isr;
-      {
-        std::lock_guard guard(_mutex);
-        isr = _isr;
-      }
-      if (isr)
-        isr();
     }
 
     io::pin::Impl *Pin::createImpl(io::pin::Type type) {

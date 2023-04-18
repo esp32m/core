@@ -1,19 +1,18 @@
-#ifdef ARDUINO
-#  include <Arduino.h>
-#else
-#  include "nvs_flash.h"
-#endif
+#include "nvs_flash.h"
 
 #include <esp_image_format.h>
 #include <esp_ota_ops.h>
 #include <esp_private/esp_int_wdt.h>
 #include <esp_task_wdt.h>
+#include <hal/efuse_hal.h>
+#include <lwip/apps/netbiosns.h>
 #include <sdkconfig.h>
 #include "esp_mac.h"
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/config/changed.hpp"
+#include "esp32m/debug/button.hpp"
 #include "esp32m/io/spiffs.hpp"
 #include "esp32m/json.hpp"
 
@@ -62,7 +61,7 @@ namespace esp32m {
     return false;
   }
 
-  Interactive::Interactive() {
+  AppObject::AppObject() {
     EventManager::instance().subscribe([this](Event &ev) {
       Request *req;
       EventDescribe *ed;
@@ -125,9 +124,30 @@ namespace esp32m {
     _appInstance->_config.reset(new Config(store));
   }
 
+  void App::Init::inferHostname(int limit, int macDigits) {
+    uint8_t mac[6];
+    char digit[3];
+    efuse_hal_get_mac(mac);
+    if (macDigits > 6)
+      macDigits = 6;
+    if (macDigits < 1)
+      macDigits = 1;
+    if (limit < macDigits * 2)
+      limit = macDigits * 2;
+    std::string hostname = _appInstance->_name.substr(0, limit - macDigits * 2);
+    for (int i = macDigits - 1; i >= 0; i--) {
+      sprintf(digit, "%02hhx", mac[i]);
+      hostname += digit;
+    }
+    _appInstance->_hostname = hostname;
+    _appInstance->_defaultHostname = hostname;
+  }
+
   App ::App(const char *name, const char *version)
       : _version(version), _props("app") {
-    setName(name);
+    _name = name;
+    _hostname = name;
+    _defaultHostname = name;
     uint8_t macOrEui[8];
     char buf[13];
     if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_efuse_mac_get_default(macOrEui)) ==
@@ -150,7 +170,6 @@ namespace esp32m {
         .trigger_panic = true};
     esp_task_wdt_deinit();
     esp_task_wdt_init(&wdtc);
-    logI("starting %s", _version ? _version : "");
     _sketchSize = sketchSize();
   }
 
@@ -173,6 +192,7 @@ namespace esp32m {
   void App::init() {
     if (initialized())
       return;
+    logI("starting %s %s", _hostname.c_str(), _version ? _version : "");
     if (!_config)
       _config.reset(new Config(io::Spiffs::instance().newConfigStore()));
     _config->load();
@@ -198,7 +218,18 @@ namespace esp32m {
         _configDirty = millis();
       return true;
     }
+    if (debug::button::Command::is(ev, 1)) {
+      auto doc = _config->read();
+      if (doc) {
+        json::dump(this, doc->as<JsonVariantConst>(), "saved config");
+        delete doc;
+      }
+    }
     return false;
+  }
+
+  void App::resetHostname() {
+    setHostname(_defaultHostname.c_str());
   }
 
   bool App::handleRequest(Request &req) {
@@ -210,6 +241,11 @@ namespace esp32m {
       return true;
     } else if (req.is("reset")) {
       config()->reset();
+      req.respond();
+      return true;
+    } else if (req.is("reset-hostname")) {
+      resetHostname();
+      _config->save();
       req.respond();
       return true;
     } else if (req.is("describe")) {
@@ -264,4 +300,37 @@ namespace esp32m {
     info["size"] = _sketchSize;
     return doc;
   }
+
+  DynamicJsonDocument *App::getConfig(RequestContext &ctx) {
+    size_t size = JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_hostname.size());
+
+    auto doc = new DynamicJsonDocument(size);
+    auto root = doc->to<JsonObject>();
+    root["hostname"] = _hostname;
+    return doc;
+  }
+
+  bool App::setConfig(const JsonVariantConst data,
+                      DynamicJsonDocument **result) {
+    JsonObjectConst root = data.as<JsonObjectConst>();
+    std::string next = _hostname;
+    bool changed = false;
+    json::from(root["hostname"], next, &changed);
+    if (changed)
+      setHostname(next.c_str());
+    return changed;
+  }
+
+  void App::setHostname(const char *hostname) {
+    std::string next(hostname ? hostname : _name.c_str());
+    std::string prev = _hostname;
+    if (next != prev) {
+      _hostname = next.substr(0, 31);
+      logI("my hostname is %s", _hostname.c_str());
+      EventPropChanged::publish("app", "hostname", prev, _hostname);
+      auto nbname = _hostname.substr(0, 15).c_str();
+      netbiosns_set_name(nbname);
+    }
+  }
+
 }  // namespace esp32m

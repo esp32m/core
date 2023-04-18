@@ -7,6 +7,8 @@
 #include <driver/pulse_cnt.h>
 #include <esp_bit_defs.h>
 #include <esp_err.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <hal/adc_types.h>
 #include <hal/gpio_types.h>
 #include <map>
@@ -42,6 +44,7 @@ namespace esp32m {
         virtual adc_bitwidth_t getWidth() = 0;
         virtual esp_err_t setWidth(adc_bitwidth_t width) = 0;
       };
+
       class IDAC : public Impl {
        public:
         Type type() override {
@@ -122,7 +125,8 @@ namespace esp32m {
       virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
       virtual esp_err_t digitalRead(bool &value) = 0;
       virtual esp_err_t digitalWrite(bool value) = 0;
-      virtual esp_err_t attach(pin::ISR handler, gpio_int_type_t type) {
+      virtual esp_err_t attach(QueueHandle_t queue,
+                               gpio_int_type_t type = GPIO_INTR_ANYEDGE) {
         return ESP_ERR_NOT_SUPPORTED;
       }
       virtual esp_err_t detach() {

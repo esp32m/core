@@ -52,7 +52,7 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Ota::getConfig(const JsonVariantConst args) {
+    DynamicJsonDocument *Ota::getConfig(RequestContext &ctx) {
       auto dl = _defaultUrl ? strlen(_defaultUrl) + 1 : 0;
       auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + dl);
       auto cr = doc->to<JsonObject>();

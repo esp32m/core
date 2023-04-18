@@ -160,7 +160,7 @@ namespace esp32m {
                     DynamicJsonDocument **result) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(const JsonVariantConst args) override;
+      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       static StaticJsonDocument<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>
           _channelProps;
       static void staticInit();

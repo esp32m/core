@@ -20,6 +20,7 @@ namespace esp32m {
     void save();
     void load();
     void reset();
+    DynamicJsonDocument *read();
 
    private:
     std::unique_ptr<ConfigStore> _store;

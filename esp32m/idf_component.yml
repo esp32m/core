@@ -4,5 +4,7 @@ dependencies:
     version: "^1.0"
   espressif/mdns:
     version: "^1.0.5"
+  joltwallet/littlefs:
+    version: "^1.5.3"
 description: ESP32 Manager Core
 version: 0.3.0
