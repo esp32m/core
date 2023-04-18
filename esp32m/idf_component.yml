@@ -1,3 +1,5 @@
+description: ESP32 Manager Core
+url: https://esp32m.com
 dependencies:
   idf: ">=4.1"
   espressif/esp-modbus:
@@ -6,5 +8,7 @@ dependencies:
     version: "^1.0.5"
   joltwallet/littlefs:
     version: "^1.5.3"
-description: ESP32 Manager Core
+  bblanchon/arduinojson:
+    public: true
+    version: "^6.21.2"
 version: 0.3.0
