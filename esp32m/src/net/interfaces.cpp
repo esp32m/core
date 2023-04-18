@@ -17,7 +17,7 @@ namespace esp32m {
     }
 
     esp_err_t Interface::getIpInfo(esp_netif_ip_info_t &info) {
-      return esp_netif_get_ip_info(_handle, &_ip);
+      return esp_netif_get_ip_info(_handle, &info);
     }
 
     void Interface::syncHandle(ErrorList &errl) {
