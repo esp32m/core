@@ -1,7 +1,7 @@
 description: ESP32 Manager Core
 url: https://esp32m.com
 dependencies:
-  idf: ">=4.1"
+  idf: ">=5.1"
   espressif/esp-modbus:
     version: "^1.0"
   espressif/mdns:
