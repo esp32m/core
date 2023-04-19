@@ -362,8 +362,7 @@ namespace esp32m {
                       errors.dump();*/
         }
         if (_cert) {
-          auto size =
-              _cert->getData((void **)&_cfg.broker.verification.certificate);
+          _cert->getData((void **)&_cfg.broker.verification.certificate);
           // _cfg.broker.verification.skip_cert_common_name_check = true;
           // printf("got cert size %d", size);
           // printf("%s", (const char *)_cfg.broker.verification.certificate);
