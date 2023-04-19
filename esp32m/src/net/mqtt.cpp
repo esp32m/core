@@ -352,6 +352,7 @@ namespace esp32m {
       _cfg.credentials.username = _username.c_str();
       _cfg.credentials.authentication.password = _password.c_str();
       _cfg.credentials.client_id = effectiveClient();
+      _cfg.broker.verification.certificate = nullptr;
       if (!_certurl.empty() && !init) {
         if (!_cert || _cert->size() == 0) {
           UrlResourceRequest req(_certurl.c_str());
