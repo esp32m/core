@@ -104,26 +104,7 @@ namespace esp32m {
     }
   };
 
-/*  class Interactive : public virtual INamed {
-   public:
-    Interactive(const Interactive &) = delete;
-    virtual const char *interactiveName() const {
-      return name();
-    };
-
-   protected:
-    Interactive();
-    virtual bool handleRequest(Request &req) = 0;
-    virtual bool handleEvent(Event &ev) {
-      return false;
-    };
-    virtual const JsonVariantConst descriptor() const {
-      return json::emptyArray();
-    };
-  };
-*/
   class AppObject : public virtual log::Loggable,
-//                    public virtual Interactive,
                     public virtual Configurable,
                     public virtual Stateful {
    public:

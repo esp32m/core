@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 
 #include "esp32m/base.hpp"
+#include "esp32m/errors.hpp"
 #include "esp32m/events.hpp"
 
 namespace esp32m {
@@ -85,7 +86,7 @@ namespace esp32m {
         : request(request), data(data) {}
     const Request &request;
     const JsonVariantConst data;
-    ErrorList errl;
+    ErrorList errors;
     DynamicJsonDocument *result = nullptr;
   };
 

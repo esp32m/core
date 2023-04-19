@@ -1,7 +1,9 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/resources.hpp"
 #include "esp32m/sleep.hpp"
+#include "esp32m/fs/cache.hpp"
 
 #include <mqtt_client.h>
 #include <mutex>
@@ -120,6 +122,7 @@ namespace esp32m {
 
      protected:
       bool handleEvent(Event &ev) override;
+      bool handleRequest(Request &req) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
@@ -136,7 +139,9 @@ namespace esp32m {
       void setState(Status state);
 
       bool _enabled = true, _configChanged = false, _listen = true;
-      std::string _uri, _username, _password, _client;
+      std::string _uri, _username, _password, _client, _certurl;
+      std::unique_ptr<Resource> _cert;
+      fs::CachedResource _certCache;
       char *_commandTopic = nullptr;
       char *_sensorsTopic = nullptr;
       char *_responseTopic = nullptr;
@@ -151,8 +156,8 @@ namespace esp32m {
                    bool isError);
       bool intSubscribe(std::string topic, int qos = 0);
       void unsubscribe(Subscription *sub);
-      void prepareCfg();
-      const char* effectiveClient();
+      void prepareCfg(bool init);
+      const char *effectiveClient();
       friend class MqttRequest;
       friend class mqtt::Subscription;
     };

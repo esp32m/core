@@ -13,7 +13,7 @@
 #include "esp32m/base.hpp"
 #include "esp32m/config/changed.hpp"
 #include "esp32m/debug/button.hpp"
-#include "esp32m/io/spiffs.hpp"
+#include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
 
 namespace esp32m {
@@ -194,7 +194,7 @@ namespace esp32m {
       return;
     logI("starting %s %s", _hostname.c_str(), _version ? _version : "");
     if (!_config)
-      _config.reset(new Config(io::Spiffs::instance().newConfigStore()));
+      _config.reset(new Config(fs::Spiffs::instance().newConfigStore()));
     _config->load();
     for (int i = 0; i <= _maxInitLevel; i++) {
       EventInit evt(i);

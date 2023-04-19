@@ -2,6 +2,7 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/errors.hpp"
 
 #include <dhcpserver/dhcpserver.h>
 #include <dhcpserver/dhcpserver_options.h>

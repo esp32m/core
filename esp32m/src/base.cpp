@@ -4,9 +4,7 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <string.h>
 #include <map>
-#include <string>
 
 #define NOP() asm volatile("nop")
 
@@ -59,9 +57,7 @@ namespace esp32m {
     return buf;
   }
 
-  std::string string_printf(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
+  std::string string_printf(const char *format, va_list args) {
     size_t sz = vsnprintf(nullptr, 0, format, args);
     size_t bufsize = sz + 1;
     char *buf = (char *)malloc(bufsize);
@@ -71,6 +67,13 @@ namespace esp32m {
       result = buf;
       free(buf);
     }
+    return result;
+  }
+
+  std::string string_printf(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    std::string result = string_printf(format, args);
     va_end(args);
     return result;
   }

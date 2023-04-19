@@ -4,6 +4,8 @@
 #include <driver/gpio.h>
 #include <esp_err.h>
 #include <hal/uart_types.h>
+#include <string.h>
+#include <cstdarg>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -20,6 +22,7 @@ namespace esp32m {
   long map(long x, long in_min, long in_max, long out_min, long out_max);
 
   const char *makeTaskName(const char *name);
+  std::string string_printf(const char *format, va_list args);
   std::string string_printf(const char *format, ...);
 
   class INamed {
@@ -37,49 +40,6 @@ namespace esp32m {
     return false;
   }
 
-  struct ErrorItem {
-   public:
-    esp_err_t code;
-    const char *message;
-    ErrorItem(esp_err_t c, const char *m) : code(c), message(m) {}
-  };
-  class ErrorList {
-   public:
-    esp_err_t check(esp_err_t err, const char *msg = nullptr) {
-      if (err != ESP_OK)
-        _list.emplace_back(ESP_ERROR_CHECK_WITHOUT_ABORT(err), msg);
-      return err;
-    };
-    DynamicJsonDocument *toJson(DynamicJsonDocument **result) {
-      auto ls = _list.size();
-      if (!ls)
-        return nullptr;
-      size_t size = JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(ls);
-      for (auto &item : _list)
-        if (item.message)
-          size += JSON_ARRAY_SIZE(2) + strlen(item.message) + 1;
-        else
-          size += JSON_ARRAY_SIZE(1);
-      auto doc = new DynamicJsonDocument(size);
-      auto root = doc->to<JsonObject>();
-      auto arr = root.createNestedArray("error");
-      for (auto &item : _list) {
-        auto i = arr.createNestedArray();
-        i.add(item.code);
-        if (item.message)
-          i.add((char *)item.message);
-      }
-      if (*result)
-        *result = doc;
-      return doc;
-    }
-    bool empty() {
-      return _list.empty();
-    }
-
-   private:
-    std::vector<ErrorItem> _list;
-  };
 
   namespace locks {
     class Guard {

@@ -5,7 +5,7 @@
 
 
 namespace esp32m {
-  namespace io {
+  namespace fs {
     class Littlefs : public AppObject {
      public:
       Littlefs(const Littlefs &) = delete;

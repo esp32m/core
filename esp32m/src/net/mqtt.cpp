@@ -8,6 +8,7 @@
 #include "esp32m/events/request.hpp"
 #include "esp32m/events/response.hpp"
 #include "esp32m/json.hpp"
+#include "esp32m/net/http.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/mqtt.hpp"
 #include "esp32m/net/wifi.hpp"
@@ -72,21 +73,8 @@ namespace esp32m {
       return 0;
     }
 
-    void setCfgStr(const char **dest, const char *src, bool &changed) {
-      if ((*dest == nullptr && src == nullptr) ||
-          (*dest != nullptr && src != nullptr && !strcmp(*dest, src)))
-        return;
-      changed = true;
-      if (*dest)
-        free((void *)*dest);
-      *dest = src ? strdup(src) : nullptr;
-    }
-
-    Mqtt::Mqtt() {
+    Mqtt::Mqtt() : _certCache("/root/mqtt-cert", http::Client::instance()) {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
-      // bool changed;
-      // don't assign directly - _cfg.uri may bee free()'d
-      // setCfgStr(&_cfg.broker.address.uri, "mqtt://mqtt.lan", changed);
       _uri = "mqtt://mqtt.lan";
       _cfg.session.keepalive = 120;
     }
@@ -111,12 +99,20 @@ namespace esp32m {
         _status = status;
       }
       mqtt::StatusChanged ev(status, prev);
-      /*if (status == Status::Ready)
-        _sleepBlocker.unblock();
-      if (_status == Status::Ready)
-        _sleepBlocker.block();*/
       ev.publish();
       xTaskNotifyGive(_task);
+    }
+
+    bool Mqtt::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      if (req.is("clear-cert-cache")) {
+        _certCache.clear();
+        _cert.reset();
+        req.respond();
+        return true;
+      }
+      return false;
     }
 
     bool Mqtt::handleEvent(Event &ev) {
@@ -127,7 +123,7 @@ namespace esp32m {
       if (EventInit::is(ev, 0)) {
         xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
-        prepareCfg();
+        prepareCfg(true);
         _handle = esp_mqtt_client_init(&_cfg);
         esp_mqtt_client_register_event(
             _handle, MQTT_EVENT_ANY,
@@ -246,7 +242,7 @@ namespace esp32m {
               logI("connecting to %s", _uri.c_str());
               /*ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_client_set_uri(_handle, _cfg.broker.address.uri));*/
-              prepareCfg();
+              prepareCfg(false);
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_set_config(_handle, &_cfg));
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_start(_handle));
@@ -322,10 +318,6 @@ namespace esp32m {
       if (ready) {
         json::to(cr, "uri", _uri);
         json::to(cr, "client", client);
-        /*if (_cfg.broker.address.uri)
-          cr["uri"] = _cfg.broker.address.uri;
-        if (_cfg.credentials.client_id)
-          cr["client"] = _cfg.credentials.client_id;*/
       }
       cr["pubcnt"] = _pubcnt;
       cr["cmdcnt"] = _cmdcnt;
@@ -333,9 +325,12 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Mqtt::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(1 + 8) +
-                    (64 * 4);  // mqtt: enabled, control, uri, username,
-                               // password, client, keepalive, timeout
+      size_t size =
+          JSON_OBJECT_SIZE(1 + 8) +  // mqtt: enabled, uri, username, password,
+                                     // client, cert_url, keepalive, timeout
+          JSON_STRING_SIZE(_uri.size()) + JSON_STRING_SIZE(_username.size()) +
+          JSON_STRING_SIZE(_password.size()) +
+          JSON_STRING_SIZE(_client.size()) + JSON_STRING_SIZE(_certurl.size());
 
       auto doc = new DynamicJsonDocument(size);
       auto cr = doc->to<JsonObject>();
@@ -346,26 +341,34 @@ namespace esp32m {
       json::to(cr, "password", _password);
       if (_client != App::instance().hostname())
         json::to(cr, "client", _client);
-      /*if (_cfg.broker.address.uri && strlen(_cfg.broker.address.uri))
-        cr["uri"] = (char *)_cfg.broker.address.uri;
-      if (_cfg.credentials.username && strlen(_cfg.credentials.username))
-        cr["username"] = (char *)_cfg.credentials.username;
-      if (_cfg.credentials.authentication.password &&
-          strlen(_cfg.credentials.authentication.password))
-        cr["password"] = (char *)_cfg.credentials.authentication.password;
-      if (_cfg.credentials.client_id && strlen(_cfg.credentials.client_id) &&
-          strcmp(_cfg.credentials.client_id, App::instance().hostname()))
-        cr["client"] = (char *)_cfg.credentials.client_id;*/
+      json::to(cr, "cert_url", _certurl);
       cr["keepalive"] = _cfg.session.keepalive;
       cr["timeout"] = _timeout;
       return doc;
     }
 
-    void Mqtt::prepareCfg() {
+    void Mqtt::prepareCfg(bool init) {
       _cfg.broker.address.uri = _uri.c_str();
       _cfg.credentials.username = _username.c_str();
       _cfg.credentials.authentication.password = _password.c_str();
       _cfg.credentials.client_id = effectiveClient();
+      if (!_certurl.empty() && !init) {
+        if (!_cert || _cert->size() == 0) {
+          UrlResourceRequest req(_certurl.c_str());
+          req.options.addNullTerminator = true;
+          _cert.reset(_certCache.obtain(req));
+          /*          auto &errors = req.errors();
+                    if (!errors.empty())
+                      errors.dump();*/
+        }
+        if (_cert) {
+          auto size =
+              _cert->getData((void **)&_cfg.broker.verification.certificate);
+          // _cfg.broker.verification.skip_cert_common_name_check = true;
+          // printf("got cert size %d", size);
+          // printf("%s", (const char *)_cfg.broker.verification.certificate);
+        }
+      }
     }
 
     bool Mqtt::setConfig(const JsonVariantConst ca,
@@ -376,15 +379,7 @@ namespace esp32m {
       json::from(ca["username"], _username, &changed);
       json::from(ca["password"], _password, &changed);
       json::from(ca["client"], _client, &changed);
-      /*      setCfgStr(&_cfg.broker.address.uri, ca["uri"].as<const char *>(),
-                      changed);
-            setCfgStr(&_cfg.credentials.username, ca["username"].as<const char
-         *>(), changed); setCfgStr(&_cfg.credentials.authentication.password,
-                      ca["password"].as<const char *>(), changed);
-            const char *client = ca["client"].as<const char *>();
-            if (!client)
-              client = App::instance().hostname();
-            setCfgStr(&_cfg.credentials.client_id, client, changed);*/
+      json::from(ca["cert_url"], _certurl, &changed);
       json::from(ca["keepalive"], _cfg.session.keepalive, &changed);
       json::from(ca["timeout"], _timeout, &changed);
       if (_timeout < 1)
