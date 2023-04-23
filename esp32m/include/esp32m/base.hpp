@@ -40,7 +40,6 @@ namespace esp32m {
     return false;
   }
 
-
   namespace locks {
     class Guard {
      public:
@@ -93,15 +92,6 @@ namespace esp32m {
       }
     };
 
-    template <>
-    struct swap_bytes<float, 4> {
-      inline float operator()(float val) {
-        uint32_t mem =
-            swap_bytes<uint32_t, sizeof(uint32_t)>()(*(uint32_t *)&val);
-        return *(float *)&mem;
-      }
-    };
-
     template <typename T>
     struct swap_bytes<T, 8> {
       inline T operator()(T val) {
@@ -117,11 +107,23 @@ namespace esp32m {
     };
 
     template <>
+    struct swap_bytes<float, 4> {
+      inline float operator()(float val) {
+        uint32_t *p32 = (uint32_t *)&val;
+        uint32_t mem = swap_bytes<uint32_t, sizeof(uint32_t)>()(*p32);
+        float *pf = (float *)&mem;
+        return *pf;
+      }
+    };
+
+    template <>
     struct swap_bytes<double, 8> {
       inline double operator()(double val) {
+        uint64_t *p64 = (uint64_t *)&val;
         uint64_t mem =
-            swap_bytes<uint64_t, sizeof(uint64_t)>()(*(uint64_t *)&val);
-        return *(double *)&mem;
+            swap_bytes<uint64_t, sizeof(uint64_t)>()(*p64);
+        double *pd = (double *)&mem;
+        return *pd;
       }
     };
 

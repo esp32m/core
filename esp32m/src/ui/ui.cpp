@@ -71,7 +71,9 @@ namespace esp32m {
       uint32_t _clientId;
       Req(Ui *ui, const char *name, int seq, const char *target,
           const JsonVariantConst data, uint32_t clientId)
-          : Request(name, seq, target, data, "ui"), _ui(ui), _clientId(clientId) {}
+          : Request(name, seq, target, data, "ui"),
+            _ui(ui),
+            _clientId(clientId) {}
     };
 
   }  // namespace ui
@@ -93,14 +95,14 @@ namespace esp32m {
       return false;
   }*/
 
-  bool Ui::handleEvent(Event &ev) {
+  void Ui::handleEvent(Event &ev) {
     if (EventInit::is(ev, 0)) {
       if (!ui::_errors.size())
         ui::_errors.add("busy");
       _transport->init(this);
       xTaskCreate([](void *self) { ((Ui *)self)->run(); }, "m/ui", 4096, this,
                   tskIDLE_PRIORITY, &_task);
-      return true;
+      return;
     }
     Broadcast *b;
     if (Broadcast::is(ev, &b)) {
@@ -115,7 +117,7 @@ namespace esp32m {
       char *text = json::allocSerialize(msg);
       wsSend(text);
       free(text);
-      return true;
+      return;
     }
     Response *r;
     if (Response::is(ev, _transport->name(), &r)) {
@@ -128,9 +130,7 @@ namespace esp32m {
                                         r->isError(), r->isPartial());
       wsSend(resp->clientId, response);
       free(response);
-      return true;
     }
-    return false;
   }
 
   void Ui::sessionClosed(uint32_t cid) {

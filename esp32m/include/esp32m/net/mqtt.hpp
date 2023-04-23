@@ -20,7 +20,6 @@ namespace esp32m {
         Initial,
         Connecting,
         Connected,
-        Subscribing,
         Ready,
         Disconnecting,
         Disconnected
@@ -121,7 +120,7 @@ namespace esp32m {
                               int qos = 0);
 
      protected:
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
       bool handleRequest(Request &req) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
@@ -138,27 +137,22 @@ namespace esp32m {
       std::map<std::string, std::map<int, Subscription *> > _subscriptions;
       void setState(Status state);
 
-      bool _enabled = true, _configChanged = false, _listen = true;
+      bool _enabled = true, _configChanged = false;
       std::string _uri, _username, _password, _client, _certurl;
       std::unique_ptr<Resource> _cert;
       fs::CachedResource _certCache;
-      char *_commandTopic = nullptr;
       char *_sensorsTopic = nullptr;
-      char *_responseTopic = nullptr;
       char *_broadcastTopic = nullptr;
-      uint32_t _cmdcnt = 0, _pubcnt = 0;
+      uint32_t _pubcnt = 0;
       unsigned long _timer = 0;
       int _timeout = 30;
       esp_err_t handle(int32_t event_id, void *event_data);
       void run();
       void disconnect();
-      void respond(const char *source, int seq, const JsonVariantConst data,
-                   bool isError);
       bool intSubscribe(std::string topic, int qos = 0);
       void unsubscribe(Subscription *sub);
       void prepareCfg(bool init);
       const char *effectiveClient();
-      friend class MqttRequest;
       friend class mqtt::Subscription;
     };
 

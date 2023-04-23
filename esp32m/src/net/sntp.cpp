@@ -24,14 +24,11 @@ namespace esp32m {
       sntp_set_time_sync_notification_cb(sync_time_cb);
     }
 
-    bool Sntp::handleEvent(Event &ev) {
+    void Sntp::handleEvent(Event &ev) {
       if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
         xTimerPendFunctionCall(
             [](void *self, uint32_t a) { ((Sntp *)self)->update(); }, this, 0,
             pdMS_TO_TICKS(1000));
-      else
-        return false;
-      return true;
     }
 
     void Sntp::synced(struct timeval *tv) {

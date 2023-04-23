@@ -25,7 +25,7 @@ namespace esp32m {
        protected:
         DynamicJsonDocument *getState(const JsonVariantConst args) override;
         bool handleRequest(Request &req) override;
-        bool handleEvent(Event &ev) override;
+        void handleEvent(Event &ev) override;
 
        private:
         TaskHandle_t _task = nullptr;

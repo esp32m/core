@@ -66,7 +66,9 @@ namespace esp32m {
                 const JsonObjectConst props);
 
    protected:
+    Flags _flags;
     Device(const Flags flags = Flags::None);
+    void handleEvent(Event &ev) override;
     virtual bool initSensors() {
       return true;
     }

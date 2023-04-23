@@ -116,9 +116,7 @@ namespace esp32m {
    protected:
     AppObject();
     virtual bool handleRequest(Request &req);
-    virtual bool handleEvent(Event &ev) {
-      return false;
-    };
+    virtual void handleEvent(Event &ev) { };
     virtual const JsonVariantConst descriptor() const {
       return json::emptyArray();
     };
@@ -173,7 +171,7 @@ namespace esp32m {
     bool setConfig(const JsonVariantConst cfg,
                    DynamicJsonDocument **result) override;
     DynamicJsonDocument *getConfig(RequestContext &ctx) override;
-    bool handleEvent(Event &ev) override;
+    void handleEvent(Event &ev) override;
     bool handleRequest(Request &req) override;
 
    private:

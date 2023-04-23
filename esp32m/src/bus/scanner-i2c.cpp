@@ -61,13 +61,11 @@ namespace esp32m {
         return false;
       }
 
-      bool I2C::handleEvent(Event &ev) {
+      void I2C::handleEvent(Event &ev) {
         if (EventInit::is(ev, 0)) {
           xTaskCreate([](void *self) { ((I2C *)self)->run(); }, "m/s/i2c", 4096,
                       this, 1, &_task);
-          return true;
         }
-        return false;
       }
 
       I2C &I2C::instance() {

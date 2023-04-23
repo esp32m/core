@@ -18,7 +18,7 @@ namespace esp32m {
     namespace ota {
       const char *Name = "ota";
       bool _isRunning = false;
-      
+
       void setDefaultUrl(const char *url) {
         Ota::instance().setDefaultUrl(url);
       }
@@ -45,7 +45,7 @@ namespace esp32m {
       auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(3));
       auto cr = doc->to<JsonObject>();
       if (_isUpdating) {
-        cr["method"] = _url ? "http" : "udp";
+        cr["method"] = _url.size() ? "http" : "udp";
         cr["progress"] = _progress;
         cr["total"] = _total;
       }
@@ -53,18 +53,19 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Ota::getConfig(RequestContext &ctx) {
-      auto dl = _defaultUrl ? strlen(_defaultUrl) + 1 : 0;
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + dl);
+      auto dl = _defaultUrl.size();
+      auto doc =
+          new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(dl));
       auto cr = doc->to<JsonObject>();
       if (dl)
-        cr["url"] = _defaultUrl;
+        json::to(cr, "url", _defaultUrl);
       return doc;
     }
 
     bool Ota::setConfig(const JsonVariantConst cfg,
                         DynamicJsonDocument **result) {
       bool changed = false;
-      json::fromDup(cfg["url"], _defaultUrl, nullptr, &changed);
+      json::from(cfg["url"], _defaultUrl, &changed);
       return changed;
     }
 
@@ -74,7 +75,7 @@ namespace esp32m {
       if (req.is("update")) {
         if (setConfig(req.data(), nullptr))
           EventConfigChanged::publish(this);
-        _url = strdup(_defaultUrl);
+        _url = _defaultUrl;
         xTaskNotifyGive(_task);
         req.respond();
       } else
@@ -83,24 +84,21 @@ namespace esp32m {
     }
 
     void Ota::setDefaultUrl(const char *url) {
-      if (_defaultUrl) {
-        free(_defaultUrl);
-        _defaultUrl = nullptr;
-      }
+      if (_defaultUrl.size())
+        _defaultUrl.clear();
       if (url) {
         auto dl = strlen(url);
         if (dl) {
           if (url[dl - 1] != '/')
-            _defaultUrl = strdup(url);
+            _defaultUrl = url;
           else {
             auto name = App::instance().name();
-            _defaultUrl = (char *)malloc(dl + 13 + strlen(name) + 1);
-            sprintf(_defaultUrl, "%sfirmware/%s.bin", url, name);
+            _defaultUrl = string_printf("%sfirmware/%s.bin", url, name);
           }
         }
       }
-      if (_defaultUrl)
-        logI("default OTA url: %s", _defaultUrl);
+      if (_defaultUrl.size())
+        logI("default OTA url: %s", _defaultUrl.c_str());
     }
 
     esp_err_t _http_client_init_cb(esp_http_client_handle_t http_client) {
@@ -111,8 +109,8 @@ namespace esp32m {
     void Ota::run() {
       esp_task_wdt_add(NULL);
       for (;;) {
-        if (_url) {
-          char *u = _url;
+        if (_url.size()) {
+          const char *u = _url.c_str();
           begin();
           logI("http updater starting for %s", u);
           esp_http_client_config_t config = {};
@@ -143,7 +141,6 @@ namespace esp32m {
               err = esp_https_ota_finish(https_ota_handle);
           }
           end();
-          free(u);
           if (err == ESP_OK) {
             logI("OTA update was successful, rebooting...");
             delay(1000);
@@ -165,20 +162,20 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_task_wdt_reconfigure(&wdtc));
       }
       _isUpdating = true;
-      ota::_isRunning=true;
+      ota::_isRunning = true;
       Broadcast::publish(name(), KeyOtaBegin);
       _mutex->lock();
     }
 
     void Ota::end() {
       Broadcast::publish(name(), KeyOtaEnd);
-      _url = nullptr;
+      _url.clear();
       _httpClient = nullptr;
       _progress = 0;
       _total = 0;
       _mutex->unlock();
       _isUpdating = false;
-      ota::_isRunning=false;
+      ota::_isRunning = false;
       auto wt = App::instance().wdtTimeout();
       if (wt) {
         esp_task_wdt_config_t wdtc = {

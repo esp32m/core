@@ -1,10 +1,12 @@
 #pragma once
 
+#include "esp32m/app.hpp"
+
 #include <mutex>
+#include <string>
 
 #include <esp_http_client.h>
 
-#include "esp32m/app.hpp"
 
 namespace esp32m {
   namespace net {
@@ -27,8 +29,8 @@ namespace esp32m {
 
      private:
       std::mutex *_mutex;
-      char *_defaultUrl = nullptr;
-      char *_url = nullptr;
+      std::string _defaultUrl;
+      std::string _url;
       TaskHandle_t _task;
       esp_http_client_handle_t _httpClient = nullptr;
       bool _isUpdating = false;

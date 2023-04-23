@@ -51,10 +51,10 @@ namespace esp32m {
         json::from(data["addr"], _addr, &changed);
         json::from(data["uart"], _uart, &changed);
         json::from(data["baud"], _baud, &changed);
-        json::from(data["parity"], (int &)_parity, &changed);
+        json::fromIntCastable(data["parity"], _parity, &changed);
         json::from(data["regs"], _regs, &changed);
         json::from(data["regc"], _regc, &changed);
-        json::from(data["cmd"], (int &)_cmd, &changed);
+        json::fromIntCastable(data["cmd"], _cmd, &changed);
         JsonArrayConst d = data["data"];
         if (d) {
           if (_data)
@@ -100,13 +100,11 @@ namespace esp32m {
         return false;
       }
 
-      bool Modbus::handleEvent(Event &ev) {
+      void Modbus::handleEvent(Event &ev) {
         if (EventInit::is(ev, 0)) {
           xTaskCreate([](void *self) { ((Modbus *)self)->run(); }, "m/s/modbus",
                       4096, this, 1, &_task);
-          return true;
         }
-        return false;
       }
 
       Modbus &Modbus::instance() {

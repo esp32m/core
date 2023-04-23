@@ -23,7 +23,8 @@ namespace esp32m {
       uart_driver_delete(_num);
     }
 
-    bool Uart::handleEvent(Event &ev) {
+    void Uart::handleEvent(Event &ev) {
+      Device::handleEvent(ev);
       if (EventInit::is(ev, 0)) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(
             uart_driver_install(_num, 2048, 2048, 10, &_queue, 0));
@@ -32,9 +33,7 @@ namespace esp32m {
         xTaskCreate([](void *self) { ((Uart *)self)->run(); }, "m/uart", 4096,
                     this, tskIDLE_PRIORITY, &_task);
         logI("server started");
-        return true;
       }
-      return false;
     }
 
     void Uart::run() {

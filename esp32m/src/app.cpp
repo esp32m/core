@@ -209,23 +209,20 @@ namespace esp32m {
     logI("initialization complete");
   }
 
-  bool App::handleEvent(Event &ev) {
+  void App::handleEvent(Event &ev) {
     if (EventConfigChanged::is(ev)) {
       if (((EventConfigChanged *)&ev)->saveNow()) {
         _config->save();
         _configDirty = 0;
       } else
         _configDirty = millis();
-      return true;
-    }
-    if (debug::button::Command::is(ev, 1)) {
+    } else if (debug::button::Command::is(ev, 1)) {
       auto doc = _config->read();
       if (doc) {
         json::dump(this, doc->as<JsonVariantConst>(), "saved config");
         delete doc;
       }
     }
-    return false;
   }
 
   void App::resetHostname() {

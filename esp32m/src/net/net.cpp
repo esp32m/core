@@ -5,6 +5,7 @@
 #include <esp_event.h>
 #include <esp_mac.h>
 #include <lwip/sockets.h>
+#include <lwip/dns.h>
 
 namespace esp32m {
   namespace json {
@@ -97,9 +98,17 @@ namespace esp32m {
     }
 
     void macTo(JsonObject target, const uint8_t mac[]) {
+      macTo(target, "mac", mac);
+    }
+    void macTo(JsonObject target, const char *key, const uint8_t mac[]) {
       char buf[net::MacMaxChars];
       sprintf(buf, MACSTR, MAC2STR(mac));
-      target["mac"] = buf;
+      target[key] = buf;
+    }
+    bool macTo(JsonArray target, const uint8_t mac[]) {
+      char buf[net::MacMaxChars];
+      sprintf(buf, MACSTR, MAC2STR(mac));
+      return target.add(buf);
     }
 
     void interfacesTo(JsonObject target) {
@@ -255,13 +264,11 @@ namespace esp32m {
         c |= from(arr[2], target.end_ip, changed);
       return c;
     }
+
     bool macFrom(JsonVariantConst source, uint8_t target[], bool *changed) {
-      auto str = source["mac"].as<const char *>();
-      if (!str)
-        return false;
+      auto str = source.as<const char *>();
       uint8_t mac[6];
-      if (sscanf(str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1],
-                 &mac[2], &mac[3], &mac[4], &mac[5]) != 6)
+      if (!net::macParse(str, mac))
         return false;
       bool c = false;
       for (auto i = 0; i < 6; i++)
@@ -277,6 +284,13 @@ namespace esp32m {
 
   namespace net {
 
+    bool macParse(const char *macstr, uint8_t target[]) {
+      if (!macstr)
+        return false;
+      return sscanf(macstr, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &target[0],
+                    &target[1], &target[2], &target[3], &target[4],
+                    &target[5]) == 6;
+    }
     bool isEmptyMac(uint8_t *mac) {
       if (!mac)
         return true;
@@ -297,6 +311,25 @@ namespace esp32m {
         default:
           return true;
       }
+    }
+
+    bool isAnyNetifUp() {
+      esp_netif_t *cif = nullptr;
+      for (;;) {
+        cif = esp_netif_next(cif);
+        if (!cif)
+          break;
+        if (esp_netif_is_netif_up(cif))
+          return true;
+      }
+      return false;
+    }
+
+    bool isDnsResponding() {
+      const ip_addr_t *dns = dns_getserver(0);
+      if (!dns)
+        return false;
+      return isAnyNetifUp();
     }
 
     struct {

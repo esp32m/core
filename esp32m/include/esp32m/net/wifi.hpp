@@ -37,10 +37,12 @@ namespace esp32m {
       class Sta : public Iface {
        public:
         Sta(const Sta &) = delete;
-        esp_err_t enable(bool enable);
         StaStatus status() const {
           return _status;
         }
+        esp_err_t enable(bool enable);
+        bool isConnected();
+        esp_err_t disconnect();
 
        private:
         Sta();
@@ -61,6 +63,8 @@ namespace esp32m {
        public:
         Ap(const Ap &) = delete;
         esp_err_t enable(bool enable);
+        bool isRunning();
+        int clientsCount();
         ApStatus status() const {
           return _status;
         }
@@ -68,8 +72,11 @@ namespace esp32m {
        private:
         Ap();
         ApStatus _status = ApStatus::Initial;
+        CaptiveDns *_captivePortal = nullptr;
+        unsigned long _apTimer = 0;
         void setStatus(ApStatus status);
         void getInfo(JsonObject);
+        void stateMachine();
         friend class net::Wifi;
       };
     }  // namespace wifi
@@ -175,14 +182,12 @@ namespace esp32m {
       }
       bool isInitialized() const;
       bool isConnected() const;
-      int apClientsCount();
       Sta &sta() {
         return _sta;
       }
-      Ap &ap() {
-        return _ap;
+      Ap *ap() {
+        return _ap.get();
       }
-      esp_err_t disconnect();
       void stop();
 
       static const uint8_t DiagId = 10;
@@ -198,21 +203,22 @@ namespace esp32m {
       DynamicJsonDocument *getConfig(RequestContext &ctx) override;
       bool pollSensors() override;
       bool handleRequest(Request &req) override;
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
 
      private:
-      Ap _ap;
+      std::unique_ptr<Ap> _ap;
       Sta _sta;
       Wifi();
 
       bool _stopped = false;
       TaskHandle_t _task = nullptr;
       EventGroupHandle_t _eventGroup = nullptr;
+      bool _managedExternally = false;
       std::vector<ApInfo *> _aps;
       wifi_err_reason_t _errReason = (wifi_err_reason_t)0;
       int8_t _txp = 0;
 
-      unsigned long _staTimer = 0, _apTimer = 0, _scanStarted = 0;
+      unsigned long _staTimer = 0, _scanStarted = 0;
       int _connectFailures = 0;
       int _maxAps = 5;
       bool _hostnameChanged = true;
@@ -224,7 +230,6 @@ namespace esp32m {
                                         .scan_time = {}};
 
       Response *_pendingResponse = nullptr;
-      CaptiveDns *_captivePortal = nullptr;
       std::unique_ptr<ApInfo> _connect;
       esp_err_t init();
       esp_err_t mode(wifi_mode_t prev, wifi_mode_t next);

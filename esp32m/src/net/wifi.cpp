@@ -6,11 +6,10 @@
 #include "esp32m/events/response.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
-#include "esp32m/net/wifi_utils.hpp"
 #include "esp32m/props.hpp"
 
-#include <dhcpserver/dhcpserver.h>
-#include <dhcpserver/dhcpserver_options.h>
+//#include <dhcpserver/dhcpserver.h>
+//#include <dhcpserver/dhcpserver_options.h>
 #include <esp_mac.h>
 #include <esp_mbo.h>
 #include <esp_netif.h>
@@ -19,8 +18,9 @@
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
 #include <lwip/dns.h>
-#include <mdns.h>
 #include <algorithm>
+
+#include <sdkconfig.h>
 
 namespace esp32m {
   namespace net {
@@ -29,6 +29,15 @@ namespace esp32m {
                                  const wifi_config_t &rhs) {
       return memcmp(&lhs, &rhs, sizeof(wifi_config_t)) == 0;
     }
+
+    enum WifiFlags {
+      Initialized = BIT0,
+      StaRunning = BIT1,
+      StaConnected = BIT2,
+      StaGotIp = BIT3,
+      ApRunning = BIT4,
+      ScanDone = BIT5,
+    };
 
     namespace wifi {
 
@@ -44,23 +53,36 @@ namespace esp32m {
                                      : (wifi_mode_t)(m & ~WIFI_MODE_STA));
       }
 
+      bool Sta::isConnected() {
+        return xEventGroupGetBits(_wifi->_eventGroup) & WifiFlags::StaConnected;
+      }
+
+      esp_err_t Sta::disconnect() {
+        if (isConnected())
+          return ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_disconnect());
+        return ESP_OK;
+      }
+
       void Sta::getInfo(JsonObject info) {
-        if (_wifi->isConnected()) {
+        if (isConnected()) {
           auto infoSta = info.createNestedObject("sta");
           wifi_ap_record_t info;
           if (!esp_wifi_sta_get_ap_info(&info)) {
-            char sbssid[18] = {0};
+            // char sbssid[18] = {0};
             infoSta["ssid"] = info.ssid;
-            if (formatBssid(info.bssid, sbssid))
-              infoSta["bssid"] = sbssid;
+            json::macTo(infoSta, "bssid", info.bssid);
+            /*if (formatBssid(info.bssid, sbssid))
+              infoSta["bssid"] = sbssid;*/
             uint8_t mac[6];
-            if (!esp_wifi_get_mac(WIFI_IF_STA, mac) && formatBssid(mac, sbssid))
-              infoSta["mac"] = sbssid;
+            if (!esp_wifi_get_mac(WIFI_IF_STA,
+                                  mac) /*&& formatBssid(mac, sbssid)*/)
+              json::macTo(infoSta, mac);
+            // infoSta["mac"] = sbssid;
             infoSta["rssi"] = info.rssi;
           }
           esp_netif_ip_info_t ip;
           if (!ESP_ERROR_CHECK_WITHOUT_ABORT(getIpInfo(ip)))
-            ip2json(infoSta, ip);
+            json::to(infoSta, ip);
         }
       }
 
@@ -113,12 +135,14 @@ namespace esp32m {
       };
 
       esp_err_t Ap::enable(bool enable) {
+        if (_wifi->_managedExternally)
+          return ESP_OK;
         wifi_mode_t m = WIFI_MODE_NULL;
         ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
         if (enable) {
           /*if (m & WIFI_MODE_AP)
             return ESP_OK;*/
-          _wifi->_apTimer = millis();
+          _apTimer = millis();
           // vTaskDelay(pdMS_TO_TICKS(100)); // allow some time for the
           // events to fire
           setStatus(ApStatus::Starting);
@@ -132,10 +156,6 @@ namespace esp32m {
         stopDhcp();
         if (enable) {
           apply(errl);
-          /*apply(ConfigItem::Ip, errl);
-          apply(ConfigItem::DhcpsLease, errl);
-          apply(ConfigItem::Dns, errl);
-          apply(ConfigItem::Role, errl);*/
 
           wifi_config_t current_conf;
           ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_AP, &current_conf));
@@ -165,16 +185,17 @@ namespace esp32m {
         if (!esp_netif_get_hostname(handle(), &hostname))
           infoAp["ssid"] = (char *)hostname;
         uint8_t mac[6];
-        char sbssid[18] = {0};
-        if (!esp_wifi_get_mac(WIFI_IF_AP, mac) && formatBssid(mac, sbssid))
-          infoAp["mac"] = sbssid;
+        // char sbssid[18] = {0};
+        if (!esp_wifi_get_mac(WIFI_IF_AP, mac) /*&& formatBssid(mac, sbssid)*/)
+          json::macTo(infoAp, mac);
+        // infoAp["mac"] = sbssid;
         wifi_sta_list_t clients;
         if (!esp_wifi_ap_get_sta_list(&clients))
           infoAp["cli"] = clients.num;
 
         esp_netif_ip_info_t ip;
         if (!ESP_ERROR_CHECK_WITHOUT_ABORT(getIpInfo(ip)))
-          ip2json(infoAp, ip);
+          json::to(infoAp, ip);
       }
 
       const char *ApStateNames[]{"initial", "starting", "running", "stopped"};
@@ -199,18 +220,85 @@ namespace esp32m {
         _status = state;
       }
 
+      bool Ap::isRunning() {
+        return xEventGroupGetBits(_wifi->_eventGroup) & WifiFlags::ApRunning;
+      }
+
+      int Ap::clientsCount() {
+        if (!isRunning())
+          return 0;
+        wifi_sta_list_t clients;
+        if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_ap_get_sta_list(&clients)) !=
+            ESP_OK)
+          return 0;
+        return clients.num;
+      }
+
+      void Ap::stateMachine() {
+        auto curtime = millis();
+        switch (_status) {
+          case ApStatus::Starting:
+            if (isRunning()) {
+              setStatus(ApStatus::Running);
+              _apTimer = curtime;
+              break;
+            }
+            if (curtime - _apTimer <= 5000)
+              break;
+            logI("could not start AP, falling back to STA");
+            setStatus(ApStatus::Initial);
+            break;
+          case ApStatus::Running: {
+            /*if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning))
+            {
+              // we can't rely on ApRunning status because AP_STOP/AP_START
+            events may be fired multiple times during AP startup
+              _ap.setStatus(ApStatus::Stopped);
+              break;
+            }*/
+            if (clientsCount() > 0)
+              _apTimer = curtime;
+            if (curtime - _apTimer >= 60000) {
+              if (_wifi->isConnected()) {
+                logW("disabling AP because STA is connected");
+                enable(false);
+              } else {
+                logW("no clients connected within 60s, restarting...");
+                App::restart();
+              }
+              delay(100);  // allow some time for the events to fire
+              break;
+            }
+            if (!_captivePortal)
+              _captivePortal = new CaptiveDns(_ip.ip);
+            _captivePortal->enable(true);
+          } break;
+          case ApStatus::Stopped:
+            if (_captivePortal)
+              _captivePortal->enable(false);
+            setStatus(ApStatus::Initial);
+            break;
+          default:
+            break;
+        };
+      }
+
+      static const char *getDefaultStaKey() {
+        const esp_netif_inherent_config_t config =
+            ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
+        return config.if_key;
+      }
+
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+      static const char *getDefaultApKey() {
+        const esp_netif_inherent_config_t config =
+            ESP_NETIF_INHERENT_DEFAULT_WIFI_AP();
+        return config.if_key;
+      }
+#endif
     }  // namespace wifi
 
     const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
-
-    enum WifiFlags {
-      Initialized = BIT0,
-      StaRunning = BIT1,
-      StaConnected = BIT2,
-      StaGotIp = BIT3,
-      ApRunning = BIT4,
-      ScanDone = BIT5,
-    };
 
     const char *WifiEvent::NAME = "wifi";
 
@@ -319,13 +407,18 @@ namespace esp32m {
                     target.add((int)_flags) && target.add(_failcount);
       if (!result)
         return false;
-      char bssidStr[18];
+      if (_bssidOfs)
+        result = json::macTo(target, bssid());
+
+      /*char bssidStr[18];
       if (formatBssid(bssid(), bssidStr))
-        result = target.add(bssidStr);
+        result = target.add(bssidStr);*/
       return result;
     }
 
-    Wifi::Wifi() : Device(Flags::HasSensors) {}
+    Wifi::Wifi() : Device(Flags::HasSensors) {
+      _eventGroup = xEventGroupCreate();
+    }
 
     bool Wifi::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
@@ -342,11 +435,10 @@ namespace esp32m {
         _connect = std::unique_ptr<ApInfo>(new ApInfo(
             0, data["ssid"].as<const char *>(),
             data["password"].as<const char *>(),
-            parseBssid(data["bssid"].as<const char *>(), bssid) ? bssid
-                                                                : nullptr));
+            net::macParse(data["bssid"].as<const char *>(), bssid) ? bssid
+                                                                   : nullptr));
         req.respond();
-        if (isConnected())
-          disconnect();
+        _sta.disconnect();
         xTaskNotifyGive(_task);
         return true;
       }
@@ -544,118 +636,49 @@ namespace esp32m {
       if (inited)
         return ESP_OK;
       inited = true;
-      EventManager::instance().subscribe([this](Event &ev) {
-        IpEvent *ip;
-        WifiEvent *wifi;
-        sleep::Event *slev;
-        if (WifiEvent::is(ev, &wifi))
-          switch (wifi->event()) {
-            case WIFI_EVENT_STA_START:
-              xEventGroupSetBits(_eventGroup, WifiFlags::StaRunning);
-              break;
-            case WIFI_EVENT_STA_STOP:
-              xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
-              break;
-            case WIFI_EVENT_STA_CONNECTED:
-              // esp_wifi_set_rssi_threshold(-67);
-              xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
-              break;
-            case WIFI_EVENT_STA_DISCONNECTED: {
-              auto r = (wifi_event_sta_disconnected_t *)wifi->data();
-              _errReason = (wifi_err_reason_t)r->reason;
-              xEventGroupClearBits(
-                  _eventGroup, WifiFlags::StaConnected | WifiFlags::StaGotIp);
-              break;
-            }
-            case WIFI_EVENT_STA_BSS_RSSI_LOW: {
-              int e = esp_rrm_send_neighbor_rep_request(neighbor_report_recv_cb,
-                                                        this);
-              if (e < 0) {
-                /* failed to send neighbor report request */
-                logW("failed to send neighbor report request: %i", e);
-                e = esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
-                                                           NULL, 0);
-                if (e < 0) {
-                  logI("failed to send btm query: %i", e);
-                }
-              }
-            } break;
-            case WIFI_EVENT_SCAN_DONE:
-              logI("scan done");
-              xEventGroupSetBits(_eventGroup, WifiFlags::ScanDone);
-              break;
-            case WIFI_EVENT_AP_START:
-              // logI("AP started");
-              // for some reason, AP_STOP/AP_START events are fired multiple
-              // times
-              xEventGroupSetBits(_eventGroup, WifiFlags::ApRunning);
-              break;
-            case WIFI_EVENT_AP_STOP:
-              // logI("AP stopped");
-              xEventGroupClearBits(_eventGroup, WifiFlags::ApRunning);
-              break;
-            /*case WIFI_EVENT_AP_STACONNECTED:
-    {
-    auto r = (wifi_event_ap_staconnected_t *)wifi->data();
-    char mac[18];
-    formatBssid(r->mac, mac);
-    logI("STA %s connected, id=%d", mac, r->aid);
-    break;
-    }
-    case WIFI_EVENT_AP_STADISCONNECTED:
-    {
-    auto r = (wifi_event_ap_stadisconnected_t *)wifi->data();
-    char mac[18];
-    formatBssid(r->mac, mac);
-    logI("STA %s disconnected, id=%d", mac, r->aid);
-    break;
-    }*/
-            default:
-              break;
-          }
-        else if (IpEvent::is(ev, &ip))
-          switch (ip->event()) {
-            case IP_EVENT_STA_GOT_IP: {
-              _errReason = (wifi_err_reason_t)0;
-              ip_event_got_ip_t *d = (ip_event_got_ip_t *)ip->data();
-              const esp_netif_ip_info_t *ip_info = &d->ip_info;
-              logI("my IP: " IPSTR, IP2STR(&ip_info->ip));
-              xEventGroupSetBits(_eventGroup, WifiFlags::StaGotIp);
-              break;
-            }
-            case IP_EVENT_STA_LOST_IP:
-              xEventGroupClearBits(_eventGroup, WifiFlags::StaGotIp);
-              break;
-            default:
-              break;
-          }
-        else if (sleep::Event::is(ev, &slev) && !isConnected())
-          slev->block();
 
-        if (_task)
-          xTaskNotifyGive(_task);
-      });
-      ESP_CHECK_RETURN(useNetif());
-      ESP_CHECK_RETURN(useEventLoop());
-      _eventGroup = xEventGroupCreate();
-      auto ifap = esp_netif_create_default_wifi_ap();
-      auto ifsta = esp_netif_create_default_wifi_sta();
-      wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-      ESP_CHECK_RETURN(esp_wifi_init(&cfg));
-      ESP_CHECK_RETURN(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+      esp_netif_t *ifsta = nullptr, *ifap = nullptr;
+
+      ifsta = esp_netif_get_handle_from_ifkey(getDefaultStaKey());
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+      ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
+#endif
+      if (ifsta || ifap)
+        _managedExternally = true;
+      if (!_managedExternally) {
+        ESP_CHECK_RETURN(useNetif());
+        ESP_CHECK_RETURN(useEventLoop());
+      }
+      if (!ifsta)
+        ifsta = esp_netif_create_default_wifi_sta();
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+      if (!ifap)
+        ifap = esp_netif_create_default_wifi_ap();
+#endif
+      if (!_managedExternally) {
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        ESP_CHECK_RETURN(esp_wifi_init(&cfg));
+        ESP_CHECK_RETURN(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+      }
       ESP_CHECK_RETURN(esp_event_handler_instance_register(
           WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, nullptr, nullptr));
       ESP_CHECK_RETURN(esp_event_handler_instance_register(
           IP_EVENT, IP_EVENT_STA_GOT_IP, ip_event_handler, nullptr, nullptr));
       xEventGroupSetBits(_eventGroup, WifiFlags::Initialized);
-      ESP_CHECK_RETURN(esp_wifi_start());
+      if (!_managedExternally)
+        ESP_CHECK_RETURN(esp_wifi_start());
       _errReason = (wifi_err_reason_t)0;
       WifiEvent::publish(WIFI_EVENT_WIFI_READY,
                          nullptr);  // this event is never sent by esp-idf, so
                                     // we do it in case someone wants it
 
-      _ap.init(this, esp_netif_get_ifkey(ifap));
       _sta.init(this, esp_netif_get_ifkey(ifsta));
+
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+      _ap.reset(new Ap());
+      _ap->init(this, esp_netif_get_ifkey(ifap));
+      _ap->enable(false);
+#endif
 
       if (_txp)
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_max_tx_power(_txp));
@@ -663,7 +686,7 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_get_max_tx_power(&_txp));
       if (_task)
         xTaskNotifyGive(_task);
-      return _ap.enable(false);
+      return ESP_OK;
     }
 
     esp_err_t Wifi::checkNameChanged() {
@@ -671,56 +694,138 @@ namespace esp32m {
         return ESP_OK;
       _hostnameChanged = false;
       ErrorList errl;
-      _ap.apply(Interface::ConfigItem::Hostname, errl);
+      if (_ap)
+        _ap->apply(Interface::ConfigItem::Hostname, errl);
       _sta.apply(Interface::ConfigItem::Hostname, errl);
       return ESP_OK;
     }
 
     bool Wifi::isInitialized() const {
-      if (!_eventGroup)
-        return false;
       return xEventGroupGetBits(_eventGroup) & WifiFlags::Initialized;
     }
 
     bool Wifi::isConnected() const {
-      if (!_eventGroup)
-        return false;
       return (xEventGroupGetBits(_eventGroup) &
               (WifiFlags::StaConnected | WifiFlags::StaGotIp)) ==
              (WifiFlags::StaConnected | WifiFlags::StaGotIp);
     }
 
-    esp_err_t Wifi::disconnect() {
-      if (xEventGroupGetBits(_eventGroup) & WifiFlags::StaConnected)
-        return ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_disconnect());
-      return ESP_OK;
-    }
-
-    bool Wifi::handleEvent(Event &ev) {
+    void Wifi::handleEvent(Event &ev) {
+      Device::handleEvent(ev);
+      IpEvent *ip;
+      WifiEvent *wifi;
+      sleep::Event *slev;
       DoneReason reason;
+      bool wakeup = false;
       if (EventInit::is(ev, 0)) {
         init();
         xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 5120,
                     this, tskIDLE_PRIORITY + 1, &_task);
-        return true;
       } else if (EventDone::is(ev, &reason)) {
         stop();
-        return true;
       } else if (EventPropChanged::is(ev, "app", "hostname")) {
         _hostnameChanged = true;
         if (_task)
           xTaskNotifyGive(_task);
-      }
-      return false;
+      } else if (WifiEvent::is(ev, &wifi)) {
+        wakeup = true;
+        switch (wifi->event()) {
+          case WIFI_EVENT_STA_START:
+            xEventGroupSetBits(_eventGroup, WifiFlags::StaRunning);
+            break;
+          case WIFI_EVENT_STA_STOP:
+            xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
+            break;
+          case WIFI_EVENT_STA_CONNECTED:
+            // esp_wifi_set_rssi_threshold(-67);
+            xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
+            break;
+          case WIFI_EVENT_STA_DISCONNECTED: {
+            auto r = (wifi_event_sta_disconnected_t *)wifi->data();
+            _errReason = (wifi_err_reason_t)r->reason;
+            xEventGroupClearBits(_eventGroup,
+                                 WifiFlags::StaConnected | WifiFlags::StaGotIp);
+            break;
+          }
+          case WIFI_EVENT_STA_BSS_RSSI_LOW: {
+            int e = esp_rrm_send_neighbor_rep_request(neighbor_report_recv_cb,
+                                                      this);
+            if (e < 0) {
+              /* failed to send neighbor report request */
+              logW("failed to send neighbor report request: %i", e);
+              e = esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
+                                                         NULL, 0);
+              if (e < 0) {
+                logI("failed to send btm query: %i", e);
+              }
+            }
+          } break;
+          case WIFI_EVENT_SCAN_DONE:
+            // logI("scan done");
+            xEventGroupSetBits(_eventGroup, WifiFlags::ScanDone);
+            break;
+          case WIFI_EVENT_AP_START:
+            // logI("AP started");
+            // for some reason, AP_STOP/AP_START events are fired multiple
+            // times
+            xEventGroupSetBits(_eventGroup, WifiFlags::ApRunning);
+            break;
+          case WIFI_EVENT_AP_STOP:
+            // logI("AP stopped");
+            xEventGroupClearBits(_eventGroup, WifiFlags::ApRunning);
+            break;
+          /*case WIFI_EVENT_AP_STACONNECTED:
+  {
+  auto r = (wifi_event_ap_staconnected_t *)wifi->data();
+  char mac[18];
+  formatBssid(r->mac, mac);
+  logI("STA %s connected, id=%d", mac, r->aid);
+  break;
+  }
+  case WIFI_EVENT_AP_STADISCONNECTED:
+  {
+  auto r = (wifi_event_ap_stadisconnected_t *)wifi->data();
+  char mac[18];
+  formatBssid(r->mac, mac);
+  logI("STA %s disconnected, id=%d", mac, r->aid);
+  break;
+  }*/
+          default:
+            wakeup = false;
+            break;
+        }
+      } else if (IpEvent::is(ev, &ip)) {
+        wakeup = true;
+        switch (ip->event()) {
+          case IP_EVENT_STA_GOT_IP: {
+            _errReason = (wifi_err_reason_t)0;
+            ip_event_got_ip_t *d = (ip_event_got_ip_t *)ip->data();
+            const esp_netif_ip_info_t *ip_info = &d->ip_info;
+            logI("my IP: " IPSTR, IP2STR(&ip_info->ip));
+            xEventGroupSetBits(_eventGroup, WifiFlags::StaGotIp);
+            break;
+          }
+          case IP_EVENT_STA_LOST_IP:
+            xEventGroupClearBits(_eventGroup, WifiFlags::StaGotIp);
+            break;
+          default:
+            wakeup = false;
+            break;
+        }
+      } else if (sleep::Event::is(ev, &slev) && !isConnected())
+        slev->block();
+
+      if (_task && wakeup)
+        xTaskNotifyGive(_task);
     }
 
     DynamicJsonDocument *Wifi::getState(const JsonVariantConst filter) {
       size_t size = JSON_OBJECT_SIZE(
                         4 + 3)  // mode, ch, ch2, status + nested: wifi, sta, ap
-                    + JSON_OBJECT_SIZE(8) + 33 + 18 + 18 + 16 + 16 +
-                    16  // sta: ssid(33), bssid(18), mac(18), ip(16), gw(16),
-                        // mask(16), rssi
-                    + JSON_OBJECT_SIZE(6) + 18 + 16 + 16 +
+                    + JSON_OBJECT_SIZE(8) + 33 + net::MacMaxChars * 2 + 16 +
+                    16 + 16  // sta: ssid(33), bssid(18), mac(18), ip(16),
+                             // gw(16), mask(16), rssi
+                    + JSON_OBJECT_SIZE(6) + net::MacMaxChars + 16 + 16 +
                     16;  // ap: mac(18), ip(16), gw(16), mask(16), cli
       auto doc = new DynamicJsonDocument(size);
       auto info = doc->to<JsonObject>();
@@ -740,10 +845,12 @@ namespace esp32m {
             _sta.getInfo(info);
             break;
           case WIFI_MODE_AP:
-            _ap.getInfo(info);
+            if (_ap)
+              _ap->getInfo(info);
             break;
           case WIFI_MODE_APSTA:
-            _ap.getInfo(info);
+            if (_ap)
+              _ap->getInfo(info);
             _sta.getInfo(info);
             break;
           default:
@@ -827,7 +934,7 @@ namespace esp32m {
 
     bool Wifi::tryConnect(ApInfo *ap, bool noBssid) {
       esp_task_wdt_reset();
-      disconnect();
+      _sta.disconnect();
       if (_sta.enable(true) != ESP_OK)
         return false;
       if (ap) {
@@ -837,11 +944,11 @@ namespace esp32m {
         strlcpy(reinterpret_cast<char *>(conf.sta.ssid), ssid,
                 sizeof(conf.sta.ssid));
         const uint8_t *bssid = ap->bssid();
-        char bssidStr[18] = "any";
+        char bssidStr[net::MacMaxChars] = "any";
         if (bssid && !noBssid) {
           conf.sta.bssid_set = 1;
           memcpy((void *)&conf.sta.bssid[0], bssid, 6);
-          formatBssid(bssid, bssidStr);
+          sprintf(bssidStr, MACSTR, MAC2STR(bssid));
         }
         const char *password = ap->password();
         if (password) {
@@ -890,7 +997,7 @@ namespace esp32m {
       bool ok = isConnected();
       if (!ok) {
         logW("connection failed: %u", (int)_errReason);
-        if (_ap._status == ApStatus::Running)
+        if (_ap && _ap->_status == ApStatus::Running)
           delay(5000);
         else
           delay(1000);
@@ -913,7 +1020,7 @@ namespace esp32m {
         if (connected)
           _connect.reset();
       }
-      if (apClientsCount() == 0) {
+      if (!_ap || _ap->clientsCount() == 0) {
         if (!connected)
           for (auto ap : _aps)
             if (ap->bssid()) {
@@ -934,7 +1041,7 @@ namespace esp32m {
         // updateTimeConfig();
       } else {
         delay(100);
-        if (apClientsCount() == 0)
+        if (!_ap || _ap->clientsCount() == 0)
           _connectFailures++;
       }
       return connected;
@@ -976,7 +1083,7 @@ namespace esp32m {
       int failcount = source[i++];
       const char *bssidStr = source[i++];
       uint8_t bssid[6];
-      uint8_t *bssidPtr = parseBssid(bssidStr, bssid) ? bssid : nullptr;
+      uint8_t *bssidPtr = net::macParse(bssidStr, bssid) ? bssid : nullptr;
       ApInfo *ap = new ApInfo(id, ssid, password, bssidPtr, flags, failcount);
       ApInfo *result = addOrUpdateAp(ap);
       if (!result->equals(ap))
@@ -1030,108 +1137,60 @@ namespace esp32m {
       esp_task_wdt_add(NULL);
       for (;;) {
         esp_task_wdt_reset();
-        auto curtime = millis();
-        switch (_sta._status) {
-          case StaStatus::Initial:
-            if (_stopped)
+        if (!_managedExternally) {
+          auto curtime = millis();
+          switch (_sta._status) {
+            case StaStatus::Initial:
+              if (_stopped)
+                break;
+              if (!_connect && !_aps.size()) {  // no APs to connect to
+                if (_ap && _ap->_status == ApStatus::Initial) {
+                  logW("no APs to connect to, switching to AP mode");
+                  _ap->enable(true);
+                }
+                break;
+              }
+              _sta.setStatus(StaStatus::Connecting);
+              _staTimer = curtime;
               break;
-            if (!_connect && !_aps.size()) {  // no APs to connect to
-              if (_ap._status == ApStatus::Initial) {
-                logW("no APs to connect to, switching to AP mode");
-                _ap.enable(true);
+            case StaStatus::Connecting:
+              if (!tryConnect()) {
+                _sta.setStatus(StaStatus::ConnectionFailed);
+                _staTimer = curtime;
               }
               break;
-            }
-            _sta.setStatus(StaStatus::Connecting);
-            _staTimer = curtime;
-            break;
-          case StaStatus::Connecting:
-            if (!tryConnect()) {
-              _sta.setStatus(StaStatus::ConnectionFailed);
-              _staTimer = curtime;
-            }
-            break;
-          case StaStatus::ConnectionFailed:
-            if (_connectFailures > 10) {
-              logW("too many connection failures, restarting...");
-              App::restart();
-            }
-            if (_ap._status == ApStatus::Initial) {
-              logW("connection failed, switching to AP+STA");
-              _ap.enable(true);
-            }
-            if (_connect ||
-                (curtime - _staTimer > 10000 && apClientsCount() == 0))
-              _sta.setStatus(StaStatus::Initial);
-            break;
-          case StaStatus::Connected:
-            if (!isConnected())
-              _sta.setStatus(StaStatus::Initial);
-            break;
-        }
-        switch (_ap._status) {
-          case ApStatus::Starting:
-            if (xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning) {
-              _ap.setStatus(ApStatus::Running);
-              _apTimer = curtime;
-              break;
-            }
-            if (curtime - _apTimer <= 5000)
-              break;
-            logI("could not start AP, falling back to STA");
-            _ap.setStatus(ApStatus::Initial);
-            break;
-          case ApStatus::Running: {
-            /*if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning)) {
-              // we can't rely on ApRunning status because AP_STOP/AP_START
-            events may be fired multiple times during AP startup
-              _ap.setStatus(ApStatus::Stopped);
-              break;
-            }*/
-            if (apClientsCount() > 0)
-              _apTimer = curtime;
-            if (curtime - _apTimer >= 60000) {
-              if (isConnected()) {
-                logW("disabling AP because STA is connected");
-                _ap.enable(false);
-              } else {
-                logW("no clients connected within 60s, restarting...");
+            case StaStatus::ConnectionFailed:
+              if (_connectFailures > 10) {
+                logW("too many connection failures, restarting...");
                 App::restart();
               }
-              delay(100);  // allow some time for the events to fire
+              if (_ap && _ap->_status == ApStatus::Initial) {
+                logW("connection failed, switching to AP+STA");
+                _ap->enable(true);
+              }
+              if (_connect || (curtime - _staTimer > 10000 &&
+                               (!_ap || _ap->clientsCount() == 0)))
+                _sta.setStatus(StaStatus::Initial);
               break;
-            }
-            if (!_captivePortal)
-              _captivePortal = new CaptiveDns(_ap._ip.ip);
-            _captivePortal->enable(true);
-          } break;
-          case ApStatus::Stopped:
-            if (_captivePortal)
-              _captivePortal->enable(false);
-            _ap.setStatus(ApStatus::Initial);
-            break;
-          default:
-            break;
-        };
+            case StaStatus::Connected:
+              if (!isConnected())
+                _sta.setStatus(StaStatus::Initial);
+              break;
+          }
+          if (_ap)
+            _ap->stateMachine();
+        }
         checkScan();
         checkNameChanged();
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
       }
     }
 
-    int Wifi::apClientsCount() {
-      if (!(xEventGroupGetBits(_eventGroup) & WifiFlags::ApRunning))
-        return 0;
-      wifi_sta_list_t clients;
-      if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_ap_get_sta_list(&clients)) !=
-          ESP_OK)
-        return 0;
-      return clients.num;
-    }
-
     void Wifi::stop() {
       _stopped = true;
-      disconnect();
+      if (_managedExternally)
+        return;
+      _sta.disconnect();
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_stop());
       waitState(
           [this] {
@@ -1151,15 +1210,16 @@ namespace esp32m {
 
         DynamicJsonDocument *doc = nullptr;
         if (sc > 0) {
-          doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(sc) +
-                                        (sc * (JSON_ARRAY_SIZE(5) + 33 + 18)));
+          doc = new DynamicJsonDocument(
+              JSON_ARRAY_SIZE(sc) +
+              (sc * (JSON_ARRAY_SIZE(5) + 33 + net::MacMaxChars)));
           JsonArray arr = doc->to<JsonArray>();
           wifi_ap_record_t *scanResult =
               (wifi_ap_record_t *)calloc(sc, sizeof(wifi_ap_record_t));
           if (doc && scanResult &&
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_wifi_scan_get_ap_records(&sc, scanResult)) == ESP_OK) {
-            char sbssid[18] = {0};
+            // char sbssid[18] = {0};
             for (uint16_t i = 0; i < sc; i++) {
               wifi_ap_record_t *r = scanResult + i;
               auto entry = arr.createNestedArray();
@@ -1168,8 +1228,9 @@ namespace esp32m {
                 entry.add(r->authmode);
                 entry.add(r->rssi);
                 entry.add(r->primary);
-                if (formatBssid(r->bssid, sbssid))
-                  entry.add(sbssid);
+                json::macTo(entry, r->bssid);
+                /*if (formatBssid(r->bssid, sbssid))
+                  entry.add(sbssid);*/
               }
             }
           }

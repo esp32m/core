@@ -75,17 +75,6 @@ namespace esp32m {
       mdns->set("esp32m", ESP32M_VERSION);
       mdns->set("wsapi", "/ws");
       net::Mdns::instance().set(mdns);
-      /*      EventManager::instance().subscribe([this](Event &ev) {
-              if (mdns::EventPopulate::is(ev)) {
-                mdns_txt_item_t serviceTxtData[2] = {
-                    {"esp32m", ESP32M_VERSION},
-                    {"wsapi", "/ws"},
-                };
-                mdns_service_remove("_http", "_tcp");
-                ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_service_add(
-                    nullptr, "_http", "_tcp", 80, serviceTxtData, 2));
-              }
-            });*/
     }
 
     Httpd::~Httpd() {
@@ -125,18 +114,21 @@ namespace esp32m {
       }
       if (!found) {
         if (!strcmp(req->uri, "/generate_204")) {
-          char location[32];
-          esp_netif_ip_info_t info;
-          net::Wifi::instance().ap().getIpInfo(info);
-          sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
-          ESP_ERROR_CHECK_WITHOUT_ABORT(
-              httpd_resp_set_status(req, "302"));  // 307 ???
-          ESP_ERROR_CHECK_WITHOUT_ABORT(
-              httpd_resp_set_hdr(req, "Location", location));
-          // httpd_resp_set_type(req, "text/plain");
-          ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
-          logI("redirecting to captive portal %s", location);
-          return ESP_OK;
+          net::wifi::Ap *ap = net::Wifi::instance().ap();
+          if (ap) {
+            char location[32];
+            esp_netif_ip_info_t info;
+            ap->getIpInfo(info);
+            sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
+            ESP_ERROR_CHECK_WITHOUT_ABORT(
+                httpd_resp_set_status(req, "302"));  // 307 ???
+            ESP_ERROR_CHECK_WITHOUT_ABORT(
+                httpd_resp_set_hdr(req, "Location", location));
+            // httpd_resp_set_type(req, "text/plain");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
+            logI("redirecting to captive portal %s", location);
+            return ESP_OK;
+          }
         }
         found = def;
       }

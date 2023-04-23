@@ -40,7 +40,7 @@ namespace esp32m {
 
     }  // namespace mdns
 
-    bool Mdns::handleEvent(Event &ev) {
+    void Mdns::handleEvent(Event &ev) {
       if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr)) {
         if (!_initialized) {
           _initialized = ESP_ERROR_CHECK_WITHOUT_ABORT(mdns_init()) == ESP_OK;
@@ -53,9 +53,7 @@ namespace esp32m {
         }
       } else if (EventPropChanged::is(ev, "app", "hostname")) {
         updateHostname();
-      } else
-        return false;
-      return true;
+      }
     }
 
     void Mdns::updateHostname() {

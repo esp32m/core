@@ -21,7 +21,7 @@ namespace esp32m {
       }
 
      protected:
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;

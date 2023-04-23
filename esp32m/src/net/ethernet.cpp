@@ -111,7 +111,8 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    bool Ethernet::handleEvent(Event &ev) {
+    void Ethernet::handleEvent(Event &ev) {
+      Device::handleEvent(ev);
       EthEvent *eth;
       IpEvent *ip;
       if (EthEvent::is(ev, &eth) && eth->handle() == _handle) {
@@ -133,7 +134,6 @@ namespace esp32m {
           default:
             break;
         }
-        return true;
       } else if (IpEvent::is(ev, &ip))
         switch (ip->event()) {
           case IP_EVENT_ETH_GOT_IP: {
@@ -156,11 +156,9 @@ namespace esp32m {
         }
       else if (EventInit::is(ev, 0)) {
         ensureReady();
-        return true;
       } else if (EventPropChanged::is(ev, "app", "hostname")) {
         updateHostname();
       }
-      return false;
     }
 
     esp_err_t Ethernet::updateHostname() {

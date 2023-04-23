@@ -20,6 +20,10 @@ namespace esp32m {
       return esp_netif_get_ip_info(_handle, &info);
     }
 
+    bool Interface::isUp() {
+      return esp_netif_is_netif_up(_handle);
+    }
+
     void Interface::syncHandle(ErrorList &errl) {
       _handle = esp_netif_get_handle_from_ifkey(_key.c_str());
       if (_handle) {
@@ -180,7 +184,7 @@ namespace esp32m {
 
         auto doc = new DynamicJsonDocument(size);
         auto root = doc->to<JsonObject>();
-        root["up"] = esp_netif_is_netif_up(_handle);
+        root["up"] = isUp();
         if (desc)
           root["desc"] = desc;
         if (hasMac)
@@ -208,9 +212,9 @@ namespace esp32m {
       ErrorList el;
       bool changed = false;
       JsonObjectConst root = cfg.as<JsonObjectConst>();
-      if (json::from(root["role"], (int &)_role, &changed))
+      if (json::fromIntCastable(root["role"], _role, &changed))
         apply(ConfigItem::Role, el);
-      if (json::macFrom(root, _mac, &changed))
+      if (json::macFrom(root["mac"], _mac, &changed))
         apply(ConfigItem::Mac, el);
       if (json::from(root, _ip, &changed))
         apply(ConfigItem::Ip, el);
@@ -261,8 +265,6 @@ namespace esp32m {
       }
       return doc;
     }
-
-
 
     Interfaces::~Interfaces() {
       std::lock_guard guard(_mapMutex);

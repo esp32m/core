@@ -1,8 +1,8 @@
 #pragma once
 
 #include "esp32m/app.hpp"
-#include "esp32m/logging.hpp"
 #include "esp32m/errors.hpp"
+#include "esp32m/logging.hpp"
 
 #include <dhcpserver/dhcpserver.h>
 #include <dhcpserver/dhcpserver_options.h>
@@ -23,7 +23,16 @@ namespace esp32m {
         DhcpClient,
         DhcpServer,
       };
-      enum class ConfigItem { Mac, Ip, Ipv6, Dns, DhcpsLease, Hostname, Role, MAX };
+      enum class ConfigItem {
+        Mac,
+        Ip,
+        Ipv6,
+        Dns,
+        DhcpsLease,
+        Hostname,
+        Role,
+        MAX
+      };
       Interface();
       Interface(const Interface &) = delete;
       virtual ~Interface();
@@ -42,6 +51,7 @@ namespace esp32m {
       void apply(ConfigItem item, ErrorList &errl);
       void apply(ErrorList &errl);
       void stopDhcp();
+      bool isUp();
 
      protected:
       bool _persistent = false;

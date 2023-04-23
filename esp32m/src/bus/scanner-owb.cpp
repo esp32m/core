@@ -42,13 +42,11 @@ namespace esp32m {
         return false;
       }
 
-      bool Owb::handleEvent(Event &ev) {
+      void Owb::handleEvent(Event &ev) {
         if (EventInit::is(ev, 0)) {
           xTaskCreate([](void *self) { ((Owb *)self)->run(); }, "m/s/owb", 4096,
                       this, 1, &_task);
-          return true;
         }
-        return false;
       }
 
       Owb &Owb::instance() {

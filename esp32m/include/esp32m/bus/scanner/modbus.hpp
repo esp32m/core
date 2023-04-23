@@ -20,7 +20,7 @@ namespace esp32m {
         bool setConfig(const JsonVariantConst cfg,
                        DynamicJsonDocument **result) override;
         bool handleRequest(Request &req) override;
-        bool handleEvent(Event &ev) override;
+        void handleEvent(Event &ev) override;
 
        private:
         TaskHandle_t _task = nullptr;

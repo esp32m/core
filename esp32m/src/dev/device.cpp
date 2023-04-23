@@ -23,15 +23,17 @@ namespace esp32m {
 
   const char *EventPollSensors::NAME = "poll-sensors";
 
-  Device::Device(Flags flags) {
+  Device::Device(Flags flags) : _flags(flags) {
     if (flags & Flags::HasSensors) {
       setupSensorPollTask();
-      EventManager::instance().subscribe([this](Event &ev) {
-        if (EventPollSensors::is(ev) && sensorsReady())
-          if (!pollSensors())
-            resetSensors();
-      });
     }
+  }
+
+  void Device::handleEvent(Event &ev) {
+    if ((_flags & Flags::HasSensors) && EventPollSensors::is(ev) &&
+        sensorsReady())
+      if (!pollSensors())
+        resetSensors();
   }
 
   void Device::sensor(const char *sensor, const float value) {

@@ -10,7 +10,7 @@ namespace esp32m {
       virtual ~Console();
       static Console& instance();
       const char* name() const override {
-        return "console";
+        return "ui-console";
       };
 
      protected:

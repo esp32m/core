@@ -23,7 +23,7 @@ namespace esp32m {
       }
 
      protected:
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
       bool handleRequest(Request &req) override;
 
      private:

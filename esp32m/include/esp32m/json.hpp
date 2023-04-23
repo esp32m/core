@@ -55,6 +55,15 @@ namespace esp32m {
       return true;
     }
     template <typename T>
+    bool fromIntCastable(JsonVariantConst source, T &target, bool *changed = nullptr) {
+      if (source.isUnbound() || source.isNull() || source.as<int>() == (int)target)
+        return false;
+      if (changed)
+        *changed = true;
+      target = (T)source.as<int>();
+      return true;
+    }
+    template <typename T>
     bool from(JsonVariantConst source, T &target, T def,
               bool *changed = nullptr) {
       T src = (source.isUnbound() || source.isNull()) ? def : source.as<T>();
@@ -65,8 +74,8 @@ namespace esp32m {
       target = src;
       return true;
     }
-    bool fromDup(JsonVariantConst source, char *&target, const char *def,
-                 bool *changed = nullptr);
+    /*bool fromDup(JsonVariantConst source, char *&target, const char *def,
+                 bool *changed = nullptr);*/
 
     template <typename T>
     class Value {

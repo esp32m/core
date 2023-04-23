@@ -3,6 +3,7 @@
 #include <freertos/task.h>
 
 #include "esp32m/dev/dsts.hpp"
+#include "esp32m/ha/ha.hpp"
 
 namespace esp32m {
   namespace dsts {
@@ -188,8 +189,9 @@ namespace esp32m {
       else {
         Scratchpad scratchpad;
         ESP_CHECK_RETURN(readScratchpad(probe, scratchpad));
-        Resolution resolution = (Resolution)(
-            ((scratchpad.configuration >> 5) & 0x03) + Resolution::R9b);
+        Resolution resolution =
+            (Resolution)(((scratchpad.configuration >> 5) & 0x03) +
+                         Resolution::R9b);
         if (!validate(resolution))
           return ESP_ERR_INVALID_RESPONSE;
       }
@@ -322,11 +324,11 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Dsts::getState(const JsonVariantConst args) {
-      std::vector<dsts::Probe> &pv = probes();
+      auto &pv = probes();
       DynamicJsonDocument *doc = new DynamicJsonDocument(
           JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(5) * pv.size());
       JsonArray root = doc->to<JsonArray>();
-      for (dsts::Probe &p : pv) {
+      for (auto &p : pv) {
         auto entry = root.createNestedArray();
         entry.add(p.codestr());
         entry.add(p.getResolution());
@@ -335,6 +337,44 @@ namespace esp32m {
         entry.add(p.successRate());
       }
       return doc;
+    }
+
+    bool Dsts::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      if (req.is(ha::DescribeRequest::Name)) {
+        auto &pv = probes();
+        for (auto &p : pv) {
+          DynamicJsonDocument *doc =
+              new DynamicJsonDocument(JSON_OBJECT_SIZE(1 + 4));
+          auto root = doc->to<JsonObject>();
+          root["name"] = interactiveName();
+          root["component"] = "sensor";
+          auto config = root.createNestedObject("config");
+          config["device_class"] = "temperature";
+          config["unit_of_measurement"] = "°C";
+          req.respond(p.codestr(), doc->as<JsonVariantConst>());
+          delete doc;
+        }
+        return true;
+      } else if (req.is(ha::StateRequest::Name)) {
+        auto id = req.data()["id"].as<const char *>();
+        if (id) {
+          auto &pv = probes();
+          for (auto &p : pv) {
+            // logI("state request %s, %s", p.codestr(), id);
+            if (!strcmp(p.codestr(), id)) {
+              DynamicJsonDocument *doc =
+                  new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+              auto root = doc->to<JsonObject>();
+              root["state"] = p.temperature();
+              req.respond(p.codestr(), doc->as<JsonVariantConst>());
+              delete doc;
+            }
+          }
+        }
+      }
+      return false;
     }
 
     bool Dsts::initSensors() {

@@ -32,9 +32,6 @@ namespace esp32m {
 
      protected:
       static const char *NAME;
-      virtual bool handleEvent(Event &ev) {
-        return false;
-      };
 
      private:
       eth_event_t _event;
@@ -58,7 +55,7 @@ namespace esp32m {
       }
 
      protected:
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
 
      private:
       const char *_name;

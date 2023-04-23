@@ -206,7 +206,7 @@ namespace esp32m {
     }
 
     bool Ble::init() {
-      ESP_CHECK_RETURN_BOOL(esp_nimble_hci_and_controller_init());
+      ESP_CHECK_RETURN_BOOL(esp_nimble_hci_init());
       nimble_port_init();
       ble_hs_cfg.reset_cb = on_reset;
       ble_hs_cfg.sync_cb = on_sync;
@@ -353,15 +353,14 @@ namespace esp32m {
       return err;
     }
 
-    bool Ble::handleEvent(Event &ev) {
+    void Ble::handleEvent(Event &ev) {
+      Device::handleEvent(ev);
       if (EventInit::is(ev, 0)) {
         _eventGroup = xEventGroupCreate();
         if (init())
           xTaskCreate([](void *self) { ((Ble *)self)->run(); }, "m/ble", 4096,
                       this, tskIDLE_PRIORITY + 1, &_task);
-        return true;
       }
-      return false;
     }
 
     bool Ble::handleRequest(Request &req) {

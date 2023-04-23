@@ -158,7 +158,7 @@ namespace esp32m {
       target = src;
       return true;
     }
-
+/*
     bool fromDup(JsonVariantConst v, char *&target, const char *def,
                  bool *changed) {
       bool c = false;
@@ -188,7 +188,7 @@ namespace esp32m {
         *changed = true;
       return c;
     }
-
+*/
     bool check(log::Loggable *l, DynamicJsonDocument *doc, const char *msg) {
       if (!doc || !l)
         return false;

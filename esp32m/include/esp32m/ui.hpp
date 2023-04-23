@@ -37,7 +37,7 @@ namespace esp32m {
 
    protected:
     //    bool handleRequest(Request &req) override;
-    bool handleEvent(Event &ev) override;
+    void handleEvent(Event &ev) override;
     void wsSend(const char *text);
     esp_err_t wsSend(uint32_t cid, const char *text);
 

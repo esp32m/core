@@ -10,7 +10,7 @@ namespace esp32m {
       Httpd();
       virtual ~Httpd();
       const char *name() const override {
-        return "httpd";
+        return "ui-http";
       };
 
      protected:

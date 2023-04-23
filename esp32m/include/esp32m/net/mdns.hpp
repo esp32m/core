@@ -63,7 +63,7 @@ namespace esp32m {
       }
 
      protected:
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
 
      private:
       bool _initialized = false;

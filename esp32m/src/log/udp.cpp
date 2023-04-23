@@ -10,8 +10,8 @@
 #include "esp32m/events.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/net/ip_event.hpp"
+#include "esp32m/net/net.hpp"
 #include "esp32m/net/ota.hpp"
-#include "esp32m/net/wifi.hpp"
 namespace esp32m {
 
   namespace log {
@@ -46,12 +46,26 @@ namespace esp32m {
 
     const uint8_t SyslogSeverity[] = {5, 5, 3, 4, 6, 7, 7};
 
+    bool getDefaultGwAddress(uint32_t &addr) {
+      esp_netif_t *dif = esp_netif_get_default_netif();
+      if (!dif)
+        return false;
+      if (!esp_netif_is_netif_up(dif))
+        return false;
+      esp_netif_ip_info_t info;
+      auto err = esp_netif_get_ip_info(dif, &info);
+      if (err != ERR_OK)
+        return false;
+      addr = info.gw.addr;
+      return true;
+    }
+
     bool Udp::append(const LogMessage *message) {
       if (!xPortCanYield())  // called from ISR
         return false;
       if (net::ota::isRunning())
         return false;
-      if (!net::Wifi::instance().isConnected())
+      if (!net::isAnyNetifUp())
         return false;
       if (!_addr.sin_addr.s_addr) {
         const char *host = _host;
@@ -70,9 +84,10 @@ namespace esp32m {
         freeaddrinfo(res);
       }
       if (!_addr.sin_addr.s_addr) {
-        esp_netif_ip_info_t info;
+        getDefaultGwAddress(_addr.sin_addr.s_addr);
+        /*esp_netif_ip_info_t info;
         net::Wifi::instance().sta().getIpInfo(info);
-        _addr.sin_addr.s_addr = info.gw.addr;
+        _addr.sin_addr.s_addr = info.gw.addr;*/
       }
       if (!_addr.sin_addr.s_addr)
         return false;

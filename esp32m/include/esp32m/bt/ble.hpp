@@ -54,7 +54,7 @@ namespace esp32m {
       override; DynamicJsonDocument *getConfig(const JsonVariantConst args)
       override;*/
       bool handleRequest(Request &req) override;
-      bool handleEvent(Event &ev) override;
+      void handleEvent(Event &ev) override;
 
      private:
       enum PendingReqType {
