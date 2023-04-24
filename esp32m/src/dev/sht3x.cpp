@@ -154,7 +154,8 @@ namespace esp32m {
   namespace dev {
 
     Sht3x::Sht3x(I2C *i2c, io::IPin *resetPin, const char *name)
-        : Device(Flags::HasSensors) {
+    {
+      Device::init(Flags::HasSensors);
       sht3x::Core::init(i2c, resetPin, name);
     }
 

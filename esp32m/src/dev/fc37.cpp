@@ -5,7 +5,8 @@
 namespace esp32m {
   namespace dev {
 
-    Fc37::Fc37(io::IPin *pin) : Device(Flags::HasSensors) {
+    Fc37::Fc37(io::IPin *pin) {
+      Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
     }
 

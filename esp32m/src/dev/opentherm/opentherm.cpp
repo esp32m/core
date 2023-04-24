@@ -1087,7 +1087,8 @@ namespace esp32m {
     OpenthermMaster::OpenthermMaster(opentherm::IDriver *driver,
                                      opentherm::IMasterModel *model,
                                      const char *name)
-        : Device(Flags::HasSensors) {
+    {
+      Device::init(Flags::HasSensors);
       opentherm::Master::init(driver, model, name);
     }
 

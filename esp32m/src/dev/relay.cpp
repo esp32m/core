@@ -4,10 +4,12 @@
 #include "esp32m/config/changed.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/dev/relay.hpp"
+#include "esp32m/ha/ha.hpp"
 
 namespace esp32m {
   namespace dev {
     void Relay::init() {
+      Device::init(Flags::AcceptsCommands);
       ESP_ERROR_CHECK_WITHOUT_ABORT(
           _pinOn->setDirection(GPIO_MODE_INPUT_OUTPUT));
       setOnLevel(Pin::On, true);
@@ -183,6 +185,45 @@ namespace esp32m {
       if (isPersistent())
         return getState(ctx.request.data());
       return nullptr;
+    }
+
+    bool Relay::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      static const char *names[] = {"?", "ON", "OFF"};
+      if (req.is(ha::DescribeRequest::Name)) {
+        DynamicJsonDocument *doc = new DynamicJsonDocument(
+            JSON_OBJECT_SIZE(1 + 2));  // acceptsCommands, component, config
+        auto root = doc->to<JsonObject>();
+        ha::DescribeRequest::setAcceptsCommands(root);
+        root["component"] = "switch";
+        root.createNestedObject("config");
+        req.respond(name(), doc->as<JsonVariantConst>());
+        delete doc;
+        return true;
+      } else if (req.is(ha::StateRequest::Name)) {
+        int si = (int)refreshState();
+        if (si < 0 || si > 2)
+          si = 0;
+        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+        auto root = doc->to<JsonObject>();
+        root["state"] = names[si];
+        req.respond(name(), doc->as<JsonVariantConst>());
+        delete doc;
+        return true;
+      } else if (req.is(ha::CommandRequest::Name)) {
+        auto state = req.data().as<const char *>();
+        if (state) {
+          // logD("received MQTT command: %s", state);
+          if (!strcmp(state, names[(int)State::On]))
+            turn(true);
+          else if (!strcmp(state, names[(int)State::Off]))
+            turn(false);
+        }
+        req.respond();
+        return true;
+      }
+      return false;
     }
 
     Relay *useRelay(const char *name, io::IPin *pin) {

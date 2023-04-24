@@ -259,11 +259,13 @@ namespace esp32m {
     }
 
     Ina3221::Ina3221(uint8_t address)
-        : Device(Flags::HasSensors), ina3221::Core(new I2C(address)) {
+        : ina3221::Core(new I2C(address)) {
+      Device::init(Flags::HasSensors);
       staticInit();
     }
 
-    Ina3221::Ina3221(I2C *i2c) : Device(Flags::HasSensors), ina3221::Core(i2c) {
+    Ina3221::Ina3221(I2C *i2c) : ina3221::Core(i2c) {
+      Device::init(Flags::HasSensors);
       staticInit();
     }
 

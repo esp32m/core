@@ -69,7 +69,8 @@ namespace esp32m {
     }  // namespace sdm
 
     Sdm::Sdm(sdm::Model model, uint8_t addr, const char *name)
-        : Device(Flags::HasSensors) {
+    {
+      Device::init(Flags::HasSensors);
       sdm::Core::init(model, addr, name);
     }
 

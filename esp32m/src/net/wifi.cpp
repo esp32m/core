@@ -416,7 +416,8 @@ namespace esp32m {
       return result;
     }
 
-    Wifi::Wifi() : Device(Flags::HasSensors) {
+    Wifi::Wifi() {
+      Device::init(Flags::HasSensors);
       _eventGroup = xEventGroupCreate();
     }
 

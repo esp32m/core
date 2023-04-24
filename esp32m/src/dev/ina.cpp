@@ -418,7 +418,7 @@ namespace esp32m {
 
   namespace dev {
 
-    Ina::Ina(I2C *i2c) : Device(Flags::HasSensors), ina::Core(i2c) {}
+    Ina::Ina(I2C *i2c) : ina::Core(i2c) { Device::init(Flags::HasSensors); }
 
     DynamicJsonDocument *Ina::getState(const JsonVariantConst args) {
       DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(7));

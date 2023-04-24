@@ -54,20 +54,27 @@ namespace esp32m {
     enum Flags {
       None = 0,
       HasSensors = 1,
+      AcceptsCommands = 2,
     };
     Device(const Device &) = delete;
     void setReinitDelay(unsigned int delay) {
       _reinitDelay = delay;
     }
-
+    bool hasSensors() const {
+      return (_flags & Flags::HasSensors) != 0;
+    }
+    bool acceptsCommands() const {
+      return (_flags & Flags::AcceptsCommands) != 0;
+    }
     /* these must be called only from within pollSensors() */
     void sensor(const char *sensor, const float value);
     void sensor(const char *sensor, const float value,
                 const JsonObjectConst props);
 
    protected:
-    Flags _flags;
-    Device(const Flags flags = Flags::None);
+    Flags _flags = Flags::None;
+    Device(){};
+    void init(const Flags flags);
     void handleEvent(Event &ev) override;
     virtual bool initSensors() {
       return true;

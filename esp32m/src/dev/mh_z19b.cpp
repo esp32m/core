@@ -5,7 +5,7 @@ namespace esp32m {
   namespace dev {
 
     MhZ19b::MhZ19b(uart_port_t uart_num, const char *name)
-        : Device(Flags::HasSensors), _name(name) {}
+        : _name(name) { Device::init(Flags::HasSensors); }
 
     bool MhZ19b::pollSensors() {
       return true;

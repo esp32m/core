@@ -12,21 +12,21 @@ namespace esp32m {
 
   class EventPollSensors : public Event {
    public:
-    EventPollSensors() : Event(NAME) {}
+    EventPollSensors() : Event(Type) {}
     static bool is(Event &ev) {
-      return ev.is(NAME);
+      return ev.is(Type);
     }
 
    private:
-    static const char *NAME;
+    constexpr static const char *Type="poll-sensors";
   };
 
-  const char *EventPollSensors::NAME = "poll-sensors";
+  // const char *EventPollSensors::NAME = "poll-sensors";
 
-  Device::Device(Flags flags) : _flags(flags) {
-    if (flags & Flags::HasSensors) {
+  void Device::init(Flags flags) {
+    _flags = flags;
+    if (flags & Flags::HasSensors)
       setupSensorPollTask();
-    }
   }
 
   void Device::handleEvent(Event &ev) {

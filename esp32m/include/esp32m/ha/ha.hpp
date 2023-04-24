@@ -12,9 +12,19 @@ namespace esp32m {
                        bool isError) override {
         if (data.isNull() || !data.size() || isError)
           return;
-        auto doc = new DynamicJsonDocument(data.memoryUsage());
+        std::string id = data["id"] | source;
+        auto doc =
+            new DynamicJsonDocument(data.memoryUsage() + JSON_OBJECT_SIZE(1));
         doc->set(data);
-        responses[source] = std::unique_ptr<DynamicJsonDocument>(doc);
+        doc->as<JsonObject>()["name"] = source;
+        responses[id] = std::unique_ptr<DynamicJsonDocument>(doc);
+      }
+
+      static void setAcceptsCommands(JsonObject data) {
+        data["acceptsCommands"] = true;
+      }
+      static bool getAcceptsCommands(const JsonObjectConst data) {
+        return data["acceptsCommands"].as<bool>();
       }
 
       constexpr static const char *Name = "ha-describe";
@@ -37,6 +47,25 @@ namespace esp32m {
       }
 
       constexpr static const char *Name = "ha-state";
+
+      std::unique_ptr<DynamicJsonDocument> response;
+    };
+    
+    class CommandRequest : public Request {
+     public:
+      CommandRequest(const char *target, JsonVariantConst data)
+          : Request(Name, 0, target, data, nullptr) {}
+
+      void respondImpl(const char *source, const JsonVariantConst data,
+                       bool isError) override {
+        if (data.isNull() || !data.size() || isError)
+          return;
+        auto doc = new DynamicJsonDocument(data.memoryUsage());
+        doc->set(data);
+        response = std::unique_ptr<DynamicJsonDocument>(doc);
+      }
+
+      constexpr static const char *Name = "ha-command";
 
       std::unique_ptr<DynamicJsonDocument> response;
     };

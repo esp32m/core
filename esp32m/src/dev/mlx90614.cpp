@@ -95,7 +95,7 @@ namespace esp32m {
   }  // namespace mlx90614
   namespace dev {
     Mlx90614::Mlx90614(I2C *i2c)
-        : Device(Flags::HasSensors), mlx90614::Core(i2c) {}
+        : mlx90614::Core(i2c) { Device::init(Flags::HasSensors); }
 
     DynamicJsonDocument *Mlx90614::getState(const JsonVariantConst args) {
       DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(6));
@@ -120,7 +120,7 @@ namespace esp32m {
       return true;
     }
     bool Mlx90614::initSensors() {
-      return init() == ESP_OK;
+      return Core::init() == ESP_OK;
     }
 
     Mlx90614 *useMlx90614(uint8_t addr) {

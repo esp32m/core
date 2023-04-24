@@ -10,7 +10,8 @@ namespace esp32m {
   namespace dev {
 
     FlowSensor::FlowSensor(const char *name, io::IPin *pin)
-        : Device(Flags::HasSensors), _name(name) {
+        : _name(name) {
+      Device::init(Flags::HasSensors);
       _pin = pin;
     }
 

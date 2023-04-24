@@ -302,8 +302,8 @@ namespace esp32m {
 
   namespace dev {
     Dsts::Dsts(gpio_num_t pin)
-        : Device(Flags::HasSensors), dsts::Core(new Owb(pin)){};
-    Dsts::Dsts(Owb *owb) : Device(Flags::HasSensors), dsts::Core(owb){};
+        : dsts::Core(new Owb(pin)){ Device::init(Flags::HasSensors); };
+    Dsts::Dsts(Owb *owb) : dsts::Core(owb){ Device::init(Flags::HasSensors); };
 
     bool Dsts::pollSensors() {
       StaticJsonDocument<JSON_OBJECT_SIZE(1)> props;
@@ -345,33 +345,34 @@ namespace esp32m {
       if (req.is(ha::DescribeRequest::Name)) {
         auto &pv = probes();
         for (auto &p : pv) {
-          DynamicJsonDocument *doc =
-              new DynamicJsonDocument(JSON_OBJECT_SIZE(1 + 4));
+          DynamicJsonDocument *doc = new DynamicJsonDocument(
+              JSON_OBJECT_SIZE(1 + 4) + JSON_STRING_SIZE(strlen(p.codestr())));
           auto root = doc->to<JsonObject>();
-          root["name"] = interactiveName();
+          root["id"] =
+              (char *)p.codestr();  // make copy in case this probe gets removed
           root["component"] = "sensor";
           auto config = root.createNestedObject("config");
           config["device_class"] = "temperature";
           config["unit_of_measurement"] = "°C";
-          req.respond(p.codestr(), doc->as<JsonVariantConst>());
+          req.respond(name(), doc->as<JsonVariantConst>());
           delete doc;
         }
         return true;
       } else if (req.is(ha::StateRequest::Name)) {
         auto id = req.data()["id"].as<const char *>();
+        // logI("state request %s", id);
         if (id) {
           auto &pv = probes();
-          for (auto &p : pv) {
-            // logI("state request %s, %s", p.codestr(), id);
+          for (auto &p : pv)
             if (!strcmp(p.codestr(), id)) {
               DynamicJsonDocument *doc =
                   new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
               auto root = doc->to<JsonObject>();
               root["state"] = p.temperature();
-              req.respond(p.codestr(), doc->as<JsonVariantConst>());
+              req.respond(name(), doc->as<JsonVariantConst>());
               delete doc;
+              return true;
             }
-          }
         }
       }
       return false;

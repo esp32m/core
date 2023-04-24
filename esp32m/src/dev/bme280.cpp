@@ -272,9 +272,9 @@ namespace esp32m {
 
   namespace dev {
     Bme280::Bme280(uint8_t address)
-        : Device(Flags::HasSensors), bme280::Core(new I2C(address)) {}
+        : bme280::Core(new I2C(address)) { Device::init(Flags::HasSensors); }
 
-    Bme280::Bme280(I2C *i2c) : Device(Flags::HasSensors), bme280::Core(i2c) {}
+    Bme280::Bme280(I2C *i2c) : bme280::Core(i2c) { Device::init(Flags::HasSensors); }
 
     bool Bme280::initSensors() {
       return sync(true) == ESP_OK;

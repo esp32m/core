@@ -14,25 +14,34 @@ namespace esp32m {
        public:
         std::string stateTopic;
         ~Dev() {
-          delete _sub;
+          if (_sub)
+            delete _sub;
         }
-        Dev(const char *name, std::string stateTopic, std::string commandTopic)
+        Dev(std::string name, std::string stateTopic, std::string commandTopic)
             : stateTopic(stateTopic), _name(name) {
-          auto &mqtt = net::Mqtt::instance();
-          _sub = mqtt.subscribe(commandTopic.c_str(),
-                                [this](std::string topic, std::string payload) {
-                                  command(payload);
-                                });
+          if (!commandTopic.empty()) {
+            auto &mqtt = net::Mqtt::instance();
+            _sub =
+                mqtt.subscribe(commandTopic.c_str(),
+                               [this](std::string topic, std::string payload) {
+                                 command(payload);
+                               });
+          }
         }
         const char *name() const {
-          return _name;
+          return _name.c_str();
         }
 
        private:
-        const char *_name;
-        net::mqtt::Subscription *_sub;
+        std::string _name;
+        net::mqtt::Subscription *_sub = nullptr;
         void command(std::string payload) {
-          logi("received MQTT command: %s", payload.c_str());
+          auto doc = new DynamicJsonDocument(JSON_STRING_SIZE(payload.size()));
+          auto root = doc->to<JsonVariant>();
+          root.set(payload);
+          CommandRequest ev(name(), root);
+          ev.publish();
+          delete doc;
         }
       };
     }  // namespace mqtt
@@ -58,6 +67,7 @@ namespace esp32m {
      private:
       TaskHandle_t _task = nullptr;
       unsigned long _describeRequested = 0, _stateRequested = 0;
+      std::string _dtp = "homeassistant";
       std::map<std::string, std::unique_ptr<mqtt::Dev> > _devices;
       Mqtt(){};
       void run() {
@@ -82,61 +92,86 @@ namespace esp32m {
         req.publish();
         auto &mqtt = net::Mqtt::instance();
         auto nodeid = App::instance().hostname();
-        for (auto const &[id, doc] : req.responses) {
-          JsonVariantConst data = doc->as<JsonVariantConst>();
-          auto source = data["name"].as<const char *>();
+        auto dtp = _dtp.c_str();
+        for (auto const &[key, doc] : req.responses) {
+          auto data = doc->as<JsonVariantConst>();
+          const char *id = data["id"] | key.c_str();
           auto component = data["component"].as<const char *>();
           if (!component || !strlen(component)) {
-            logW("device %s did not provide HA component name", id.c_str());
+            logW("device %s did not provide HA component name", id);
             continue;
           }
-          std::string configTopic = string_printf(
-              "homeassistant/%s/%s/%s/config", component, nodeid, id.c_str());
           auto configInput = data["config"].as<JsonObjectConst>();
           if (!configInput) {
-            logW("device %s did not provide HA config ", id.c_str());
+            logW("device %s did not provide HA config ", id);
             continue;
           }
-
-          std::string stateTopic = string_printf("homeassistant/%s/%s/%s/state",
-                                                 component, nodeid, id.c_str());
-          DynamicJsonDocument *configPayloadDoc = new DynamicJsonDocument(
-              configInput.memoryUsage() + JSON_OBJECT_SIZE(1) +
-              JSON_STRING_SIZE(stateTopic.size()));
+          auto configTopic =
+              string_printf("%s/%s/%s/%s/config", dtp, component, nodeid, id);
+          auto stateTopic =
+              string_printf("%s/%s/%s/%s/state", dtp, component, nodeid, id);
+          std::string commandTopic;
+          bool acceptsCommands = DescribeRequest::getAcceptsCommands(data);
+          if (acceptsCommands) {
+            commandTopic = string_printf("%s/%s/%s/%s/command", dtp, component,
+                                         nodeid, id);
+          }
+          bool addName = !configInput.containsKey("name");
+          auto configPayloadDoc = new DynamicJsonDocument(
+              configInput.memoryUsage() +
+              JSON_OBJECT_SIZE(1 + (acceptsCommands ? 1 : 0) +
+                               (addName ? 1 : 0)) +
+              JSON_STRING_SIZE(stateTopic.size()) +
+              JSON_STRING_SIZE(commandTopic.size()));
           configPayloadDoc->set(configInput);
           auto configPayloadRoot = configPayloadDoc->as<JsonObject>();
+          if (addName)
+            configPayloadRoot["name"] = id;
           configPayloadRoot["state_topic"] = stateTopic;
-
+          if (acceptsCommands)
+            configPayloadRoot["command_topic"] = commandTopic;
+          json::check(this, configPayloadDoc, "HA config payload");
           auto configPayload =
               json::allocSerialize(configPayloadDoc->as<JsonVariantConst>());
           delete configPayloadDoc;
 
-          // logI("config topic: %s, payload: %s", configTopic.c_str(),
-          // configPayload);
+          /*logI("config topic: %s, payload: %s, acceptsCommands=%d",
+               configTopic.c_str(), configPayload, acceptsCommands);*/
           mqtt.publish(configTopic.c_str(), configPayload);
           free(configPayload);
 
           auto it = _devices.find(id);
           if (it == _devices.end()) {
-            std::string commandTopic =
-                string_printf("homeassistant/%s/%s/%s/command", component,
-                              nodeid, id.c_str());
             _devices[id] = std::unique_ptr<mqtt::Dev>(
-                new mqtt::Dev(source, stateTopic, commandTopic));
+                new mqtt::Dev(data["name"], stateTopic, commandTopic));
           }
         }
       }
       void requestState() {
+        const size_t MaxStaticIdLength = 32;
         _stateRequested = millis();
-        StaticJsonDocument<JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(64)> reqDoc;
+        StaticJsonDocument<JSON_OBJECT_SIZE(1) +
+                           JSON_STRING_SIZE(MaxStaticIdLength)>
+            reqDoc;
         auto reqData = reqDoc.to<JsonObject>();
         auto &mqtt = net::Mqtt::instance();
         for (auto const &[id, dev] : _devices) {
-          reqData["id"] = id;
-          StateRequest req(dev->name(), reqData);
+          DynamicJsonDocument *dynReqDoc = nullptr;
+          JsonObject safeReqData = reqData;
+          if (id.size() > MaxStaticIdLength) {  // very unlikely, but still need
+                                                // to account for it
+            dynReqDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) +
+                                                JSON_STRING_SIZE(id.size()));
+            safeReqData = dynReqDoc->to<JsonObject>();
+          }
+          safeReqData["id"] = id;
+          StateRequest req(dev->name(), safeReqData);
           req.publish();
+          if (dynReqDoc)
+            delete dynReqDoc;
           if (!req.response) {
-            logW("no response to state request from device %s", id.c_str());
+            logW("no response to state request from device %s (%s)",
+                 dev->name(), id.c_str());
             continue;
           }
           JsonVariantConst data = req.response->as<JsonVariantConst>();
@@ -145,11 +180,19 @@ namespace esp32m {
             logW("device %s did not provide state", id.c_str());
             continue;
           }
-          auto statePayload = json::allocSerialize(state);
-          // logI("state topic: %s, payload: %s", dev->stateTopic.c_str(),
-          // statePayload);
+          char *statePayload;
+          bool jsonStatePayload = false;
+          if (state.is<const char *>()) {
+            statePayload = (char *)state.as<const char *>();
+          } else {
+            statePayload = json::allocSerialize(state);
+            jsonStatePayload = true;
+          }
+          /*logI("state topic: %s, payload: %s", dev->stateTopic.c_str(),
+               statePayload);*/
           mqtt.publish(dev->stateTopic.c_str(), statePayload);
-          free(statePayload);
+          if (jsonStatePayload)
+            free(statePayload);
         }
       }
     };

@@ -7,8 +7,8 @@ namespace esp32m {
     const char *DIR = "direction";
     const char *SPEED = "speed";
 
-    Sm538x::Sm538x(uint8_t addr) : Device(Flags::HasSensors) {
-      _addr = addr;
+    Sm538x::Sm538x(uint8_t addr) : _addr(addr) {
+      Device::init(Flags::HasSensors);
     }
 
     bool Sm538x::initSensors() {

@@ -176,9 +176,9 @@ namespace esp32m {
 
   namespace dev {
     Ina219::Ina219(uint8_t address)
-        : Device(Flags::HasSensors), ina219::Core(new I2C(address)) {}
+        : ina219::Core(new I2C(address)) { Device::init(Flags::HasSensors); }
 
-    Ina219::Ina219(I2C *i2c) : Device(Flags::HasSensors), ina219::Core(i2c) {}
+    Ina219::Ina219(I2C *i2c) : ina219::Core(i2c) { Device::init(Flags::HasSensors); }
 
     bool Ina219::initSensors() {
       return sync(true) == ESP_OK;

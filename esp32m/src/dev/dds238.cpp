@@ -5,8 +5,8 @@
 
 namespace esp32m {
   namespace dev {
-    Dds238::Dds238(uint8_t addr) : Device(Flags::HasSensors) {
-      _addr = addr;
+    Dds238::Dds238(uint8_t addr): _addr(addr) {
+      Device::init(Flags::HasSensors); 
     }
 
     float readFloat(uint16_t *ptr) {

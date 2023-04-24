@@ -9,7 +9,8 @@ namespace esp32m {
 
     MicrowaveMotionSensor::MicrowaveMotionSensor(const char *name,
                                                  io::IPin *pin)
-        : Device(Flags::HasSensors), _name(name) {
+        : _name(name) {
+      Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
       _sampler = new io::Sampler(10, 2);
       xTaskCreate([](void *self) { ((MicrowaveMotionSensor *)self)->run(); },

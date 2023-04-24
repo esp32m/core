@@ -6,7 +6,8 @@ namespace esp32m {
   namespace dev {
 
     Mq135::Mq135(io::IPin *pin, const char *name)
-        : Device(Flags::HasSensors), _name(name) {
+        : _name(name) {
+      Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
     }
 

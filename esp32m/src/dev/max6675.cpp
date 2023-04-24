@@ -6,9 +6,8 @@ namespace esp32m {
   namespace dev {
 
     Max6675::Max6675(const char *name, spi_host_device_t host)
-        : Device(Flags::HasSensors),
-          _name(name ? name : "MAX6675"),
-          _host(host) {}
+        : _name(name ? name : "MAX6675"),
+          _host(host) { Device::init(Flags::HasSensors); }
 
     bool Max6675::initSensors() {
       spi_bus_config_t buscfg = {};

@@ -7,8 +7,8 @@
 
 namespace esp32m {
   namespace dev {
-    Qdy30a::Qdy30a(uint8_t addr) : Device(Flags::HasSensors) {
-      _addr = addr;
+    Qdy30a::Qdy30a(uint8_t addr): _addr(addr) {
+      Device::init(Flags::HasSensors);
     }
 
     bool Qdy30a::initSensors() {

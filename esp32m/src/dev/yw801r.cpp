@@ -5,8 +5,8 @@
 
 namespace esp32m {
   namespace dev {
-    Yw801r::Yw801r(uint8_t addr) : Device(Flags::HasSensors) {
-      _addr = addr;
+    Yw801r::Yw801r(uint8_t addr) : _addr(addr) {
+      Device::init(Flags::HasSensors);
     }
 
     bool Yw801r::initSensors() {
