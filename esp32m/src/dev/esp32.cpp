@@ -40,7 +40,7 @@ namespace esp32m {
 #endif
     Esp32::Esp32() {
       esp_image_header_t fhdr;
-      if (esp_flash_read(nullptr, (uint32_t *)&fhdr, 0x1000,
+      if (esp_flash_read(nullptr, (uint32_t *)&fhdr, CONFIG_BOOTLOADER_OFFSET_IN_FLASH,
                          sizeof(esp_image_header_t)) == ESP_OK &&
           fhdr.magic == ESP_IMAGE_HEADER_MAGIC) {
         switch (fhdr.spi_size & 0x0F) {
