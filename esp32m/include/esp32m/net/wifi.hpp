@@ -59,6 +59,10 @@ namespace esp32m {
         Stopped,
       };
 
+      struct ApOptions {
+        uint32_t autoRestartSeconds;
+      };
+
       class Ap : public Iface {
        public:
         Ap(const Ap &) = delete;
@@ -67,6 +71,10 @@ namespace esp32m {
         int clientsCount();
         ApStatus status() const {
           return _status;
+        }
+        
+        ApOptions &options() {
+          return _options;
         }
 
        protected:
@@ -77,6 +85,7 @@ namespace esp32m {
         ApStatus _status = ApStatus::Initial;
         CaptiveDns *_captivePortal = nullptr;
         unsigned long _apTimer = 0;
+        ApOptions _options = {};
         void setStatus(ApStatus status);
         void getInfo(JsonObject);
         void stateMachine();

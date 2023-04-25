@@ -123,7 +123,7 @@ namespace esp32m {
               // only set primary DNS for DhcpServer
               if (_role == Role::DhcpServer && kv.first > ESP_NETIF_DNS_MAIN) 
                 break;
-              logI("set DNS: %d, %x", kv.first, kv.second.ip.u_addr.ip4.addr);
+              // logI("set DNS: %d, %x", kv.first, kv.second.ip.u_addr.ip4.addr);
               errl.check(esp_netif_set_dns_info(_handle, kv.first, &kv.second));
             }
           if (_role == Role::DhcpServer) {

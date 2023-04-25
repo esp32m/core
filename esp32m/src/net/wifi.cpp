@@ -275,12 +275,15 @@ namespace esp32m {
               if (_wifi->isConnected()) {
                 logW("disabling AP because STA is connected");
                 enable(false);
-              } else {
-                logW("no clients connected within 60s, restarting...");
-                App::restart();
               }
               delay(100);  // allow some time for the events to fire
               break;
+            }
+            if (_options.autoRestartSeconds > 0 &&
+                (curtime - _apTimer > _options.autoRestartSeconds * 1000) &&
+                !_wifi->isConnected()) {
+              logW("no clients connected within 60s, restarting...");
+              App::restart();
             }
             if (!_captivePortal)
               _captivePortal = new CaptiveDns(_ip.ip);

@@ -178,6 +178,7 @@ namespace esp32m {
   }
 
   void App::restart() {
+    delay(100); // this won't hurt, especually for buffered logs to catch up
     EventDone::publish(DoneReason::Restart);
     esp_restart();
   }
