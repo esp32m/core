@@ -1,7 +1,6 @@
 #include <driver/gpio.h>
 
 #include "esp32m/app.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/dev/relay.hpp"
 #include "esp32m/ha/ha.hpp"
@@ -64,7 +63,7 @@ namespace esp32m {
       logI("state changed: %s -> %s", toString(_state), toString(state));
       _state = state;
       if (isPersistent())
-        EventConfigChanged::publish(this);
+        config::Changed::publish(this);
     }
 
     esp_err_t Relay::turn(bool on) {

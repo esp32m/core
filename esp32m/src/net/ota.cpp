@@ -5,7 +5,6 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/events.hpp"
 #include "esp32m/events/broadcast.hpp"
 #include "esp32m/json.hpp"
@@ -74,7 +73,7 @@ namespace esp32m {
         return true;
       if (req.is("update")) {
         if (setConfig(req.data(), nullptr))
-          EventConfigChanged::publish(this);
+          config::Changed::publish(this);
         _url = _defaultUrl;
         xTaskNotifyGive(_task);
         req.respond();

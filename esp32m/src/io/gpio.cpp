@@ -100,6 +100,8 @@ namespace esp32m {
         return (_flags & ADCFlags::Valid) != 0;
       }
       esp_err_t read(int &value, uint32_t *mv) override {
+        if (!valid())
+          return ESP_FAIL;
         adc_oneshot_unit_handle_t handle;
         ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
         /*
@@ -269,7 +271,7 @@ namespace esp32m {
       adc_unit_t _unit;
       adc_channel_t _channel;
       adc_cali_handle_t _calihandle = nullptr;
-      adc_bitwidth_t _width = ADC_BITWIDTH_12;
+      adc_bitwidth_t _width = ADC_BITWIDTH_DEFAULT;
       adc_atten_t _atten = ADC_ATTEN_DB_11;
       ADCFlags _flags = ADCFlags::None;
       esp_err_t init() {
@@ -277,14 +279,8 @@ namespace esp32m {
           ESP_ERROR_CHECK_WITHOUT_ABORT(adc_cali_check_scheme(&calischeme));
         ESP_CHECK_RETURN(
             adc_oneshot_io_to_channel(_pin->num(), &_unit, &_channel));
-
-        /*if (_c1 >= 0) {
-          ESP_CHECK_RETURN(adc1_config_width(_width));
-          ESP_CHECK_RETURN(
-              adc1_config_channel_atten((adc1_channel_t)_c1, _atten));
-        } else
-          ESP_CHECK_RETURN(
-              adc2_config_channel_atten((adc2_channel_t)_c2, _atten));*/
+        logd("initialized oneshot ADC on gpio %d, ADC%d, channel %d",
+             _pin->num(), _unit + 1, _channel);
         return update();
       }
       esp_err_t update() {
@@ -542,26 +538,23 @@ namespace esp32m {
     Pin::Pin(int id) : IPin(id) {
       gpio_num_t num = this->num();
       snprintf(_name, sizeof(_name), "IO%02u", num);
-      ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num));
       _features = Features::None;
-      if (num < GPIO_NUM_6 || num > GPIO_NUM_11) {
-        if ((num >= GPIO_NUM_2 && num <= GPIO_NUM_5) || num >= GPIO_NUM_12)
-          _features |= Features::DigitalInput | Features::PulseCounter;
-        if ((num != GPIO_NUM_3 && num <= GPIO_NUM_5) ||
-            (num >= GPIO_NUM_12 && num <= GPIO_NUM_33)) {
-          _features |= Features::DigitalOutput | Features::PullUp;
-          if (num != GPIO_NUM_3)
-            _features |= Features::PullDown;
-        }
+      if (!GPIO_IS_VALID_GPIO(num))
+        return;
+      if (GPIO_IS_VALID_DIGITAL_IO_PAD(num))
+        _features |= Features::DigitalInput | Features::PulseCounter;
+      if (GPIO_IS_VALID_OUTPUT_GPIO(num))
+        _features |=
+            Features::DigitalOutput | Features::PullUp | Features::PullDown;
 #if SOC_DAC_SUPPORTED
-        if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
-          _features |= Features::DAC;
+      if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
+        _features |= Features::DAC;
 #endif
-        adc_unit_t unit;
-        adc_channel_t channel;
-        if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
-          _features |= Features::ADC;
-      }
+      adc_unit_t unit;
+      adc_channel_t channel;
+      if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
+        _features |= Features::ADC;
+      ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num));
     };
     gpio_num_t Pin::num() {
       return (gpio_num_t)(_id - io::Gpio::instance().pinBase());
@@ -588,7 +581,8 @@ namespace esp32m {
       arg->_stamp = stamp;
       BaseType_t high_task_wakeup = pdFALSE;
       xQueueSendFromISR(arg->_queue, &diff, &high_task_wakeup);
-      if (high_task_wakeup != pdFALSE) // TODO: should we do this? many examples seem to work without it
+      if (high_task_wakeup != pdFALSE)  // TODO: should we do this? many
+                                        // examples seem to work without it
         portYIELD_FROM_ISR();
     }
 

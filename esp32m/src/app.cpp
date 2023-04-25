@@ -11,7 +11,6 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/debug/button.hpp"
 #include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
@@ -25,15 +24,15 @@ namespace esp32m {
   const char *EventPropChanged::NAME = "prop-changed";
   App *_appInstance = nullptr;
 
-  const char *Stateful::KeyStateSet = "state-set";
-  const char *Stateful::KeyStateGet = "state-get";
+  const char *AppObject::KeyStateSet = "state-set";
+  const char *AppObject::KeyStateGet = "state-get";
 
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
     EventManager::instance().publishBackwards(ev);
   }
 
-  bool Stateful::handleStateRequest(Request &req) {
+  bool AppObject::handleStateRequest(Request &req) {
     const char *name = req.name();
     if (!strcmp(name, KeyStateGet)) {
       DynamicJsonDocument *state = getState(req.data());
@@ -210,8 +209,8 @@ namespace esp32m {
   }
 
   void App::handleEvent(Event &ev) {
-    if (EventConfigChanged::is(ev)) {
-      if (((EventConfigChanged *)&ev)->saveNow()) {
+    if (config::Changed::is(ev)) {
+      if (((config::Changed *)&ev)->saveNow()) {
         _config->save();
         _configDirty = 0;
       } else

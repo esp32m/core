@@ -6,9 +6,11 @@
 
 #include <driver/i2c.h>
 #include <hal/gpio_types.h>
+#include <sdkconfig.h>
 
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
 
@@ -21,8 +23,8 @@ namespace esp32m {
 
     class MutexRef {
      public:
-      MutexRef(uint8_t addr, i2c_port_t port = I2C_NUM_0, int sda = I2C_MASTER_SDA,
-               int scl = I2C_MASTER_SCL);
+      MutexRef(uint8_t addr, i2c_port_t port = I2C_NUM_0,
+               int sda = I2C_MASTER_SDA, int scl = I2C_MASTER_SCL);
       ~MutexRef();
       std::mutex &mutex();
 
@@ -32,11 +34,15 @@ namespace esp32m {
 
   }  // namespace i2c
 
-  class I2C {
+  class I2C : public log::Loggable {
    public:
-    I2C(uint8_t addr, i2c_port_t port = I2C_NUM_0, gpio_num_t sda = I2C_MASTER_SDA,
-        gpio_num_t scl = I2C_MASTER_SCL, uint32_t clk_speed = 100000);
+    I2C(uint8_t addr, i2c_port_t port = I2C_NUM_0,
+        gpio_num_t sda = I2C_MASTER_SDA, gpio_num_t scl = I2C_MASTER_SCL,
+        uint32_t clk_speed = 100000);
     I2C(const I2C &) = delete;
+    const char *name() const override {
+      return _name.c_str();
+    }
     std::mutex &mutex() const {
       return _mutex->mutex();
     }
@@ -116,6 +122,7 @@ namespace esp32m {
     }
 
    private:
+    std::string _name;
     uint8_t _addr = 0;
     i2c_port_t _port;
     i2c_config_t _cfg;
@@ -126,6 +133,8 @@ namespace esp32m {
     Endian _endianness = Endian::Big;
     std::unique_ptr<i2c::MutexRef> _mutex;
     esp_err_t sync();
+    void logIO(bool write, esp_err_t res, const void *out_data,
+               size_t out_size, const void *in_data, size_t in_size);
   };
 
 }  // namespace esp32m

@@ -1,5 +1,4 @@
 #include "esp32m/dev/opentherm.hpp"
-#include "esp32m/config/changed.hpp"
 
 #include <esp_task_wdt.h>
 #include <cinttypes>
@@ -1253,7 +1252,7 @@ namespace esp32m {
       _pendingResponse->publish();
       delete _pendingResponse;
       _pendingResponse = nullptr;
-      EventConfigChanged::publish(this, true);
+      config::Changed::publish(this, true);
     }
 
     bool OpenthermMaster::pollSensors() {

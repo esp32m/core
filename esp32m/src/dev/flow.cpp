@@ -1,6 +1,5 @@
 #include "esp32m/dev/flow.hpp"
 #include "esp32m/base.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/defs.hpp"
 
 #include <math.h>
@@ -45,7 +44,7 @@ namespace esp32m {
         if (ms - _lastDump > 10000 &&
             abs(_consumption - _dumpedConsumption) >
                 std::numeric_limits<float>::epsilon()) {
-          EventConfigChanged::publish(this);
+          config::Changed::publish(this);
           _dumpedConsumption = _consumption;
           _lastDump = ms;
         }

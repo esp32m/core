@@ -3,7 +3,6 @@
 #include "esp32m/net/ota.hpp"
 
 #include <esp_rom_uart.h>
-#include <rom/ets_sys.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -11,6 +10,7 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <malloc.h>
+#include <rom/ets_sys.h>
 #include <string.h>
 #include <time.h>
 
@@ -27,6 +27,25 @@ namespace esp32m {
     inline char hdigit(int n) {
       return "0123456789abcdef"[n & 0xf];
     };
+
+    size_t bytes2hex(char *dest, size_t destSize, const uint8_t *src,
+                     size_t srcSize) {
+      size_t si, di = 0;
+      for (si = 0; si < srcSize; si++) {
+        if (destSize - di < 2)
+          break;
+        dest[di++] = hdigit(src[si] >> 4);
+        dest[di++] = hdigit(src[si]);
+        if (si == srcSize - 1)
+          break;
+        if (destSize - di < 1)
+          break;
+        dest[di++] = ' ';
+      }
+      if (destSize - di > 0)
+        dest[di++] = 0;
+      return di;
+    }
 
     const char *dumpline(char *dest, int bpl, const char *src,
                          const char *srcend) {

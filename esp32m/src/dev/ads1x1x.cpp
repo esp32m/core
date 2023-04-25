@@ -31,7 +31,7 @@ namespace esp32m {
     static const int ConfigModeOsSingle = 0x8000;
 
     Core::Core(I2C *i2c, Variant v) : _i2c(i2c), _variant(v) {
-      _i2c->setEndianness(Endian::Little);
+      _i2c->setEndianness(Endian::Big);
       _gain = Gain::TwoThirds;
       if (_variant == Variant::Ads101x) {
         _rate = Rate::ADS1015_1600SPS;
@@ -89,8 +89,8 @@ namespace esp32m {
       ESP_CHECK_RETURN(_i2c->write(Register::Config, config));
 
       // Set ALERT/RDY to RDY mode.
-      ESP_CHECK_RETURN(_i2c->write(Register::ThreshH, 0x8000));
-      ESP_CHECK_RETURN(_i2c->write(Register::ThreshL, 0x8000));
+      ESP_CHECK_RETURN(_i2c->write(Register::ThreshH, (uint16_t)0x8000));
+      ESP_CHECK_RETURN(_i2c->write(Register::ThreshL, (uint16_t)0x8000));
       return ESP_OK;
     }
     esp_err_t Core::readMux(Mux mux, int16_t &value, bool continuous) {

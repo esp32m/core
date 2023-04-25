@@ -1,7 +1,6 @@
 #include <driver/gpio.h>
 
 #include "esp32m/app.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/dev/hbridge.hpp"
 
@@ -40,7 +39,7 @@ namespace esp32m {
       ESP_CHECK_RETURN(_pinRev->digitalWrite(r));
       ESP_CHECK_RETURN(refresh());
       if (_persistent)
-        EventConfigChanged::publish(this);
+        config::Changed::publish(this);
       return ESP_OK;
     }
 

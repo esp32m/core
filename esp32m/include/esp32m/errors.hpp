@@ -1,8 +1,8 @@
 #pragma once
 
 #include "esp32m/base.hpp"
-#include "esp32m/logging.hpp"
 #include "esp32m/json.hpp"
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
 
@@ -73,10 +73,12 @@ namespace esp32m {
       for (auto &item : other._list) _list.push_back(item);
     }
     void dump() {
+      if (empty())
+        return;
       auto doc = toJson(nullptr);
       auto str = json::allocSerialize(doc->as<JsonVariantConst>());
       delete doc;
-      logi(str);
+      loge(str);
       free(str);
     }
 
@@ -84,4 +86,4 @@ namespace esp32m {
     std::vector<ErrorItem> _list;
   };
 
-}
+}  // namespace esp32m

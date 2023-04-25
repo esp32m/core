@@ -1,6 +1,5 @@
 #include "esp32m/config/configurable.hpp"
 #include "esp32m/config.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/events/broadcast.hpp"
 #include "esp32m/json.hpp"
 
@@ -31,9 +30,8 @@ namespace esp32m {
       RequestContext ctx(req, data);
       DynamicJsonDocument *result = nullptr;
       if (setConfig(data, &result)) {
-        EventConfigChanged::publish(this);
+        config::Changed::publish(this);
         Broadcast::publish(cname, "config-changed");
-        _configured = true;
       }
       if (result) {
         json::check(this, result, "setConfig()");

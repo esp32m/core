@@ -4,7 +4,6 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/events.hpp"
 #include "esp32m/events/request.hpp"
 #include "esp32m/events/response.hpp"
@@ -92,7 +91,7 @@ namespace esp32m {
           else {
             setConfig(data, nullptr);
             _pendingResponse = req.makeResponse();
-            EventConfigChanged::publish(this, true);
+            config::Changed::publish(this, true);
             xTaskNotifyGive(_task);
           }
           return true;

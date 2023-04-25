@@ -462,11 +462,13 @@ namespace esp32m {
     }
 
     void Mqtt::disconnect() {
-      if (_status == Status::Disconnecting || _status == Status::Initial)
+      if (_status == Status::Disconnecting || _status == Status::Initial ||
+          _status == Status::Disconnected)
         return;
       setState(Status::Disconnecting);
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_stop(_handle));
-      setState(Status::Disconnected); // we only get MQTT_EVENT_DISCONNECTED on network error or server disconnect
+      setState(Status::Disconnected);  // we only get MQTT_EVENT_DISCONNECTED on
+                                       // network error or server disconnect
     }
 
     Mqtt &Mqtt::instance() {

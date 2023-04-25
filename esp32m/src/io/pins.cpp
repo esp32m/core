@@ -89,6 +89,9 @@ namespace esp32m {
         case ADC_BITWIDTH_12:
           value = (float)raw / (1 << 12);
           break;
+        case ADC_BITWIDTH_13:
+          value = (float)raw / (1 << 13);
+          break;
         default:
           return ESP_FAIL;
       }

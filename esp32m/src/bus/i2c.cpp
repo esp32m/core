@@ -62,6 +62,7 @@ namespace esp32m {
     _addr = addr;
     _mutex.reset(
         new i2c::MutexRef(addr, _port, _cfg.sda_io_num, _cfg.scl_io_num));
+    _name = string_printf("I2C%d[0x%02" PRIx8 "]", _port, _addr);
   }
 
   inline static bool cfg_equal(const i2c_config_t &a, const i2c_config_t &b) {
@@ -86,6 +87,21 @@ namespace esp32m {
     return ESP_OK;
   }
 
+#ifdef CONFIG_ESP32M_I2C_LOG_IO
+  void I2C::logIO(bool write, esp_err_t res, const void *out_data,
+                  size_t out_size, const void *io_data, size_t io_size) {
+    auto hboSize = out_size * 3 + 1;
+    char hbo[hboSize];
+    auto hbiSize = io_size * 3 + 1;
+    char hbi[hbiSize];
+    log::bytes2hex(hbo, hboSize, (const uint8_t *)out_data, out_size);
+    log::bytes2hex(hbi, hbiSize, (const uint8_t *)io_data, io_size);
+    const char *fmt =
+        write ? "write to %s: %s (err=%d)" : "read from %s: %s (err=%d)";
+    logD(fmt, hbo, hbi, res);
+  }
+#endif
+
   esp_err_t I2C::read(const void *out_data, size_t out_size, void *in_data,
                       size_t in_size) {
     if (!in_data || !in_size)
@@ -108,6 +124,9 @@ namespace esp32m {
       res = ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(
           _port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
+#ifdef CONFIG_ESP32M_I2C_LOG_IO
+      logIO(false, res, out_data, out_size, in_data, in_size);
+#endif
     }
     _err = res;
     if (res != ESP_OK)
@@ -133,6 +152,9 @@ namespace esp32m {
       res = ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_cmd_begin(
           _port, cmd, i2c::DevTimeout / portTICK_PERIOD_MS));
       i2c_cmd_link_delete(cmd);
+#ifdef CONFIG_ESP32M_I2C_LOG_IO
+      logIO(true, res, out_reg, out_reg_size, out_data, out_size);
+#endif
     }
     _err = res;
     if (res != ESP_OK)

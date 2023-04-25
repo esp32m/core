@@ -85,9 +85,12 @@ namespace esp32m {
     friend class App;
   };
 
-  class Stateful : public virtual log::Loggable {
+  class AppObject : public virtual log::Loggable, public virtual Configurable {
    public:
-    Stateful(const Stateful &) = delete;
+    AppObject(const AppObject &) = delete;
+    virtual const char *interactiveName() const {
+      return name();
+    };
     virtual const char *stateName() const {
       return name();
     }
@@ -95,31 +98,18 @@ namespace esp32m {
    protected:
     static const char *KeyStateGet;
     static const char *KeyStateSet;
-    Stateful() {}
+    AppObject();
+    virtual bool handleRequest(Request &req);
+    virtual void handleEvent(Event &ev){};
+    virtual const JsonVariantConst descriptor() const {
+      return json::emptyArray();
+    };
     virtual bool handleStateRequest(Request &req);
     virtual void setState(const JsonVariantConst cfg,
                           DynamicJsonDocument **result) {}
     virtual DynamicJsonDocument *getState(const JsonVariantConst args) {
       return nullptr;
     }
-  };
-
-  class AppObject : public virtual log::Loggable,
-                    public virtual Configurable,
-                    public virtual Stateful {
-   public:
-    AppObject(const AppObject &) = delete;
-    virtual const char *interactiveName() const {
-      return name();
-    };
-
-   protected:
-    AppObject();
-    virtual bool handleRequest(Request &req);
-    virtual void handleEvent(Event &ev) { };
-    virtual const JsonVariantConst descriptor() const {
-      return json::emptyArray();
-    };
   };
 
   class App : public AppObject {

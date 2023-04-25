@@ -20,7 +20,7 @@ namespace esp32m {
       class Iface : public Interface {
        protected:
         net::Wifi *_wifi = nullptr;
-        void init(net::Wifi *wifi, const char *key) {
+        virtual void init(net::Wifi *wifi, const char *key) {
           _wifi = wifi;
           Interface::init(key);
         }
@@ -68,6 +68,9 @@ namespace esp32m {
         ApStatus status() const {
           return _status;
         }
+
+       protected:
+        void init(net::Wifi *wifi, const char *key) override;
 
        private:
         Ap();

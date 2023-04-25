@@ -8,8 +8,8 @@
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
 
-//#include <dhcpserver/dhcpserver.h>
-//#include <dhcpserver/dhcpserver_options.h>
+// #include <dhcpserver/dhcpserver.h>
+// #include <dhcpserver/dhcpserver_options.h>
 #include <esp_mac.h>
 #include <esp_mbo.h>
 #include <esp_netif.h>
@@ -128,11 +128,23 @@ namespace esp32m {
             static_cast<uint32_t>(_ip.ip.addr) + (1 << 24);
         _dhcpsLease.end_ip.addr =
             static_cast<uint32_t>(_ip.ip.addr) + (11 << 24);
-        esp_netif_dns_info_t dns;
-        dns.ip.u_addr.ip4.addr = _ip.ip.addr;
-        dns.ip.type = IPADDR_TYPE_V4;
-        _dns[ESP_NETIF_DNS_MAIN] = dns;
+        /*        esp_netif_dns_info_t dns;
+                dns.ip.u_addr.ip4.addr = _ip.ip.addr;
+                dns.ip.type = IPADDR_TYPE_V4;
+                _dns[ESP_NETIF_DNS_MAIN] = dns;*/
       };
+
+      void Ap::init(net::Wifi *wifi, const char *key) {
+        auto handle = esp_netif_get_handle_from_ifkey(key);
+        if (handle) {
+          // we can't just set _dns because it will be overwritten on synchandle
+          esp_netif_dns_info_t dns;
+          dns.ip.u_addr.ip4.addr = _ip.ip.addr;
+          dns.ip.type = IPADDR_TYPE_V4;
+          esp_netif_set_dns_info(handle, ESP_NETIF_DNS_MAIN, &dns);
+        }
+        Iface::init(wifi, key);
+      }
 
       esp_err_t Ap::enable(bool enable) {
         if (_wifi->_managedExternally)
@@ -156,6 +168,7 @@ namespace esp32m {
         stopDhcp();
         if (enable) {
           apply(errl);
+          errl.dump();
 
           wifi_config_t current_conf;
           ESP_CHECK_RETURN(esp_wifi_get_config(WIFI_IF_AP, &current_conf));
@@ -174,7 +187,7 @@ namespace esp32m {
             ESP_ERROR_CHECK_WITHOUT_ABORT(
                 esp_wifi_set_config(WIFI_IF_AP, &conf));
           }
-        } else
+        } else if (_status != ApStatus::Initial)
           setStatus(ApStatus::Stopped);
         return ESP_OK;
       }
@@ -458,7 +471,7 @@ namespace esp32m {
               break;
             }
         if (!error)
-          App::instance().config()->save();
+          config::Changed::publish(this);
         req.respond(error);
         return true;
       }
@@ -669,9 +682,11 @@ namespace esp32m {
       if (!_managedExternally)
         ESP_CHECK_RETURN(esp_wifi_start());
       _errReason = (wifi_err_reason_t)0;
+      /*
       WifiEvent::publish(WIFI_EVENT_WIFI_READY,
                          nullptr);  // this event is never sent by esp-idf, so
                                     // we do it in case someone wants it
+      */
 
       _sta.init(this, esp_netif_get_ifkey(ifsta));
 
@@ -719,7 +734,6 @@ namespace esp32m {
       DoneReason reason;
       bool wakeup = false;
       if (EventInit::is(ev, 0)) {
-        init();
         xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 5120,
                     this, tskIDLE_PRIORITY + 1, &_task);
       } else if (EventDone::is(ev, &reason)) {
@@ -1009,7 +1023,7 @@ namespace esp32m {
         else
           ap->succeeded();
         addOrUpdateAp(ap->clone());
-        App::instance().config()->save();
+        config::Changed::publish(this);
       }
       return ok;
     }
@@ -1136,6 +1150,7 @@ namespace esp32m {
 
     void Wifi::run() {
       esp_task_wdt_add(NULL);
+      init();
       for (;;) {
         esp_task_wdt_reset();
         if (!_managedExternally) {
@@ -1220,7 +1235,6 @@ namespace esp32m {
           if (doc && scanResult &&
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_wifi_scan_get_ap_records(&sc, scanResult)) == ESP_OK) {
-            // char sbssid[18] = {0};
             for (uint16_t i = 0; i < sc; i++) {
               wifi_ap_record_t *r = scanResult + i;
               auto entry = arr.createNestedArray();
@@ -1230,8 +1244,6 @@ namespace esp32m {
                 entry.add(r->rssi);
                 entry.add(r->primary);
                 json::macTo(entry, r->bssid);
-                /*if (formatBssid(r->bssid, sbssid))
-                  entry.add(sbssid);*/
               }
             }
           }
@@ -1249,6 +1261,10 @@ namespace esp32m {
       if (!_scanStarted || (curtime - _scanStarted > 15000)) {
         _scanStarted = curtime;
         esp_wifi_scan_stop();
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/wifi.html
+        // Currently, the esp_wifi_scan_start() API is supported only in station
+        // or station/AP mode.
+        _sta.enable(true);
         if (ESP_ERROR_CHECK_WITHOUT_ABORT(
                 esp_wifi_scan_start(&_scanConfig, false)) == ESP_OK)
           logI("scan started");

@@ -4,8 +4,8 @@
 
 #include <esp_event.h>
 #include <esp_mac.h>
-#include <lwip/sockets.h>
 #include <lwip/dns.h>
+#include <lwip/sockets.h>
 
 namespace esp32m {
   namespace json {
@@ -319,6 +319,9 @@ namespace esp32m {
         cif = esp_netif_next(cif);
         if (!cif)
           break;
+        const char *key = esp_netif_get_ifkey(cif);
+        if (key && !strcmp("WIFI_AP_DEF", key)) 
+          continue;
         if (esp_netif_is_netif_up(cif))
           return true;
       }

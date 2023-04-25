@@ -194,7 +194,7 @@ namespace esp32m {
        * @param buf data pointer
        * @param buflen length of the data
        */
-      void dump(Level level, const void* buf, size_t buflen);
+      void dump(Level level, const void *buf, size_t buflen);
 
      private:
       const Loggable &_loggable;
@@ -366,5 +366,10 @@ namespace esp32m {
      */
     void hookUartLogger(int bufsize = 128);
 
+    /**
+     * @brief Unitlty method to format byte buffer as a hex sequence.
+     */
+    size_t bytes2hex(char *dest, size_t destSize, const uint8_t *src,
+                     size_t srcSize);
   }  // namespace log
 }  // namespace esp32m

@@ -1,5 +1,4 @@
 #include "esp32m/config.hpp"
-#include "esp32m/config/changed.hpp"
 #include "esp32m/config/configurable.hpp"
 #include "esp32m/events/request.hpp"
 #include "esp32m/json.hpp"
@@ -7,7 +6,6 @@
 namespace esp32m {
   const char *Config::KeyConfigGet = "config-get";
   const char *Config::KeyConfigSet = "config-set";
-  const char *EventConfigChanged::NAME = "config-changed";
 
   class ConfigRequest : public Request {
    public:

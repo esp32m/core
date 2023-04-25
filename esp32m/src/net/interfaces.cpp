@@ -118,13 +118,14 @@ namespace esp32m {
           }
           break;
         case ConfigItem::Dns:
-          if (_role != Role::DhcpClient) {
+          if (_role != Role::DhcpClient)
             for (auto &kv : _dns) {
-              // logi("%s set DNS: %d, %d", _key.c_str(), kv.first,
-              // kv.second.ip.u_addr.ip4.addr);
+              // only set primary DNS for DhcpServer
+              if (_role == Role::DhcpServer && kv.first > ESP_NETIF_DNS_MAIN) 
+                break;
+              logI("set DNS: %d, %x", kv.first, kv.second.ip.u_addr.ip4.addr);
               errl.check(esp_netif_set_dns_info(_handle, kv.first, &kv.second));
             }
-          }
           if (_role == Role::DhcpServer) {
             dhcps_offer_t offer = OFFER_DNS;
             errl.check(esp_netif_dhcps_option(_handle, ESP_NETIF_OP_SET,

@@ -88,7 +88,10 @@ namespace esp32m {
     size_t mu = json::measure(config.as<JsonVariantConst>());
     size_t ss;
     char *buf = json::allocSerialize(config, &ss);
-
+    if (!buf) {
+      logW("could not serialize config, low memory?");
+      return;
+    }
     /*size_t bufsize = measureJson(config) + 1;
     char *buf = (char *)malloc(bufsize);
     size_t ss = serializeJson(config, buf, bufsize);*/

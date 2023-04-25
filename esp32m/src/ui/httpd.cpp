@@ -128,7 +128,7 @@ namespace esp32m {
             ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
             logI("redirecting to captive portal %s", location);
             return ESP_OK;
-          }
+          } else logW("got %s request while AP is not running", req->uri);
         }
         found = def;
       }
