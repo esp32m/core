@@ -286,8 +286,7 @@ namespace esp32m {
 
       auto doc = new DynamicJsonDocument(size);
       auto cr = doc->to<JsonObject>();
-      if (_enabled)
-        cr["enabled"] = _enabled;
+      cr["enabled"] = _enabled;
       json::to(cr, "uri", _uri);
       json::to(cr, "username", _username);
       json::to(cr, "password", _password);

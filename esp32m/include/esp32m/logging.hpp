@@ -19,7 +19,7 @@
 #define LOGE(loggable, format, ...) \
   loggable->logger().logf(log::Level::Error, format, ##__VA_ARGS__)
 #define LOGW(loggable, format, ...) \
-  loggablehis->logger().logf(log::Level::Warning, format, ##__VA_ARGS__)
+  loggable->logger().logf(log::Level::Warning, format, ##__VA_ARGS__)
 #define LOGI(loggable, format, ...) \
   loggable->logger().logf(log::Level::Info, format, ##__VA_ARGS__)
 #define LOGD(loggable, format, ...) \
@@ -62,6 +62,7 @@ namespace esp32m {
       friend class Logger;
 
      private:
+      // save some space & time by instantiating logger only when it is needed
       std::unique_ptr<Logger> _logger;
     };
 

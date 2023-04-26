@@ -95,12 +95,16 @@ namespace esp32m {
     }
 
     Logger &Loggable::logger() {
+      if (!_logger) {
+        xSemaphoreTake(_loggingLock, portMAX_DELAY);
+        _logger = std::unique_ptr<Logger>(new Logger(*this));
+        xSemaphoreGive(_loggingLock);
+      }
       if (_logger)
         return *_logger;
-      xSemaphoreTake(_loggingLock, portMAX_DELAY);
-      _logger = std::unique_ptr<Logger>(new Logger(*this));
-      xSemaphoreGive(_loggingLock);
-      return *_logger;
+      // We get here if logger instance could not be created, most probably due
+      // to low memory. Return system loger for this case
+      return system();
     }
 
     class BufferedAppender : public LogAppender {
@@ -477,16 +481,25 @@ namespace esp32m {
       if (msg) {
         auto len = strlen(msg);
         char lc = '\0';
-        int inc = 0;
+        if (len > 3 && msg[0] == 0x1b && msg[1] == '[') {
+          // color sequence is "\u00x1b[X;XXm", so skip past 'm'
+          int p = 3;
+          while (p < len && p < 10)
+            if (msg[p++] == 'm') {
+              msg += p;
+              len -= p;
+              break;
+            }
+        }
         if (len > 4 && msg[0] == '[' && msg[2] == ']') {
           lc = msg[1];
-          inc = 3;
+          msg += 3;
         } else if (len > 2 && msg[1] == ' ') {
           lc = msg[0];
-          inc = 2;
+          msg += 2;
         }
         if (charToLevel(lc, l))
-          (*mptr) += inc;
+          *mptr = msg;
       }
       if (!l)
         l = Level::Debug;

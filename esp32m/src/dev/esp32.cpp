@@ -40,24 +40,35 @@ namespace esp32m {
 #endif
     Esp32::Esp32() {
       esp_image_header_t fhdr;
-      if (esp_flash_read(nullptr, (uint32_t *)&fhdr, CONFIG_BOOTLOADER_OFFSET_IN_FLASH,
-                         sizeof(esp_image_header_t)) == ESP_OK &&
-          fhdr.magic == ESP_IMAGE_HEADER_MAGIC) {
+      auto res = ESP_ERROR_CHECK_WITHOUT_ABORT(esp_flash_read(
+          nullptr, (uint32_t *)&fhdr, CONFIG_BOOTLOADER_OFFSET_IN_FLASH,
+          sizeof(esp_image_header_t)));
+      // logger.dump(log::Level::Debug, &fhdr, sizeof(esp_image_header_t));
+      if (res == ESP_OK && fhdr.magic == ESP_IMAGE_HEADER_MAGIC) {
         switch (fhdr.spi_size & 0x0F) {
-          case 0x0:  // 8 MBit (1MB)
+          case ESP_IMAGE_FLASH_SIZE_1MB:  // 8 MBit (1MB)
             _flashChipSize = 8;
             break;
-          case 0x1:  // 16 MBit (2MB)
+          case ESP_IMAGE_FLASH_SIZE_2MB:  // 16 MBit (2MB)
             _flashChipSize = 16;
             break;
-          case 0x2:  // 32 MBit (4MB)
+          case ESP_IMAGE_FLASH_SIZE_4MB:  // 32 MBit (4MB)
             _flashChipSize = 32;
             break;
-          case 0x3:  // 64 MBit (8MB)
+          case ESP_IMAGE_FLASH_SIZE_8MB:  // 64 MBit (8MB)
             _flashChipSize = 64;
             break;
-          case 0x4:  // 128 MBit (16MB)
+          case ESP_IMAGE_FLASH_SIZE_16MB:  // 128 MBit (16MB)
             _flashChipSize = 128;
+            break;
+          case ESP_IMAGE_FLASH_SIZE_32MB:
+            _flashChipSize = 256;
+            break;
+          case ESP_IMAGE_FLASH_SIZE_64MB:
+            _flashChipSize = 512;
+            break;
+          case ESP_IMAGE_FLASH_SIZE_128MB:
+            _flashChipSize = 1024;
             break;
           default:  // fail?
             break;
