@@ -31,26 +31,50 @@ namespace esp32m {
             pdMS_TO_TICKS(1000));
     }
 
+    bool Sntp::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      if (req.is("sync")) {
+        sntp_restart();
+        req.respond();
+        return true;
+      }
+      return false;
+    }
+
+    void time2str(char *buf, size_t bufsize) {
+      time_t now;
+      time(&now);
+      struct tm timeinfo;
+      localtime_r(&now, &timeinfo);
+      strftime(buf, bufsize, "%F %T", &timeinfo);
+    }
+
     void Sntp::synced(struct timeval *tv) {
       _syncedAt = millis();
+      char buf[32];
+      time2str(buf, sizeof(buf));
+      logD("local time/date was set to %s, (TZ=%s)", buf, _tze.c_str());
     }
 
     DynamicJsonDocument *Sntp::getState(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(3);
+      char buf[32];
+      time2str(buf, sizeof(buf));
+      size_t size = JSON_OBJECT_SIZE(3) + JSON_STRING_SIZE(strlen(buf));
       auto doc = new DynamicJsonDocument(size);
       auto root = doc->to<JsonObject>();
       json::to(root, "status", (int)sntp_get_sync_status());
       if (_syncedAt)
         json::to(root, "synced", millis() - _syncedAt);
-      time_t t;
-      time(&t);
-      json::to(root, "time", t);
+      json::to(root, "time", buf);
       return doc;
     }
 
     DynamicJsonDocument *Sntp::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(5 /*enabled, host, tz, dst*/) +
-                    JSON_STRING_SIZE(_host.size());
+      size_t size =
+          JSON_OBJECT_SIZE(1 + 5 /*enabled, host, tzr, tze, interval*/) +
+          JSON_STRING_SIZE(_host.size()) + JSON_STRING_SIZE(_tzr.size()) +
+          JSON_STRING_SIZE(_tze.size());
       auto doc = new DynamicJsonDocument(size);
       auto root = doc->to<JsonObject>();
       json::to(root, "enabled", _enabled);
@@ -58,8 +82,8 @@ namespace esp32m {
         json::to(root, "host", _host);
       else
         json::to(root, "host", DefaultNtpHost);
-      json::to(root, "tz", _tzOfs, 0);
-      json::to(root, "dst", _dstOfs, 0);
+      json::to(root, "tzr", _tzr);
+      json::to(root, "tze", _tze);
       json::to(root, "interval", _interval);
       return doc;
     }
@@ -74,8 +98,8 @@ namespace esp32m {
         _host = DefaultNtpHost;
         changed = true;
       }
-      json::from(obj["tz"], _tzOfs, &changed);
-      json::from(obj["dst"], _dstOfs, &changed);
+      json::from(obj["tzr"], _tzr, &changed);
+      json::from(obj["tze"], _tze, &changed);
       json::from(obj["interval"], _interval, &changed);
       if (changed)
         update();
@@ -92,28 +116,10 @@ namespace esp32m {
                                _host.size() ? _host.c_str() : DefaultNtpHost);
         sntp_set_sync_interval((uint32_t)(_interval * 1000));
         esp_sntp_init();
-        char cst[17] = {0};
-        char cdt[17] = "DST";
-        char tz[33] = {0};
-        long offset = _tzOfs * 60;
-        int daylight = _dstOfs * 60;
-        if (offset % 3600)
-          sprintf(cst, "UTC%ld:%02u:%02u", (offset / 3600),
-                  (unsigned int)abs((offset % 3600) / 60),
-                  (unsigned int)abs(offset % 60));
+        if (_tze.empty())
+          unsetenv("TZ");
         else
-          sprintf(cst, "UTC%ld", offset / 3600);
-        if (daylight != 3600) {
-          long tz_dst = offset - daylight;
-          if (tz_dst % 3600)
-            sprintf(cdt, "DST%ld:%02u:%02u", tz_dst / 3600,
-                    (unsigned int)abs((tz_dst % 3600) / 60),
-                    (unsigned int)abs(tz_dst % 60));
-          else
-            sprintf(cdt, "DST%ld", tz_dst / 3600);
-        }
-        sprintf(tz, "%s%s", cst, cdt);
-        setenv("TZ", tz, 1);
+          setenv("TZ", _tze.c_str(), 1);
         tzset();
       }
     }

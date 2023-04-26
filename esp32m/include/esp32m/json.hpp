@@ -45,18 +45,29 @@ namespace esp32m {
     void to(JsonObject target, const char *key, const char *value);
     void to(JsonObject target, const char *key, char *value);
 
+    // isUnbound() means there is no entry with the given key/index
+    // isNull means either the object with the given key is null, OR there is no
+    // entry with the given key/index
+    // We DO want to set the target when the source is not Unbound, even if it
+    // is Null
+
     template <typename T>
     bool from(JsonVariantConst source, T &target, bool *changed = nullptr) {
-      if (source.isUnbound() || source.isNull() || source.as<T>() == target)
+      if (source.isUnbound() /* || source.isNull() */ ||
+          source.as<T>() == target)
         return false;
       if (changed)
         *changed = true;
       target = source.as<T>();
       return true;
     }
+    bool from(JsonVariantConst source, std::string &target,
+              bool *changed = nullptr);
     template <typename T>
-    bool fromIntCastable(JsonVariantConst source, T &target, bool *changed = nullptr) {
-      if (source.isUnbound() || source.isNull() || source.as<int>() == (int)target)
+    bool fromIntCastable(JsonVariantConst source, T &target,
+                         bool *changed = nullptr) {
+      if (source.isUnbound() /*|| source.isNull()*/ ||
+          source.as<int>() == (int)target)
         return false;
       if (changed)
         *changed = true;
@@ -66,7 +77,8 @@ namespace esp32m {
     template <typename T>
     bool from(JsonVariantConst source, T &target, T def,
               bool *changed = nullptr) {
-      T src = (source.isUnbound() || source.isNull()) ? def : source.as<T>();
+      T src =
+          (source.isUnbound() /*|| source.isNull()*/) ? def : source.as<T>();
       if (src == target)
         return false;
       if (changed)
@@ -74,8 +86,8 @@ namespace esp32m {
       target = src;
       return true;
     }
-    /*bool fromDup(JsonVariantConst source, char *&target, const char *def,
-                 bool *changed = nullptr);*/
+    bool from(JsonVariantConst source, std::string &target, std::string def,
+              bool *changed = nullptr);
 
     template <typename T>
     class Value {

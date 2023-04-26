@@ -16,12 +16,10 @@ namespace esp32m {
       std::string host() const {
         return _host;
       }
-      int tzOfs() const {
-        return _tzOfs;
-      }
 
      protected:
       void handleEvent(Event &ev) override;
+      bool handleRequest(Request &req) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;
@@ -30,8 +28,7 @@ namespace esp32m {
      private:
       Sntp();
       bool _enabled = true;
-      std::string _host;
-      int _dstOfs = 0, _tzOfs = 0;
+      std::string _host, _tzr, _tze;
       float _interval;
       unsigned long _syncedAt = 0;
       void update();
