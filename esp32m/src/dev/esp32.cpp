@@ -14,6 +14,7 @@
 #include <soc/rtc.h>
 #include <soc/rtc_cntl_reg.h>
 #include <soc/sens_reg.h>
+#include "esp_private/esp_clk.h"
 
 #include "esp32m/dev/esp32.hpp"
 
@@ -104,8 +105,8 @@ namespace esp32m {
 
       auto doc = new DynamicJsonDocument(
           JSON_OBJECT_SIZE(1 + 4)    // heap: size, free, min, max
-          + JSON_OBJECT_SIZE(1 + 8)  // chip: model, rev, cores, features, freq,
-                                     // mac, temperature, rr
+          + JSON_OBJECT_SIZE(1 + 9)  // chip: model, rev, cores, features, freq,
+                                     // efreq, mac, temperature, rr
           + JSON_OBJECT_SIZE(1 + 3)  // flash: size, speed, mode
           + (_psramSize ? JSON_OBJECT_SIZE(1 + 4)
                         : 0)  // psram: size, free, min, max
@@ -147,6 +148,7 @@ namespace esp32m {
       infoChip["cores"] = chip_info.cores;
       infoChip["features"] = chip_info.features;
       infoChip["freq"] = conf.freq_mhz;
+      infoChip["efreq"] = esp_clk_cpu_freq() / MHZ;
       uint64_t _chipmacid = 0LL;
       esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
       infoChip["mac"] = _chipmacid;
@@ -169,27 +171,33 @@ namespace esp32m {
     bool Esp32::setConfig(const JsonVariantConst cfg,
                           DynamicJsonDocument **result) {
       bool changed = false;
+#ifdef CONFIG_PM_ENABLE
       auto pm = cfg["pm"];
       if (pm) {
-        json::from(pm[0], _pm.max_freq_mhz, 240, &changed);
-        json::from(pm[1], _pm.min_freq_mhz, 160, &changed);
-        json::from(pm[2], _pm.light_sleep_enable, false, &changed);
+        json::from(pm["fmin"], _pm.min_freq_mhz, &changed);
+        json::from(pm["fmax"], _pm.max_freq_mhz, &changed);
+#  ifdef CONFIG_FREERTOS_USE_TICKLESS_IDLE
+        json::from(pm["lse"], _pm.light_sleep_enable, &changed);
+#  endif
         if (changed)
           json::checkSetResult(
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_pm_configure(&_pm)), result);
       }
+#endif
       return changed;
     }
 
     DynamicJsonDocument *Esp32::getConfig(RequestContext &ctx) {
-      auto doc = new DynamicJsonDocument(
-          JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3)  // pm
-      );
+      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1 + 3));
+#ifdef CONFIG_PM_ENABLE
       auto root = doc->to<JsonObject>();
-      auto pm = root.createNestedArray("pm");
-      pm.add(_pm.max_freq_mhz);
-      pm.add(_pm.min_freq_mhz);
-      pm.add(_pm.light_sleep_enable);
+      auto pm = root.createNestedObject("pm");
+      json::to(pm, "fmin", _pm.min_freq_mhz);
+      json::to(pm, "fmax", _pm.max_freq_mhz);
+#  ifdef CONFIG_FREERTOS_USE_TICKLESS_IDLE
+      json::to(pm, "lse", _pm.light_sleep_enable);
+#  endif
+#endif
       return doc;
     }
 

@@ -430,15 +430,12 @@ namespace esp32m {
     }
     int ledcTimerGet(ledc_mode_t speed_mode, ledc_timer_bit_t duty_resolution,
                      uint32_t freq_hz, ledc_clk_cfg_t clk_cfg) {
-      LedcTimer t = {.c =
-                         {
-                             .speed_mode = speed_mode,
-                             .duty_resolution = duty_resolution,
-                             .timer_num = LEDC_TIMER_MAX,
-                             .freq_hz = freq_hz,
-                             .clk_cfg = clk_cfg,
-                         },
-                     .ref = 0};
+      LedcTimer t = {};
+      t.c.speed_mode = speed_mode;
+      t.c.duty_resolution = duty_resolution;
+      t.c.timer_num = LEDC_TIMER_MAX;
+      t.c.freq_hz = freq_hz;
+      t.c.clk_cfg = clk_cfg;
       int freeSlot = -1;
       for (int i = 0; i < LEDC_TIMER_MAX; i++)
         if (ledcTimersEqual(&t, ledcTimers[i]))
