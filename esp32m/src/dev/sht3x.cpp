@@ -59,11 +59,11 @@ namespace esp32m {
       _name = name ? name : "SHT3X";
       _i2c->setEndianness(Endian::Little);
       _i2c->setErrSnooze(30000);
-      _reset = resetPin;
+      _reset = resetPin?resetPin->digital():nullptr;
       if (_reset) {
         _reset->setDirection(GPIO_MODE_INPUT_OUTPUT);
         _reset->setPull(GPIO_PULLUP_ONLY);
-        _reset->digitalWrite(true);
+        _reset->write(true);
       }
       return reset(Mode::Single, Repeatability::Medium);
     }

@@ -39,7 +39,7 @@ namespace esp32m {
         return ESP_OK;
       }
 
-      TwoPinSensor::TwoPinSensor(io::IPin *open, io::IPin *closed)
+      TwoPinSensor::TwoPinSensor(io::pin::IDigital *open, io::pin::IDigital *closed)
           : _open(open), _closed(closed) {
         open->setDirection(GPIO_MODE_INPUT);
         closed->setDirection(GPIO_MODE_INPUT);
@@ -47,8 +47,8 @@ namespace esp32m {
 
       esp_err_t TwoPinSensor::sense(State &state) {
         bool opened, closed;
-        ESP_CHECK_RETURN(_open->digitalRead(opened));
-        ESP_CHECK_RETURN(_closed->digitalRead(closed));
+        ESP_CHECK_RETURN(_open->read(opened));
+        ESP_CHECK_RETURN(_closed->read(closed));
         opened = opened == _openLevel;
         closed = closed == _closedLevel;
         if (opened) {
@@ -273,18 +273,18 @@ namespace esp32m {
 
     Valve *useValve(const char *name, valve::IWiring *wiring, io::IPin *isOpen,
                     io::IPin *isClosed) {
-      return new Valve(name, wiring, new valve::TwoPinSensor(isOpen, isClosed));
+      return new Valve(name, wiring, new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
 
     Valve *useValve(const char *name, HBridge *hb, io::IPin *isOpen,
                     io::IPin *isClosed) {
       return new Valve(name, new valve::HBridge(hb),
-                       new valve::TwoPinSensor(isOpen, isClosed));
+                       new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
     Valve *useValve(const char *name, Relay *power, Relay *direction,
                     io::IPin *isOpen, io::IPin *isClosed) {
       return new Valve(name, new valve::TwoRelays(power, direction),
-                       new valve::TwoPinSensor(isOpen, isClosed));
+                       new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
 
   }  // namespace dev

@@ -29,7 +29,7 @@ namespace esp32m {
 
      private:
       std::unique_ptr<I2C> _i2c;
-      io::IPin *_rst = nullptr;
+      io::pin::IDigital *_rst = nullptr;
       uint16_t _out, _cfg, _int, _mode, _input, _gcr;
       esp_err_t init();
       esp_err_t readInput();

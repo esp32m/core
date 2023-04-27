@@ -35,8 +35,8 @@ namespace esp32m {
           return ESP_FAIL;
       }
       // logD("run %d", mode);
-      ESP_CHECK_RETURN(_pinFwd->digitalWrite(f));
-      ESP_CHECK_RETURN(_pinRev->digitalWrite(r));
+      ESP_CHECK_RETURN(_pinFwd->write(f));
+      ESP_CHECK_RETURN(_pinRev->write(r));
       ESP_CHECK_RETURN(refresh());
       if (_persistent)
         config::Changed::publish(this);
@@ -45,8 +45,8 @@ namespace esp32m {
 
     esp_err_t HBridge::refresh() {
       bool f, r;
-      ESP_CHECK_RETURN(_pinFwd->digitalRead(f));
-      ESP_CHECK_RETURN(_pinRev->digitalRead(r));
+      ESP_CHECK_RETURN(_pinFwd->read(f));
+      ESP_CHECK_RETURN(_pinRev->read(r));
       if (f && r)
         _mode = Mode::Off;
       else if (!f && r)
@@ -89,7 +89,7 @@ namespace esp32m {
     }
 
     HBridge *useHBridge(const char *name, io::IPin *pinFwd, io::IPin *pinRev) {
-      return new HBridge(name, pinFwd, pinRev);
+      return new HBridge(name, pinFwd->digital(), pinRev->digital());
     }
   }  // namespace dev
 }  // namespace esp32m

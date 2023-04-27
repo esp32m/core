@@ -17,15 +17,18 @@ namespace esp32m {
     void Sysled::init() {
       xTaskCreate([](void *self) { ((Sysled *)self)->run(); }, "m/sysled", 2048,
                   this, tskIDLE_PRIORITY + 1, &_task);
-      _pin->setDirection(GPIO_MODE_OUTPUT);
     }
 
     void Sysled::blink(int count) {
-      for (int i = 0; i < count; i++) {
-        _pin->digitalWrite(true);
-        delay(200);
-        _pin->digitalWrite(false);
-        delay(200);
+      auto digital = _pin->digital();
+      if (digital) {
+        digital->setDirection(GPIO_MODE_OUTPUT);
+        for (int i = 0; i < count; i++) {
+          digital->write(true);
+          delay(200);
+          digital->write(false);
+          delay(200);
+        }
       }
     }
 

@@ -17,16 +17,16 @@ namespace esp32m {
         SenseOn,
         SenseOff,
       };
-      Relay(const char *name, io::IPin *pin)
+      Relay(const char *name, io::pin::IDigital *pin)
           : _name(name), _pinOn(pin), _pinOff(pin) {
         init();
       }
-      Relay(const char *name, io::IPin *pinOn, io::IPin *pinOff)
+      Relay(const char *name, io::pin::IDigital *pinOn, io::pin::IDigital *pinOff)
           : _name(name), _pinOn(pinOn), _pinOff(pinOff) {
         init();
       }
-      Relay(const char *name, io::IPin *pinOn, io::IPin *pinOff,
-            io::IPin *pinSenseOn, io::IPin *pinSenseOff)
+      Relay(const char *name, io::pin::IDigital *pinOn, io::pin::IDigital *pinOff,
+            io::pin::IDigital *pinSenseOn, io::pin::IDigital *pinSenseOff)
           : _name(name),
             _pinOn(pinOn),
             _pinOff(pinOff),
@@ -75,8 +75,8 @@ namespace esp32m {
 
      private:
       const char *_name;
-      io::IPin *_pinOn, *_pinOff;
-      io::IPin *_pinSenseOn = nullptr, *_pinSenseOff = nullptr;
+      io::pin::IDigital *_pinOn, *_pinOff;
+      io::pin::IDigital *_pinSenseOn = nullptr, *_pinSenseOff = nullptr;
       uint8_t _levels = 0;
       bool _persistent = true;
       State _state = State::Unknown;

@@ -50,7 +50,7 @@ namespace esp32m {
 
       class TwoPinSensor : public ISensor {
        public:
-        TwoPinSensor(io::IPin *open, io::IPin *closed);
+        TwoPinSensor(io::pin::IDigital *open, io::pin::IDigital *closed);
         void setLevels(bool open, bool closed) {
           _openLevel = open;
           _closedLevel = closed;
@@ -58,7 +58,7 @@ namespace esp32m {
         esp_err_t sense(State &state) override;
 
        private:
-        io::IPin *_open, *_closed;
+        io::pin::IDigital *_open, *_closed;
         bool _openLevel = false, _closedLevel = false;
       };
 

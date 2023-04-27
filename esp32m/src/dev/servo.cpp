@@ -9,7 +9,7 @@ namespace esp32m {
     Servo::Servo(const char *name, io::IPin *pin) : _name(name), _pin(pin) {
       if (pin) {
         pin->reset();
-        pin->digitalWrite(false);
+        pin->digital()->write(false);
         _ledc = pin->ledc();
       } else
         _ledc = nullptr;

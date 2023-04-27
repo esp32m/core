@@ -4,49 +4,71 @@
 
 namespace esp32m {
   namespace io {
-    class PcaPin : public IPin {
-     public:
-      PcaPin(Pca95x5 *owner, int id) : IPin(id), _owner(owner) {
-        snprintf(_name, sizeof(_name), "PCA95x5");
+    namespace pca95x5 {
+
+      class Pin : public IPin {
+       public:
+        Pin(Pca95x5 *owner, int id) : IPin(id), _owner(owner) {
+          snprintf(_name, sizeof(_name), "PCA95x5");
+        };
+        const char *name() const override {
+          return _name;
+        }
+        io::pin::Features features() override {
+          return io::pin::Features::DigitalInput |
+                 io::pin::Features::DigitalOutput | io::pin::Features::PullUp;
+        }
+        pin::Impl *createImpl(pin::Type type) override;
+
+       private:
+        Pca95x5 *_owner;
+        char _name[11];
+        friend class Digital;
       };
-      const char *name() const override {
-        return _name;
-      }
-      Features features() override {
-        return Features::DigitalInput | Features::DigitalOutput |
-               Features::PullUp;
-      }
-      esp_err_t setDirection(gpio_mode_t mode) override {
-        switch (mode) {
-          case GPIO_MODE_INPUT:
-            _owner->setPinMode(_id, true);
+
+      class Digital : public io::pin::IDigital {
+       public:
+        Digital(Pin *pin) : _pin(pin) {}
+        esp_err_t setDirection(gpio_mode_t mode) override {
+          switch (mode) {
+            case GPIO_MODE_INPUT:
+              _pin->_owner->setPinMode(_pin->id(), true);
+              return ESP_OK;
+            case GPIO_MODE_OUTPUT:
+            case GPIO_MODE_OUTPUT_OD:
+            case GPIO_MODE_INPUT_OUTPUT:
+            case GPIO_MODE_INPUT_OUTPUT_OD:
+              _pin->_owner->setPinMode(_pin->id(), false);
+              return ESP_OK;
+            default:
+              return ESP_FAIL;
+          }
+        }
+        esp_err_t setPull(gpio_pull_mode_t pull) override {
+          if (pull == GPIO_PULLUP_ONLY)
             return ESP_OK;
-          case GPIO_MODE_OUTPUT:
-          case GPIO_MODE_OUTPUT_OD:
-          case GPIO_MODE_INPUT_OUTPUT:
-          case GPIO_MODE_INPUT_OUTPUT_OD:
-            _owner->setPinMode(_id, false);
-            return ESP_OK;
+          return ESP_FAIL;
+        }
+        esp_err_t read(bool &value) override {
+          return _pin->_owner->readPin(_pin->id(), value);
+        }
+        esp_err_t write(bool value) override {
+          return _pin->_owner->writePin(_pin->id(), value);
+        }
+
+       private:
+        Pin *_pin;
+      };
+
+      pin::Impl *Pin::createImpl(pin::Type type) {
+        switch (type) {
+          case pin::Type::Digital:
+            return new Digital(this);
           default:
-            return ESP_FAIL;
+            return nullptr;
         }
       }
-      esp_err_t setPull(gpio_pull_mode_t pull) override {
-        if (pull == GPIO_PULLUP_ONLY)
-          return ESP_OK;
-        return ESP_FAIL;
-      }
-      esp_err_t digitalRead(bool &value) override {
-        return _owner->readPin(_id, value);
-      }
-      esp_err_t digitalWrite(bool value) override {
-        return _owner->writePin(_id, value);
-      }
-
-     private:
-      Pca95x5 *_owner;
-      char _name[11];
-    };
+    }  // namespace pca95x5
 
     const uint8_t RegInput = 0;
     const uint8_t RegOutput = 2;
@@ -67,7 +89,7 @@ namespace esp32m {
     }
 
     IPin *Pca95x5::newPin(int id) {
-      return new PcaPin(this, id);
+      return new pca95x5::Pin(this, id);
     }
 
     esp_err_t Pca95x5::readPin(int pin, bool &value) {

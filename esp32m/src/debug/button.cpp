@@ -18,7 +18,7 @@ namespace esp32m {
 
     void Button::run() {
       _queue = xQueueCreate(16, sizeof(int32_t));
-      _pin->attach(_queue);
+      _pin->digital()->attach(_queue);
       esp_task_wdt_add(NULL);
       int32_t value;
       for (;;) {

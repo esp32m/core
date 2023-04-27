@@ -12,7 +12,7 @@ namespace esp32m {
     Buzzer::Buzzer(io::IPin *pin) {
       if (pin) {
         pin->reset();
-        pin->digitalWrite(false);
+        pin->digital()->write(false);
         _ledc = pin->ledc();
       } else
         _ledc = nullptr;

@@ -44,45 +44,59 @@ namespace esp32m {
         return _name;
       }
       gpio_num_t num();
-      Features features() override {
+      io::pin::Features features() override {
         return _features;
       }
       void reset() override;
-      esp_err_t setDirection(gpio_mode_t mode) override {
-        return gpio_set_direction(num(), mode);
-      }
-      esp_err_t setPull(gpio_pull_mode_t pull) override {
-        return gpio_set_pull_mode(num(), pull);
-      }
-      esp_err_t digitalRead(bool &value) override {
-        value = gpio_get_level(num()) != 0;
-        return ESP_OK;
-      }
-      esp_err_t digitalWrite(bool value) override {
-        return gpio_set_level(num(), value);
-      }
-      esp_err_t attach(QueueHandle_t queue, gpio_int_type_t type) override;
-      esp_err_t detach() override;
 
      protected:
       io::pin::Impl *createImpl(io::pin::Type type) override;
 
      private:
-      Features _features;
+      io::pin::Features _features;
       char _name[5];
+    };
+
+    class Digital : public io::pin::IDigital {
+     public:
+      Digital(Pin *pin) : _pin(pin) {}
+      ~Digital() override {
+        detach();
+        ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(_pin->num()));
+      }
+
+      esp_err_t setDirection(gpio_mode_t mode) override {
+        return gpio_set_direction(_pin->num(), mode);
+      }
+      esp_err_t setPull(gpio_pull_mode_t pull) override {
+        return gpio_set_pull_mode(_pin->num(), pull);
+      }
+      esp_err_t read(bool &value) override {
+        value = gpio_get_level(_pin->num()) != 0;
+        return ESP_OK;
+      }
+      esp_err_t write(bool value) override {
+        return gpio_set_level(_pin->num(), value);
+      }
+      esp_err_t attach(QueueHandle_t queue, gpio_int_type_t type) override;
+      esp_err_t detach() override;
+
+     private:
+      Pin *_pin;
       ISRArg *_isr = nullptr;
+      friend class ISRArg;
     };
 
     class ISRArg {
      public:
-      ISRArg(Pin *pin, QueueHandle_t queue) : _pin(pin), _queue(queue) {
-        _num = pin->num();
+      ISRArg(Digital *pin, QueueHandle_t queue) : _pin(pin), _queue(queue) {
+        _num = pin->_pin->num();
         _stamp = esp_timer_get_time();
         _level = gpio_get_level(_num) != 0;
       }
 
      private:
-      Pin *_pin;
+      Digital *_pin;
       gpio_num_t _num;
       QueueHandle_t _queue;
       bool _level;
@@ -173,22 +187,10 @@ namespace esp32m {
       esp_err_t range(int &min, int &max, uint32_t *mvMin = nullptr,
                       uint32_t *mvMax = nullptr) override {
         min = 0;
-        switch (_width) {
-          case ADC_BITWIDTH_9:
-            max = (1 << 9) - 1;
-            break;
-          case ADC_BITWIDTH_10:
-            max = (1 << 10) - 1;
-            break;
-          case ADC_BITWIDTH_11:
-            max = (1 << 11) - 1;
-            break;
-          case ADC_BITWIDTH_12:
-            max = (1 << 12) - 1;
-            break;
-          default:
-            return ESP_FAIL;
-        }
+        auto width = getWidth();
+        if (width <= 0)
+          return ESP_FAIL;
+        max = (1 << width) - 1;
 #if CONFIG_IDF_TARGET_ESP32S2
         if (mvMin || mvMax) {
           if (mvMin)
@@ -254,8 +256,9 @@ namespace esp32m {
         _flags |= ADCFlags::CharsDirty;
         return update();
       }
-      adc_bitwidth_t getWidth() override {
-        return _width;
+      int getWidth() override {
+        return _width == ADC_BITWIDTH_DEFAULT ? SOC_ADC_RTC_MAX_BITWIDTH
+                                              : _width;
       }
 
       esp_err_t setWidth(adc_bitwidth_t width) override {
@@ -279,8 +282,8 @@ namespace esp32m {
           ESP_ERROR_CHECK_WITHOUT_ABORT(adc_cali_check_scheme(&calischeme));
         ESP_CHECK_RETURN(
             adc_oneshot_io_to_channel(_pin->num(), &_unit, &_channel));
-        logd("initialized oneshot ADC on gpio %d, ADC%d, channel %d",
-             _pin->num(), _unit + 1, _channel);
+        /*logd("initialized oneshot ADC on gpio %d, ADC%d, channel %d",
+             _pin->num(), _unit + 1, _channel);*/
         return update();
       }
       esp_err_t update() {
@@ -535,22 +538,23 @@ namespace esp32m {
     Pin::Pin(int id) : IPin(id) {
       gpio_num_t num = this->num();
       snprintf(_name, sizeof(_name), "IO%02u", num);
-      _features = Features::None;
+      _features = io::pin::Features::None;
       if (!GPIO_IS_VALID_GPIO(num))
         return;
       if (GPIO_IS_VALID_DIGITAL_IO_PAD(num))
-        _features |= Features::DigitalInput | Features::PulseCounter;
-      if (GPIO_IS_VALID_OUTPUT_GPIO(num))
         _features |=
-            Features::DigitalOutput | Features::PullUp | Features::PullDown;
+            io::pin::Features::DigitalInput | io::pin::Features::PulseCounter;
+      if (GPIO_IS_VALID_OUTPUT_GPIO(num))
+        _features |= io::pin::Features::DigitalOutput |
+                     io::pin::Features::PullUp | io::pin::Features::PullDown;
 #if SOC_DAC_SUPPORTED
       if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
-        _features |= Features::DAC;
+        _features |= io::pin::Features::DAC;
 #endif
       adc_unit_t unit;
       adc_channel_t channel;
       if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
-        _features |= Features::ADC;
+        _features |= io::pin::Features::ADC;
       ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num));
     };
     gpio_num_t Pin::num() {
@@ -559,8 +563,6 @@ namespace esp32m {
 
     void Pin::reset() {
       IPin::reset();
-      detach();
-      ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num()));
     };
 
     void IRAM_ATTR gpio_isr_handler(void *self) {
@@ -583,19 +585,20 @@ namespace esp32m {
         portYIELD_FROM_ISR();
     }
 
-    esp_err_t Pin::attach(QueueHandle_t queue, gpio_int_type_t type) {
+    esp_err_t Digital::attach(QueueHandle_t queue, gpio_int_type_t type) {
       if (!queue)
         return ESP_FAIL;
-      std::lock_guard guard(_mutex);
+      std::lock_guard guard(_pin->mutex());
       if (_isr)
         return ESP_ERR_INVALID_STATE;
       esp_err_t err = gpio_install_isr_service(0);
       if (err != ESP_ERR_INVALID_STATE)
         ESP_CHECK_RETURN(err);
+      auto num = _pin->num();
       gpio_config_t gpio_conf;
       gpio_conf.intr_type = type;
       gpio_conf.mode = GPIO_MODE_INPUT;
-      gpio_conf.pin_bit_mask = (1ULL << num());
+      gpio_conf.pin_bit_mask = (1ULL << num);
       gpio_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
       gpio_conf.pull_up_en = GPIO_PULLUP_ENABLE;
       gpio_config(&gpio_conf);
@@ -603,7 +606,7 @@ namespace esp32m {
       // ESP_CHECK_RETURN(gpio_set_intr_type(num(), type));
       // ESP_CHECK_RETURN(gpio_intr_enable(num()));
       _isr = new ISRArg(this, queue);
-      err = gpio_isr_handler_add(num(), gpio_isr_handler, _isr);
+      err = gpio_isr_handler_add(num, gpio_isr_handler, _isr);
       if (err != ESP_OK) {
         delete _isr;
         _isr = nullptr;
@@ -612,12 +615,13 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Pin::detach() {
-      std::lock_guard guard(_mutex);
-      ESP_CHECK_RETURN(gpio_intr_disable(num()));
+    esp_err_t Digital::detach() {
+      std::lock_guard guard(_pin->mutex());
+      auto n = _pin->num();
+      ESP_CHECK_RETURN(gpio_intr_disable(n));
       if (!_isr)
         return ESP_ERR_INVALID_STATE;
-      ESP_CHECK_RETURN(gpio_isr_handler_remove(num()));
+      ESP_CHECK_RETURN(gpio_isr_handler_remove(n));
       delete _isr;
       _isr = nullptr;
       return ESP_OK;
@@ -625,22 +629,27 @@ namespace esp32m {
 
     io::pin::Impl *Pin::createImpl(io::pin::Type type) {
       switch (type) {
+        case io::pin::Type::Digital:
+          if ((_features & (io::pin::Features::DigitalInput |
+                            io::pin::Features::DigitalOutput)) != 0)
+            return new gpio::Digital(this);
+          break;
         case io::pin::Type::ADC:
-          if ((_features & io::IPin::Features::ADC) != 0)
+          if ((_features & io::pin::Features::ADC) != 0)
             return new gpio::ADC(this);
           break;
 #if SOC_DAC_SUPPORTED
         case io::pin::Type::DAC:
-          if ((_features & io::IPin::Features::DAC) != 0)
+          if ((_features & io::pin::Features::DAC) != 0)
             return new gpio::DAC(this);
           break;
 #endif
         case io::pin::Type::Pcnt:
-          if ((_features & io::IPin::Features::PulseCounter) != 0)
+          if ((_features & io::pin::Features::PulseCounter) != 0)
             return new gpio::Pcnt(this);
           break;
         case io::pin::Type::LEDC:
-          if ((_features & io::IPin::Features::DigitalOutput) != 0)
+          if ((_features & io::pin::Features::DigitalOutput) != 0)
             return new gpio::LEDC(this);
           break;
         default:

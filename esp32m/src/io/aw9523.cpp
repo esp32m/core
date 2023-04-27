@@ -35,17 +35,6 @@ namespace esp32m {
       Rst = 0x7f,  ///< Register for soft resetting
     };
 
-    class Pin;
-
-    class DAC : public io::pin::IDAC {
-     public:
-      DAC(Pin *pin) : _pin(pin) {}
-      esp_err_t write(float value) override;
-
-     private:
-      Pin *_pin;
-    };
-
     class Pin : public io::IPin {
      public:
       Pin(io::Aw9523 *owner, int id) : io::IPin(id), _owner(owner) {
@@ -57,21 +46,39 @@ namespace esp32m {
       int num() {
         return _owner->id2num(_id);
       }
-      io::IPin::Features features() override {
-        return io::IPin::Features::DigitalInput |
-               io::IPin::Features::DigitalOutput | io::IPin::Features::PullUp |
-               io::IPin::Features::DAC;
+      io::pin::Features features() override {
+        return io::pin::Features::DigitalInput |
+               io::pin::Features::DigitalOutput | io::pin::Features::PullUp |
+               io::pin::Features::DAC;
       }
+
+      esp_err_t analogWrite(float value) {
+        return _owner->analogWrite(num(), value);
+      }
+
+     protected:
+      io::pin::Impl *createImpl(io::pin::Type type) override;
+
+     private:
+      io::Aw9523 *_owner;
+      char _name[11];
+      friend class Digital;
+    };
+
+    class Digital : public io::pin::IDigital {
+     public:
+      Digital(Pin *pin) : _pin(pin) {}
+
       esp_err_t setDirection(gpio_mode_t mode) override {
         switch (mode) {
           case GPIO_MODE_INPUT:
-            _owner->setPinMode(num(), PinMode::Input);
+            _pin->_owner->setPinMode(_pin->num(), PinMode::Input);
             return ESP_OK;
           case GPIO_MODE_OUTPUT:
           case GPIO_MODE_OUTPUT_OD:
           case GPIO_MODE_INPUT_OUTPUT:
           case GPIO_MODE_INPUT_OUTPUT_OD:
-            _owner->setPinMode(num(), PinMode::Output);
+            _pin->_owner->setPinMode(_pin->num(), PinMode::Output);
             return ESP_OK;
           default:
             return ESP_FAIL;
@@ -82,36 +89,42 @@ namespace esp32m {
           return ESP_OK;
         return ESP_FAIL;
       }
-      esp_err_t digitalRead(bool &value) override {
-        return _owner->readPin(num(), value);
+      esp_err_t read(bool &value) override {
+        return _pin->_owner->readPin(_pin->num(), value);
       }
-      esp_err_t digitalWrite(bool value) override {
-        return _owner->writePin(num(), value);
-      }
-      esp_err_t analogWrite(float value) {
-        return _owner->analogWrite(num(), value);
-      }
-
-     protected:
-      io::pin::Impl *createImpl(io::pin::Type type) override {
-        switch (type) {
-          case io::pin::Type::DAC:
-            return new DAC(this);
-            break;
-          default:
-            return nullptr;
-        }
-        return nullptr;
+      esp_err_t write(bool value) override {
+        return _pin->_owner->writePin(_pin->num(), value);
       }
 
      private:
-      io::Aw9523 *_owner;
-      char _name[11];
+      Pin *_pin;
+    };
+
+    class DAC : public io::pin::IDAC {
+     public:
+      DAC(Pin *pin) : _pin(pin) {}
+      esp_err_t write(float value) override;
+
+     private:
+      Pin *_pin;
     };
 
     esp_err_t DAC::write(float value) {
       return _pin->analogWrite(value);
     }
+
+    io::pin::Impl *Pin::createImpl(io::pin::Type type) {
+      switch (type) {
+        case io::pin::Type::Digital:
+          return new Digital(this);
+        case io::pin::Type::DAC:
+          return new DAC(this);
+        default:
+          return nullptr;
+      }
+      return nullptr;
+    }
+
   }  // namespace aw9523
   namespace io {
     Aw9523::Aw9523(I2C *i2c) : _i2c(i2c) {
@@ -142,17 +155,17 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::setRst(io::IPin *pin) {
-      _rst = pin;
-      if (pin)
-        ESP_CHECK_RETURN(pin->digitalWrite(true));
+      _rst = pin ? pin->digital() : nullptr;
+      if (_rst)
+        ESP_CHECK_RETURN(_rst->write(true));
       return ESP_OK;
     }
 
     esp_err_t Aw9523::reset(bool hard) {
       if (hard && _rst) {
-        ESP_CHECK_RETURN(_rst->digitalWrite(false));
+        ESP_CHECK_RETURN(_rst->write(false));
         delayUs(20);
-        ESP_CHECK_RETURN(_rst->digitalWrite(true));
+        ESP_CHECK_RETURN(_rst->write(true));
       } else {
         std::lock_guard guard(_i2c->mutex());
         ESP_CHECK_RETURN(_i2c->write(aw9523::Register::Rst, (uint8_t)0));

@@ -172,9 +172,9 @@ namespace esp32m {
 #if CONFIG_ETH_USE_ESP32_EMAC
     Ethernet *useOlimexEthernet(const char *name) {
       // power up LAN8710 chip
-      auto pin = gpio::pin(GPIO_NUM_12);
+      auto pin = gpio::pin(GPIO_NUM_12)->digital();
       pin->setDirection(GPIO_MODE_OUTPUT);
-      pin->digitalWrite(true);
+      pin->write(true);
       delay(10);
 
       eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();

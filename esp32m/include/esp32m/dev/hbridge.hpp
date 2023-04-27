@@ -10,7 +10,7 @@ namespace esp32m {
     class HBridge : public Device {
      public:
       enum Mode { Break, Forward, Reverse, Off };
-      HBridge(const char *name, io::IPin *pinFwd, io::IPin *pinRev)
+      HBridge(const char *name, io::pin::IDigital *pinFwd, io::pin::IDigital *pinRev)
           : _name(name), _pinFwd(pinFwd), _pinRev(pinRev) {
         init();
       };
@@ -45,7 +45,7 @@ namespace esp32m {
 
      private:
       const char *_name;
-      io::IPin *_pinFwd, *_pinRev;
+      io::pin::IDigital *_pinFwd, *_pinRev;
       bool _persistent = true;
       Mode _mode = Off;
       float _speed = 1;

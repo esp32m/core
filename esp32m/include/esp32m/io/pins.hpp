@@ -19,7 +19,18 @@ namespace esp32m {
     class IPin;
 
     namespace pin {
-      enum class Type { ADC, DAC, Pcnt, LEDC };
+      enum class Type { Digital, ADC, DAC, Pcnt, LEDC };
+      enum class Features {
+        None = 0,
+        PullUp = BIT0,
+        PullDown = BIT1,
+        DigitalInput = BIT2,
+        DigitalOutput = BIT3,
+        ADC = BIT4,
+        DAC = BIT5,
+        PulseCounter = BIT6,
+      };
+      ENUM_FLAG_OPERATORS(Features)
 
       class Impl {
        public:
@@ -27,6 +38,24 @@ namespace esp32m {
         virtual Type type() = 0;
         virtual bool valid() {
           return true;
+        }
+      };
+
+      class IDigital : public Impl {
+       public:
+        Type type() override {
+          return Type::Digital;
+        };
+        virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
+        virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
+        virtual esp_err_t read(bool &value) = 0;
+        virtual esp_err_t write(bool value) = 0;
+        virtual esp_err_t attach(QueueHandle_t queue,
+                                 gpio_int_type_t type = GPIO_INTR_ANYEDGE) {
+          return ESP_ERR_NOT_SUPPORTED;
+        }
+        virtual esp_err_t detach() {
+          return ESP_ERR_NOT_SUPPORTED;
         }
       };
 
@@ -41,7 +70,7 @@ namespace esp32m {
                                 uint32_t *mvMax = nullptr) = 0;
         virtual adc_atten_t getAtten() = 0;
         virtual esp_err_t setAtten(adc_atten_t atten = ADC_ATTEN_DB_0) = 0;
-        virtual adc_bitwidth_t getWidth() = 0;
+        virtual int getWidth() = 0;
         virtual esp_err_t setWidth(adc_bitwidth_t width) = 0;
       };
 
@@ -101,16 +130,6 @@ namespace esp32m {
 
     class IPin : public virtual log::Loggable {
      public:
-      enum class Features {
-        None = 0,
-        PullUp = BIT0,
-        PullDown = BIT1,
-        DigitalInput = BIT2,
-        DigitalOutput = BIT3,
-        ADC = BIT4,
-        DAC = BIT5,
-        PulseCounter = BIT6,
-      };
       IPin(int id) : _id(id){};
       IPin(const IPin &) = delete;
       int id() const {
@@ -120,8 +139,8 @@ namespace esp32m {
         return _mutex;
       }
       virtual void reset();
-      virtual Features features() = 0;
-      virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
+      virtual pin::Features features() = 0;
+      /*virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
       virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
       virtual esp_err_t digitalRead(bool &value) = 0;
       virtual esp_err_t digitalWrite(bool value) = 0;
@@ -131,8 +150,11 @@ namespace esp32m {
       }
       virtual esp_err_t detach() {
         return ESP_ERR_NOT_SUPPORTED;
-      }
+      }*/
 
+      pin::IDigital *digital() {
+        return (pin::IDigital *)impl(pin::Type::Digital);
+      }
       pin::IADC *adc() {
         return (pin::IADC *)impl(pin::Type::ADC);
       }
@@ -154,11 +176,9 @@ namespace esp32m {
       };
 
      private:
-      pin::Impl *_impl = nullptr;
+      std::map<pin::Type, std::unique_ptr<pin::Impl> > _impls;
       pin::Impl *impl(pin::Type type);
     };
-
-    ENUM_FLAG_OPERATORS(IPin::Features)
 
     namespace pin {
       class ITxFinalizer {

@@ -71,19 +71,19 @@ namespace esp32m {
       auto onLevel = getLevel(Pin::On, on);
       auto offLevel = getLevel(Pin::Off, on);
       if (_pinOff == _pinOn)
-        ESP_CHECK_RETURN(_pinOn->digitalWrite(onLevel));
+        ESP_CHECK_RETURN(_pinOn->write(onLevel));
       else if (on) {
-        ESP_CHECK_RETURN(_pinOff->digitalWrite(!offLevel));
-        ESP_CHECK_RETURN(_pinOn->digitalWrite(onLevel));
+        ESP_CHECK_RETURN(_pinOff->write(!offLevel));
+        ESP_CHECK_RETURN(_pinOn->write(onLevel));
         delay(100);
-        ESP_CHECK_RETURN(_pinOn->digitalWrite(!onLevel));
+        ESP_CHECK_RETURN(_pinOn->write(!onLevel));
         if (noSense)
           setState(State::On);
       } else {
-        ESP_CHECK_RETURN(_pinOn->digitalWrite(false));
-        ESP_CHECK_RETURN(_pinOff->digitalWrite(true));
+        ESP_CHECK_RETURN(_pinOn->write(false));
+        ESP_CHECK_RETURN(_pinOff->write(true));
         delay(100);
-        ESP_CHECK_RETURN(_pinOff->digitalWrite(false));
+        ESP_CHECK_RETURN(_pinOff->write(false));
         if (noSense)
           setState(State::Off);
       }
@@ -103,16 +103,16 @@ namespace esp32m {
       return toString(refreshState());
     }
 
-    Relay::State getStateFromPins(io::IPin *on, io::IPin *off, bool levelOn,
+    Relay::State getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off, bool levelOn,
                                   bool levelOff) {
       bool onLevel = false, offLevel = false;
       if (on)
-        if (on->digitalRead(onLevel) != ESP_OK)
+        if (on->read(onLevel) != ESP_OK)
           return Relay::State::Unknown;
       if (off) {
         if (off == on)
           offLevel = onLevel;
-        else if (off->digitalRead(offLevel) != ESP_OK)
+        else if (off->read(offLevel) != ESP_OK)
           return Relay::State::Unknown;
       }
 
@@ -226,16 +226,16 @@ namespace esp32m {
     }
 
     Relay *useRelay(const char *name, io::IPin *pin) {
-      return new Relay(name, pin);
+      return new Relay(name, pin->digital());
     }
 
     Relay *useRelay(const char *name, io::IPin *pinOn, io::IPin *pinOff) {
-      return new Relay(name, pinOn, pinOff);
+      return new Relay(name, pinOn->digital(), pinOff->digital());
     }
 
     Relay *useRelay(const char *name, io::IPin *pinOn, io::IPin *pinOff,
                     io::IPin *pinSenseOn, io::IPin *pinSenseOff) {
-      return new Relay(name, pinOn, pinOff, pinSenseOn, pinSenseOff);
+      return new Relay(name, pinOn->digital(), pinOff->digital(), pinSenseOn->digital(), pinSenseOff->digital());
     }
 
   }  // namespace dev

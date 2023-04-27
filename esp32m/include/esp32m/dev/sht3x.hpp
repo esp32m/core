@@ -46,7 +46,7 @@ namespace esp32m {
      protected:
       std::unique_ptr<I2C> _i2c;
       const char *_name;
-      io::IPin *_reset = nullptr;
+      io::pin::IDigital *_reset = nullptr;
       esp_err_t init(I2C *i2c, io::IPin *resetPin = nullptr,
                      const char *name = nullptr);
 

@@ -4,12 +4,93 @@
 
 namespace esp32m {
   namespace io {
-    class CD74HC4067Pin;
 
     namespace cd74hc4067 {
+      class Pin : public IPin {
+       public:
+        Pin(CD74HC4067 *owner, int id) : IPin(id), _owner(owner) {
+          snprintf(_name, sizeof(_name), "CD74HC4067-%02u",
+                   id - owner->pinBase());
+        };
+        const char *name() const override {
+          return _name;
+        }
+        io::pin::Features features() override {
+          return _owner->_sig->features();
+        }
+        pin::Impl *createImpl(pin::Type type) override;
+
+        esp_err_t select() {
+          return _owner->selectChannel(_id);
+        }
+
+       private:
+        CD74HC4067 *_owner;
+        char _name[14];
+        friend class ADC;
+        friend class Digital;
+      };
+
+      class Digital : public io::pin::IDigital {
+       public:
+        Digital(Pin *pin) : _pin(pin) {}
+        esp_err_t setDirection(gpio_mode_t mode) override {
+          switch (mode) {
+            case GPIO_MODE_INPUT:
+            case GPIO_MODE_OUTPUT:
+            case GPIO_MODE_INPUT_OUTPUT:
+              _mode = mode;
+              return ESP_OK;
+            default:
+              return ESP_FAIL;
+          }
+        }
+        esp_err_t setPull(gpio_pull_mode_t pull) override {
+          _pull = pull;
+          return ESP_OK;
+        }
+        esp_err_t read(bool &value) override {
+          /*if (_mode == GPIO_MODE_INPUT_OUTPUT && _set) {
+            value = _value;
+            return ESP_OK;
+          }*/
+          auto sig = _pin->_owner->_sig;
+          std::lock_guard guard(sig->mutex());
+          auto sd = sig->digital();
+          ESP_CHECK_RETURN(_pin->_owner->enable(false));
+          ESP_CHECK_RETURN(_pin->select());
+          ESP_CHECK_RETURN(_pin->_owner->enable(true));
+          ESP_CHECK_RETURN(sd->setDirection(_mode));
+          ESP_CHECK_RETURN(sd->setPull(_pull));
+          ESP_CHECK_RETURN(sd->read(value));
+          return ESP_OK;
+        }
+        esp_err_t write(bool value) override {
+          auto sig = _pin->_owner->_sig;
+          std::lock_guard guard(sig->mutex());
+          auto sd = sig->digital();
+          ESP_CHECK_RETURN(_pin->_owner->enable(false));
+          ESP_CHECK_RETURN(_pin->select());
+          ESP_CHECK_RETURN(sd->setDirection(_mode));
+          ESP_CHECK_RETURN(sd->write(value));
+          ESP_CHECK_RETURN(_pin->_owner->enable(true));
+          if (_mode == GPIO_MODE_INPUT_OUTPUT) {
+            _set = true;
+            _value = value;
+          }
+          return ESP_OK;
+        }
+
+       private:
+        Pin *_pin;
+        gpio_mode_t _mode = GPIO_MODE_INPUT;
+        gpio_pull_mode_t _pull = GPIO_FLOATING;
+        bool _value = false, _set = false;
+      };
+
       class ADC : public pin::IADC {
        public:
-        ADC(CD74HC4067Pin *pin) : _pin(pin) {}
+        ADC(Pin *pin) : _pin(pin) {}
         esp_err_t read(int &value, uint32_t *mv) override;
         esp_err_t range(int &min, int &max, uint32_t *mvMin = nullptr,
                         uint32_t *mvMax = nullptr) override;
@@ -20,106 +101,41 @@ namespace esp32m {
           _atten = atten;
           return ESP_OK;
         }
-        adc_bitwidth_t getWidth() override {
+        int getWidth() override {
           return _width;
         }
-
         esp_err_t setWidth(adc_bitwidth_t width) override {
           _width = width;
           return ESP_OK;
         }
 
        private:
-        CD74HC4067Pin *_pin;
+        Pin *_pin;
         adc_bitwidth_t _width = ADC_BITWIDTH_12;
         adc_atten_t _atten = ADC_ATTEN_DB_11;
       };
-    }  // namespace cd74hc4067
 
-    class CD74HC4067Pin : public IPin {
-     public:
-      CD74HC4067Pin(CD74HC4067 *owner, int id) : IPin(id), _owner(owner) {
-        snprintf(_name, sizeof(_name), "CD74HC4067-%02u",
-                 id - owner->pinBase());
-      };
-      const char *name() const override {
-        return _name;
-      }
-      Features features() override {
-        return _owner->_sig->features();
-      }
-      esp_err_t setDirection(gpio_mode_t mode) override {
-        switch (mode) {
-          case GPIO_MODE_INPUT:
-          case GPIO_MODE_OUTPUT:
-          case GPIO_MODE_INPUT_OUTPUT:
-            _mode = mode;
-            return ESP_OK;
-          default:
-            return ESP_FAIL;
-        }
-      }
-      esp_err_t setPull(gpio_pull_mode_t pull) override {
-        _pull = pull;
-        return ESP_OK;
-      }
-      esp_err_t digitalRead(bool &value) override {
-        /*if (_mode == GPIO_MODE_INPUT_OUTPUT && _set) {
-          value = _value;
-          return ESP_OK;
-        }*/
-        auto sig = _owner->_sig;
-        std::lock_guard guard(sig->mutex());
-        ESP_CHECK_RETURN(_owner->enable(false));
-        ESP_CHECK_RETURN(select());
-        ESP_CHECK_RETURN(_owner->enable(true));
-        ESP_CHECK_RETURN(sig->setDirection(_mode));
-        ESP_CHECK_RETURN(sig->setPull(_pull));
-        ESP_CHECK_RETURN(sig->digitalRead(value));
-        return ESP_OK;
-      }
-      esp_err_t digitalWrite(bool value) override {
-        auto sig = _owner->_sig;
-        std::lock_guard guard(sig->mutex());
-        ESP_CHECK_RETURN(_owner->enable(false));
-        ESP_CHECK_RETURN(select());
-        ESP_CHECK_RETURN(sig->setDirection(_mode));
-        ESP_CHECK_RETURN(sig->digitalWrite(value));
-        ESP_CHECK_RETURN(_owner->enable(true));
-        if (_mode == GPIO_MODE_INPUT_OUTPUT) {
-          _set = true;
-          _value = value;
-        }
-        return ESP_OK;
-      }
-      pin::Impl *createImpl(pin::Type type) override {
+      pin::Impl *Pin::createImpl(pin::Type type) {
         auto *sig = _owner->_sig;
         switch (type) {
+          case pin::Type::Digital:
+            if ((sig->features() & (io::pin::Features::DigitalInput |
+                                    io::pin::Features::DigitalOutput)) != 0)
+              return new Digital(this);
           case pin::Type::ADC:
-            if ((sig->features() & IPin::Features::ADC) != 0)
-              return new cd74hc4067::ADC(this);
+            if ((sig->features() & io::pin::Features::ADC) != 0)
+              return new ADC(this);
             break;
           default:
             return nullptr;
         }
         return nullptr;
       }
+    }  // namespace cd74hc4067
 
-      esp_err_t select() {
-        return _owner->selectChannel(_id);
-      }
-
-     private:
-      CD74HC4067 *_owner;
-      gpio_mode_t _mode = GPIO_MODE_INPUT;
-      gpio_pull_mode_t _pull = GPIO_FLOATING;
-      bool _value = false, _set = false;
-      char _name[14];
-      friend class cd74hc4067::ADC;
-    };
-
-    CD74HC4067::CD74HC4067(IPin *pinEn, IPin *pinS0, IPin *pinS1, IPin *pinS2,
-                           IPin *pinS3, IPin *pinSig)
+    CD74HC4067::CD74HC4067(io::pin::IDigital *pinEn, io::pin::IDigital *pinS0,
+                           io::pin::IDigital *pinS1, io::pin::IDigital *pinS2,
+                           io::pin::IDigital *pinS3, IPin *pinSig)
         : _en(pinEn),
           _s0(pinS0),
           _s1(pinS1),
@@ -142,12 +158,12 @@ namespace esp32m {
 
     esp_err_t CD74HC4067::enable(bool en) {
       if (_en)
-        ESP_CHECK_RETURN(_en->digitalWrite(!en));
+        ESP_CHECK_RETURN(_en->write(!en));
       return ESP_OK;
     }
 
     IPin *CD74HC4067::newPin(int id) {
-      return new CD74HC4067Pin(this, id);
+      return new cd74hc4067::Pin(this, id);
     }
 
     esp_err_t CD74HC4067::selectChannel(int c) {
@@ -156,10 +172,10 @@ namespace esp32m {
         return ESP_ERR_INVALID_ARG;
       esp_err_t err = ESP_OK;
       pin::Tx tx(pin::Tx::Type::Write, &err);
-      ESP_CHECK_RETURN(_s0->digitalWrite((c & 0x1) != 0));
-      ESP_CHECK_RETURN(_s1->digitalWrite((c & 0x2) != 0));
-      ESP_CHECK_RETURN(_s2->digitalWrite((c & 0x4) != 0));
-      ESP_CHECK_RETURN(_s3->digitalWrite((c & 0x8) != 0));
+      ESP_CHECK_RETURN(_s0->write((c & 0x1) != 0));
+      ESP_CHECK_RETURN(_s1->write((c & 0x2) != 0));
+      ESP_CHECK_RETURN(_s2->write((c & 0x4) != 0));
+      ESP_CHECK_RETURN(_s3->write((c & 0x8) != 0));
       return err;
     }
 
@@ -190,7 +206,9 @@ namespace esp32m {
 
     CD74HC4067 *useCD74HC4067(IPin *pinEn, IPin *pinS0, IPin *pinS1,
                               IPin *pinS2, IPin *pinS3, IPin *pinSig) {
-      return new CD74HC4067(pinEn, pinS0, pinS1, pinS2, pinS3, pinSig);
+      return new CD74HC4067(pinEn ? pinEn->digital() : nullptr,
+                            pinS0->digital(), pinS1->digital(),
+                            pinS2->digital(), pinS3->digital(), pinSig);
     }
 
   }  // namespace io

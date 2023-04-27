@@ -4,49 +4,71 @@
 
 namespace esp32m {
   namespace io {
-    class PcfPin : public IPin {
-     public:
-      PcfPin(Pcf857x *owner, int id) : IPin(id), _owner(owner) {
-        snprintf(_name, sizeof(_name), "PCF857x-%02u", id - owner->pinBase());
+    namespace pcf857x {
+
+      class Pin : public IPin {
+       public:
+        Pin(Pcf857x *owner, int id) : IPin(id), _owner(owner) {
+          snprintf(_name, sizeof(_name), "PCF857x-%02u", id - owner->pinBase());
+        };
+        const char *name() const override {
+          return _name;
+        }
+        io::pin::Features features() override {
+          return io::pin::Features::DigitalInput |
+                 io::pin::Features::DigitalOutput | io::pin::Features::PullUp;
+        }
+        pin::Impl *createImpl(pin::Type type) override;
+
+       private:
+        Pcf857x *_owner;
+        char _name[11];
+        friend class Digital;
       };
-      const char *name() const override {
-        return _name;
-      }
-      Features features() override {
-        return Features::DigitalInput | Features::DigitalOutput |
-               Features::PullUp;
-      }
-      esp_err_t setDirection(gpio_mode_t mode) override {
-        switch (mode) {
-          case GPIO_MODE_INPUT:
-            _owner->setPinMode(_id, true);
+
+      class Digital : public io::pin::IDigital {
+       public:
+        Digital(Pin *pin) : _pin(pin) {}
+        esp_err_t setDirection(gpio_mode_t mode) override {
+          switch (mode) {
+            case GPIO_MODE_INPUT:
+              _pin->_owner->setPinMode(_pin->id(), true);
+              return ESP_OK;
+            case GPIO_MODE_OUTPUT:
+            case GPIO_MODE_OUTPUT_OD:
+            case GPIO_MODE_INPUT_OUTPUT:
+            case GPIO_MODE_INPUT_OUTPUT_OD:
+              _pin->_owner->setPinMode(_pin->id(), false);
+              return ESP_OK;
+            default:
+              return ESP_FAIL;
+          }
+        }
+        esp_err_t setPull(gpio_pull_mode_t pull) override {
+          if (pull == GPIO_PULLUP_ONLY)
             return ESP_OK;
-          case GPIO_MODE_OUTPUT:
-          case GPIO_MODE_OUTPUT_OD:
-          case GPIO_MODE_INPUT_OUTPUT:
-          case GPIO_MODE_INPUT_OUTPUT_OD:
-            _owner->setPinMode(_id, false);
-            return ESP_OK;
+          return ESP_FAIL;
+        }
+        esp_err_t read(bool &value) override {
+          return _pin->_owner->readPin(_pin->id(), value);
+        }
+        esp_err_t write(bool value) override {
+          return _pin->_owner->writePin(_pin->id(), value);
+        }
+
+       private:
+        Pin *_pin;
+      };
+
+      pin::Impl *Pin::createImpl(pin::Type type) {
+        switch (type) {
+          case pin::Type::Digital:
+            return new Digital(this);
           default:
-            return ESP_FAIL;
+            return nullptr;
         }
       }
-      esp_err_t setPull(gpio_pull_mode_t pull) override {
-        if (pull == GPIO_PULLUP_ONLY)
-          return ESP_OK;
-        return ESP_FAIL;
-      }
-      esp_err_t digitalRead(bool &value) override {
-        return _owner->readPin(_id, value);
-      }
-      esp_err_t digitalWrite(bool value) override {
-        return _owner->writePin(_id, value);
-      }
-
-     private:
-      Pcf857x *_owner;
-      char _name[11];
-    };
+    }  // namespace pcf857x
 
     Pcf857x::Pcf857x(Flavor f, I2C *i2c) : _flavor(f), _i2c(i2c) {
       init();
@@ -59,7 +81,7 @@ namespace esp32m {
     }
 
     IPin *Pcf857x::newPin(int id) {
-      return new PcfPin(this, id);
+      return new pcf857x::Pin(this, id);
     }
 
     esp_err_t Pcf857x::read(uint16_t &port) {

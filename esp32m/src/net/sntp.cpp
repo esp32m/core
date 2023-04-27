@@ -111,16 +111,17 @@ namespace esp32m {
         return;
       esp_sntp_stop();
       if (_enabled) {
-        esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-        esp_sntp_setservername(0,
-                               _host.size() ? _host.c_str() : DefaultNtpHost);
-        sntp_set_sync_interval((uint32_t)(_interval * 1000));
-        esp_sntp_init();
         if (_tze.empty())
           unsetenv("TZ");
         else
           setenv("TZ", _tze.c_str(), 1);
         tzset();
+        esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+        esp_sntp_setservername(0,
+                               _host.size() ? _host.c_str() : DefaultNtpHost);
+        sntp_set_sync_interval((uint32_t)(_interval * 1000));
+        esp_sntp_init();
+        sntp_restart();
       }
     }
 

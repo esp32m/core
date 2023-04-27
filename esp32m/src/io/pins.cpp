@@ -50,51 +50,32 @@ namespace esp32m {
 
     void IPin::reset() {
       std::lock_guard guard(_mutex);
-      if (!_impl)
-        return;
-      delete _impl;
-      _impl = nullptr;
+      _impls.clear();
     }
     pin::Impl *IPin::impl(pin::Type type) {
       std::lock_guard guard(_mutex);
-      if (_impl && _impl->type() != type) {
-        delete _impl;
-        _impl = nullptr;
-      }
-      if (!_impl) {
-        _impl = createImpl(type);
-        if (_impl && !_impl->valid()) {
-          delete _impl;
-          _impl = nullptr;
+      pin::Impl *result = nullptr;
+      auto it = _impls.find(type);
+      if (it == _impls.end()) {
+        auto i = createImpl(type);
+        if (i) {
+          if (i->valid())
+            _impls[type] = std::unique_ptr<pin::Impl>(result = i);
+          else
+            delete i;
         }
-      }
-      if (_impl && _impl->type() == type)
-        return _impl;
-      return nullptr;
+      } else
+        result = it->second.get();
+      return result;
     }
 
     esp_err_t pin::IADC::read(float &value, uint32_t *mv) {
       int raw;
       ESP_CHECK_RETURN(read(raw, mv));
-      switch (getWidth()) {
-        case ADC_BITWIDTH_9:
-          value = (float)raw / (1 << 9);
-          break;
-        case ADC_BITWIDTH_10:
-          value = (float)raw / (1 << 10);
-          break;
-        case ADC_BITWIDTH_11:
-          value = (float)raw / (1 << 11);
-          break;
-        case ADC_BITWIDTH_12:
-          value = (float)raw / (1 << 12);
-          break;
-        case ADC_BITWIDTH_13:
-          value = (float)raw / (1 << 13);
-          break;
-        default:
-          return ESP_FAIL;
-      }
+      auto width = getWidth();
+      if (width <= 0)
+        return ESP_FAIL;
+      value = (float)raw / (1 << width);
       return ESP_OK;
     }
 
