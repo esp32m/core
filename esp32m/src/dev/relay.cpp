@@ -103,8 +103,8 @@ namespace esp32m {
       return toString(refreshState());
     }
 
-    Relay::State getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off, bool levelOn,
-                                  bool levelOff) {
+    Relay::State getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off,
+                                  bool levelOn, bool levelOff) {
       bool onLevel = false, offLevel = false;
       if (on)
         if (on->read(onLevel) != ESP_OK)
@@ -189,6 +189,8 @@ namespace esp32m {
     bool Relay::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
+      if (!_haAutodiscovery)
+        return false;
       static const char *names[] = {"?", "ON", "OFF"};
       if (req.is(ha::DescribeRequest::Name)) {
         DynamicJsonDocument *doc = new DynamicJsonDocument(
@@ -235,7 +237,8 @@ namespace esp32m {
 
     Relay *useRelay(const char *name, io::IPin *pinOn, io::IPin *pinOff,
                     io::IPin *pinSenseOn, io::IPin *pinSenseOff) {
-      return new Relay(name, pinOn->digital(), pinOff->digital(), pinSenseOn->digital(), pinSenseOff->digital());
+      return new Relay(name, pinOn->digital(), pinOff->digital(),
+                       pinSenseOn->digital(), pinSenseOff->digital());
     }
 
   }  // namespace dev

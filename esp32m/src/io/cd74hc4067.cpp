@@ -122,6 +122,7 @@ namespace esp32m {
             if ((sig->features() & (io::pin::Features::DigitalInput |
                                     io::pin::Features::DigitalOutput)) != 0)
               return new Digital(this);
+            break;
           case pin::Type::ADC:
             if ((sig->features() & io::pin::Features::ADC) != 0)
               return new ADC(this);

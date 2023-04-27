@@ -3,6 +3,12 @@
 namespace esp32m {
   namespace ha {
 
+    class Descriptor {
+     public:
+      bool acceptsCommands = false;
+      std::vector<const char *> stateTopicNames;
+    };
+
     class DescribeRequest : public Request {
      public:
       DescribeRequest(const char *target)
@@ -50,7 +56,7 @@ namespace esp32m {
 
       std::unique_ptr<DynamicJsonDocument> response;
     };
-    
+
     class CommandRequest : public Request {
      public:
       CommandRequest(const char *target, JsonVariantConst data)

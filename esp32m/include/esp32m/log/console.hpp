@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
@@ -17,6 +18,7 @@ namespace esp32m {
       Console() {}
 
      protected:
+      std::mutex _mutex;
       virtual bool append(const char *message);
     };
   }  // namespace log

@@ -117,17 +117,25 @@ namespace esp32m {
                                          nodeid, id);
           }
           bool addName = !configInput.containsKey("name");
+          auto stateTopicNames = data["stateTopicNames"].as<JsonArrayConst>();
           auto configPayloadDoc = new DynamicJsonDocument(
               configInput.memoryUsage() +
               JSON_OBJECT_SIZE(1 + (acceptsCommands ? 1 : 0) +
                                (addName ? 1 : 0)) +
-              JSON_STRING_SIZE(stateTopic.size()) +
+              (stateTopicNames ? JSON_OBJECT_SIZE(stateTopicNames.size()) +
+                                     JSON_STRING_SIZE(stateTopic.size()) *
+                                         stateTopicNames.size()
+                               : JSON_STRING_SIZE(stateTopic.size())) +
               JSON_STRING_SIZE(commandTopic.size()));
           configPayloadDoc->set(configInput);
           auto configPayloadRoot = configPayloadDoc->as<JsonObject>();
           if (addName)
             configPayloadRoot["name"] = id;
-          configPayloadRoot["state_topic"] = stateTopic;
+          if (stateTopicNames)
+            for (const char *name : stateTopicNames)
+              configPayloadRoot[name] = stateTopic;
+          else
+            configPayloadRoot["state_topic"] = stateTopic;
           if (acceptsCommands)
             configPayloadRoot["command_topic"] = commandTopic;
           json::check(this, configPayloadDoc, "HA config payload");
@@ -135,7 +143,7 @@ namespace esp32m {
               json::allocSerialize(configPayloadDoc->as<JsonVariantConst>());
           delete configPayloadDoc;
 
-          /*logI("config topic: %s, payload: %s, acceptsCommands=%d",
+          /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
                configTopic.c_str(), configPayload, acceptsCommands);*/
           mqtt.publish(configTopic.c_str(), configPayload);
           free(configPayload);
@@ -188,7 +196,7 @@ namespace esp32m {
             statePayload = json::allocSerialize(state);
             jsonStatePayload = true;
           }
-          /*logI("state topic: %s, payload: %s", dev->stateTopic.c_str(),
+          /*logD("state topic: %s, payload: %s", dev->stateTopic.c_str(),
                statePayload);*/
           mqtt.publish(dev->stateTopic.c_str(), statePayload);
           if (jsonStatePayload)

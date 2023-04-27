@@ -323,15 +323,17 @@ namespace esp32m {
       if (!_appenders) {
         auto m = formatter()(message);
         if (m) {
-          ets_printf("%s\n", m);
+          ets_printf(m);
+          ets_printf("\n");
           free(m);
         }
       } else {
         LogQueue *queue = logQueue;
+        bool enqueued = false;
         // we can't use queue if scheduler is suspended
         if (queue && xTaskGetSchedulerState() != taskSCHEDULER_SUSPENDED)
-          queue->enqueue(message);
-        else {
+          enqueued = queue->enqueue(message);
+        if (!enqueued) {
           LogAppender *appender = _appenders;
           while (appender) {
             appender->append(message);

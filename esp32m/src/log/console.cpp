@@ -21,6 +21,7 @@ namespace esp32m {
       if (net::ota::isRunning())
         return false;
       if (message) {
+        std::lock_guard guard(_mutex);
         auto l = strlen(message);
         for (auto i = 0; i < l; i++) esp_rom_uart_putc(message[i]);
         esp_rom_uart_putc('\n');

@@ -21,12 +21,14 @@ namespace esp32m {
           : _name(name), _pinOn(pin), _pinOff(pin) {
         init();
       }
-      Relay(const char *name, io::pin::IDigital *pinOn, io::pin::IDigital *pinOff)
+      Relay(const char *name, io::pin::IDigital *pinOn,
+            io::pin::IDigital *pinOff)
           : _name(name), _pinOn(pinOn), _pinOff(pinOff) {
         init();
       }
-      Relay(const char *name, io::pin::IDigital *pinOn, io::pin::IDigital *pinOff,
-            io::pin::IDigital *pinSenseOn, io::pin::IDigital *pinSenseOff)
+      Relay(const char *name, io::pin::IDigital *pinOn,
+            io::pin::IDigital *pinOff, io::pin::IDigital *pinSenseOn,
+            io::pin::IDigital *pinSenseOff)
           : _name(name),
             _pinOn(pinOn),
             _pinOff(pinOff),
@@ -79,6 +81,7 @@ namespace esp32m {
       io::pin::IDigital *_pinSenseOn = nullptr, *_pinSenseOff = nullptr;
       uint8_t _levels = 0;
       bool _persistent = true;
+      bool _haAutodiscovery = false;
       State _state = State::Unknown;
       void setState(State state);
       bool getLevel(Pin pin, bool on);
