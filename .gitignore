@@ -6,7 +6,8 @@
 
 # Yarn 3 files
 .pnp.*
-.yarn/*
+.yarn/
+.yarn/cache/
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
@@ -20,6 +21,7 @@ build/
 coverage/
 *.log
 *.pem
+!esp32m/web-ui/ts-libs/dev/dist
 
 dependencies.lock
 sdkconfig
