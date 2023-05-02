@@ -20,7 +20,7 @@ export const SystemSummary = () => {
     const { heap, chip, spiffs } = hw || {};
     if (chip) {
       if (chip.revision || chip.freq)
-        list.push(['CPU frequency', `${chip.freq} MHz`]);
+        list.push(['CPU Frequency', `${chip.freq} MHz`]);
       if (chip.temperature)
         list.push([
           'CPU temperature',
