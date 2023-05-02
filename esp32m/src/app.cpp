@@ -178,7 +178,7 @@ namespace esp32m {
   }
 
   void App::restart() {
-    delay(100); // this won't hurt, especually for buffered logs to catch up
+    delay(100);  // this won't hurt, especually for buffered logs to catch up
     EventDone::publish(DoneReason::Restart);
     esp_restart();
   }
@@ -299,11 +299,21 @@ namespace esp32m {
   }
 
   DynamicJsonDocument *App::getConfig(RequestContext &ctx) {
-    size_t size = JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_hostname.size());
+    size_t size = JSON_OBJECT_SIZE(4)  // hostname, udplog: enabled, host
+                  + JSON_STRING_SIZE(_hostname.size());
+    if (_udpLogger)
+      size += JSON_STRING_SIZE(_udpLogger->getHost().size());
 
     auto doc = new DynamicJsonDocument(size);
     auto root = doc->to<JsonObject>();
-    root["hostname"] = _hostname;
+    json::to(root, "hostname", _hostname);
+    auto udplog = root.createNestedObject("udplog");
+    if (_udpLogger) {
+      json::to(udplog, "enabled", _udpLogger->isEnabled());
+      json::to(udplog, "host", _udpLogger->getHost());
+    } else {
+      json::to(udplog, "enabled", false);
+    }
     return doc;
   }
 
@@ -315,6 +325,31 @@ namespace esp32m {
     json::from(root["hostname"], next, &changed);
     if (changed)
       setHostname(next.c_str());
+    auto udplog = root["udplog"];
+    if (udplog) {
+      auto enabled = udplog["enabled"].as<bool>();
+      if (enabled) {
+        if (!_udpLogger) {
+          _udpLogger = new log::Udp();
+          log::addAppender(_udpLogger);
+        }
+      }
+      if (_udpLogger) {
+        if (_udpLogger->isEnabled() != enabled) {
+          _udpLogger->enable(enabled);
+          changed = true;
+        }
+        auto vhost = udplog["host"];
+        if (vhost) {
+          std::string oldHost = _udpLogger->getHost();
+          std::string newHost = vhost;
+          if (oldHost != newHost) {
+            _udpLogger->setHost(newHost.c_str());
+            changed = true;
+          }
+        }
+      }
+    }
     return changed;
   }
 

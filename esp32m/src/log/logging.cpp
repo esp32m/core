@@ -255,11 +255,11 @@ namespace esp32m {
         struct tm timeinfo;
         gmtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%F %T", &timeinfo);
-        buf = (char *)malloc(strlen(strftime_buf) + 1 /*dot*/ + 4 /*millis*/ +
+        buf = (char *)malloc(strlen(strftime_buf) + 1 /*dot*/ + 3 /*millis*/ +
                              1 /*space*/ + 1 /*level*/ + 1 /*space*/ +
                              strlen(name) + 2 /*spaces*/ + msg->message_size() +
                              1 /*zero*/);
-        sprintf(buf, "%s.%04d %c %s  %s", strftime_buf, (int)(stamp % 1000), l,
+        sprintf(buf, "%s.%03d %c %s  %s", strftime_buf, (int)(stamp % 1000), l,
                 name, msg->message());
       } else {
         int millis = stamp % 1000;
@@ -273,9 +273,9 @@ namespace esp32m {
         buf = (char *)malloc(
             6 /*days*/ + 1 /*colon*/ + 2 /*hours*/ + 1 /*colon*/ +
             2 /*minutes*/ + 1 /*colon*/ + 2 /*seconds*/ + 1 /*colon*/ +
-            4 /*millis*/ + 1 /*space*/ + 1 /*level*/ + 1 /*space*/ +
+            3 /*millis*/ + 1 /*space*/ + 1 /*level*/ + 1 /*space*/ +
             strlen(name) + 2 /*spaces*/ + msg->message_size() + 1 /*zero*/);
-        sprintf(buf, "%d:%02d:%02d:%02d.%04d %c %s  %s", days, hours, minutes,
+        sprintf(buf, "%d:%02d:%02d:%02d.%03d %c %s  %s", days, hours, minutes,
                 seconds, millis, l, name, msg->message());
       }
       return buf;

@@ -36,7 +36,8 @@ namespace esp32m {
       StaConnected = BIT2,
       StaGotIp = BIT3,
       ApRunning = BIT4,
-      ScanDone = BIT5,
+      Scanning = BIT5,
+      ScanDone = BIT6,
     };
 
     namespace wifi {
@@ -780,6 +781,7 @@ namespace esp32m {
           } break;
           case WIFI_EVENT_SCAN_DONE:
             // logI("scan done");
+            xEventGroupClearBits(_eventGroup, WifiFlags::Scanning);
             xEventGroupSetBits(_eventGroup, WifiFlags::ScanDone);
             break;
           case WIFI_EVENT_AP_START:
@@ -838,20 +840,21 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Wifi::getState(const JsonVariantConst filter) {
-      size_t size = JSON_OBJECT_SIZE(
-                        4 + 3)  // mode, ch, ch2, status + nested: wifi, sta, ap
-                    + JSON_OBJECT_SIZE(8) + 33 + net::MacMaxChars * 2 + 16 +
-                    16 + 16  // sta: ssid(33), bssid(18), mac(18), ip(16),
-                             // gw(16), mask(16), rssi
-                    + JSON_OBJECT_SIZE(6) + net::MacMaxChars + 16 + 16 +
-                    16;  // ap: mac(18), ip(16), gw(16), mask(16), cli
+      size_t size =
+          JSON_OBJECT_SIZE(4 + 3)  // mode, flags, ch, ch2  + nested: sta, ap
+          + JSON_OBJECT_SIZE(8) + 33 + net::MacMaxChars * 2 + 16 + 16 +
+          16  // sta: ssid(33), bssid(18), mac(18), ip(16),
+              // gw(16), mask(16), rssi
+          + JSON_OBJECT_SIZE(6) + net::MacMaxChars + 16 + 16 +
+          16;  // ap: mac(18), ip(16), gw(16), mask(16), cli
       auto doc = new DynamicJsonDocument(size);
       auto info = doc->to<JsonObject>();
       wifi_mode_t wfm = WIFI_MODE_NULL;
       if (esp_wifi_get_mode(&wfm) == ESP_OK) {
         info["mode"] = (int)wfm;
-        uint8_t pc;
-        wifi_second_chan_t sc;
+        info["flags"] = xEventGroupGetBits(_eventGroup);
+        uint8_t pc = 0;
+        wifi_second_chan_t sc = WIFI_SECOND_CHAN_NONE;
         if (esp_wifi_get_channel(&pc, &sc) == ESP_OK) {
           if (pc)
             info["ch"] = pc;
@@ -1263,14 +1266,17 @@ namespace esp32m {
       auto curtime = millis();
       if (!_scanStarted || (curtime - _scanStarted > 15000)) {
         _scanStarted = curtime;
+        xEventGroupClearBits(_eventGroup, WifiFlags::Scanning);
         esp_wifi_scan_stop();
         // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/wifi.html
         // Currently, the esp_wifi_scan_start() API is supported only in station
         // or station/AP mode.
         _sta.enable(true);
         if (ESP_ERROR_CHECK_WITHOUT_ABORT(
-                esp_wifi_scan_start(&_scanConfig, false)) == ESP_OK)
+                esp_wifi_scan_start(&_scanConfig, false)) == ESP_OK) {
           logI("scan started");
+          xEventGroupSetBits(_eventGroup, WifiFlags::Scanning);
+        }
       }
     }
 

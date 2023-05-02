@@ -38,7 +38,7 @@ namespace esp32m {
     }
     if (tr == st.st_size) {
       buf[st.st_size] = 0;
-      logD("config: %s", buf + sizeof(size_t));
+      // logD("config: %s", buf + sizeof(size_t));
       *mu = *(size_t *)buf;
       *bptr = buf;
       result = tr;
@@ -92,9 +92,6 @@ namespace esp32m {
       logW("could not serialize config, low memory?");
       return;
     }
-    /*size_t bufsize = measureJson(config) + 1;
-    char *buf = (char *)malloc(bufsize);
-    size_t ss = serializeJson(config, buf, bufsize);*/
 
     uint32_t crc = esp_rom_crc32_le(mu, (const uint8_t *)buf, ss);
 
@@ -105,15 +102,15 @@ namespace esp32m {
                   "error writing config header"))
           if (check(fwrite(buf, 1, ss, file) == ss, file,
                     "error writing config")) {
-            logD("%d bytes saved, mu=%d, data=%s", ss, mu, buf);
+            // logD("%d bytes saved, mu=%d, data=%s", ss, mu, buf);
             _crc = crc;
           }
         fflush(file);
         fclose(file);
       } else
         logW("could not open %s for writing: %d", _path, errno);
-    } else
-      logD("config not changed, ignoring save request");
+    } /*else
+      logD("config not changed, ignoring save request");*/
 
     free(buf);
   }

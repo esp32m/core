@@ -273,6 +273,7 @@ namespace esp32m {
         json::to(cr, "client", client);
       }
       cr["pubcnt"] = _pubcnt;
+      cr["recvcnt"] = _recvcnt;
       return doc;
     }
 
@@ -439,6 +440,7 @@ namespace esp32m {
         case MQTT_EVENT_DATA: {
           std::string topic = std::string(event->topic, event->topic_len);
           std::string payload = std::string(event->data, event->data_len);
+          _recvcnt++;
           Incoming ev(topic, payload);
           ev.publish();
           std::vector<HandlerFunction> handlers;

@@ -45,10 +45,10 @@ namespace esp32m {
           return;
         const char *name = msg["name"];
         if (name) {
-          // DynamicJsonDocument *data = config::addMaskSensitive(msg["data"]);
+          /*if (!strcmp(name, "config-get"))
+            json::dump(ui, msg, "process request");*/
           Req ev(ui, name, msg["seq"], msg["target"], msg["data"], cid);
           ev.publish();
-          // delete data;
         }
       }
 
@@ -75,6 +75,10 @@ namespace esp32m {
             _ui(ui),
             _clientId(clientId) {}
     };
+
+    Client::Client(Ui *ui, uint32_t id) {
+      _name = string_printf("%s-%u", ui->transport()->name(), id);
+    }
 
   }  // namespace ui
 
@@ -134,11 +138,10 @@ namespace esp32m {
   }
 
   void Ui::sessionClosed(uint32_t cid) {
-    // logI("session %d closed", cid);
     std::lock_guard<std::mutex> guard(_mutex);
     auto i = _clients.find(cid);
     if (i != _clients.end())
-      i->second.disconnected();
+      i->second->disconnected();
   }
 
   void Ui::incoming(uint32_t cid, DynamicJsonDocument *json) {
@@ -146,8 +149,14 @@ namespace esp32m {
       return;
     std::lock_guard<std::mutex> guard(_mutex);
     auto i = _clients.find(cid);
-    ui::Client &c = i == _clients.end() ? _clients[cid] : i->second;
-    if (!c.enqueue(json)) {
+    ui::Client *c;
+    if (i == _clients.end()) {
+      c = new ui::Client(this, cid);
+      _clients[cid] = std::unique_ptr<ui::Client>(c);
+      LOGD(c, "session opened");
+    } else
+      c = i->second.get();
+    if (!c->enqueue(json)) {
       JsonObjectConst req = json->as<JsonObjectConst>();
       int seq = req["seq"];
       const char *type = req["type"];
@@ -182,11 +191,14 @@ namespace esp32m {
       {
         std::lock_guard<std::mutex> guard(_mutex);
         for (auto it = _clients.begin(); it != _clients.end();) {
-          auto &client = it->second;
-          if (client.isDisconnected())
+          auto client = it->second.get();
+          if (client->isDisconnected()) {
+            // TODO: LogMessage stores pointer to loggable name which will get
+            // destroyed before the message gets to the formatter LOGD(client,
+            // "session closed");
             it = _clients.erase(it);
-          else {
-            req = client.dequeue();
+          } else {
+            req = client->dequeue();
             cid = it->first;
             if (req)
               break;

@@ -19,13 +19,24 @@ namespace esp32m {
       void setMode(Format format) {
         _format = format;
       }
+      std::string getHost() {
+        return _host;
+      }
+      void setHost(const char *host);
+      void enable(bool enabled) {
+        _enabled = enabled;
+      }
+      bool isEnabled() const {
+        return _enabled;
+      }
 
      protected:
       virtual bool append(const LogMessage *message);
 
      private:
       Format _format;
-      const char *_host;
+      std::string _host;
+      bool _enabled = false;
       struct sockaddr_in _addr;
       int _fd;
     };

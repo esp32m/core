@@ -15,25 +15,28 @@
 namespace esp32m {
 
   namespace log {
-    Udp::Udp(const char *host, uint16_t port) : _host(host), _fd(-1) {
+    namespace udp {
+      const char *DefaultHost = "syslog.lan";
+    }
+
+    Udp::Udp(const char *host, uint16_t port) : _fd(-1) {
       memset(&_addr, 0, sizeof(_addr));
       _addr.sin_family = AF_INET;
       _addr.sin_port = htons(port);
-      if (host)
-        inet_aton(host, &_addr.sin_addr.s_addr);
+      setHost(host);
       _format = port == 514 ? Format::Syslog : Format::Text;
-      if (_addr.sin_addr.s_addr == 0)
-        EventManager::instance().subscribe([this](Event &ev) {
-          IpEvent *ip;
-          if (IpEvent::is(ev, &ip))
-            switch (ip->event()) {
-              case IP_EVENT_STA_LOST_IP:
-                _addr.sin_addr.s_addr = 0;
-                break;
-              default:
-                break;
-            }
-        });
+      /*      if (_addr.sin_addr.s_addr == 0)
+              EventManager::instance().subscribe([this](Event &ev) {
+                IpEvent *ip;
+                if (IpEvent::is(ev, &ip))
+                  switch (ip->event()) {
+                    case IP_EVENT_STA_LOST_IP:
+                      _addr.sin_addr.s_addr = 0;
+                      break;
+                    default:
+                      break;
+                  }
+              });*/
     }
 
     Udp::~Udp() {
@@ -41,6 +44,16 @@ namespace esp32m {
         shutdown(_fd, 2);
         close(_fd);
         _fd = -1;
+      }
+    }
+
+    void Udp::setHost(const char *host) {
+      if (!(host && strlen(host)))
+        host = udp::DefaultHost;
+      _host = host;
+      _addr.sin_addr.s_addr = 0;
+      if (_host.size()) {
+        inet_aton(host, &_addr.sin_addr.s_addr);
       }
     }
 
@@ -61,6 +74,8 @@ namespace esp32m {
     }
 
     bool Udp::append(const LogMessage *message) {
+      if (!_enabled)
+        return true;
       if (!xPortCanYield())  // called from ISR
         return false;
       if (net::ota::isRunning())
@@ -68,7 +83,7 @@ namespace esp32m {
       if (!net::isAnyNetifUp())
         return false;
       if (!_addr.sin_addr.s_addr) {
-        const char *host = _host;
+        const char *host = _host.c_str();
         if (!host)
           host = "syslog.lan";
         struct addrinfo hints = {};
@@ -83,12 +98,8 @@ namespace esp32m {
                sizeof(_addr.sin_addr));
         freeaddrinfo(res);
       }
-      if (!_addr.sin_addr.s_addr) {
+      if (!_addr.sin_addr.s_addr)
         getDefaultGwAddress(_addr.sin_addr.s_addr);
-        /*esp_netif_ip_info_t info;
-        net::Wifi::instance().sta().getIpInfo(info);
-        _addr.sin_addr.s_addr = info.gw.addr;*/
-      }
       if (!_addr.sin_addr.s_addr)
         return false;
       if (!message)

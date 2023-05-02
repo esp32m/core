@@ -64,16 +64,9 @@ namespace esp32m {
 
       void respondImpl(const char *source, const JsonVariantConst data,
                        bool isError) override {
-        if (data.isNull() || !data.size() || isError)
-          return;
-        auto doc = new DynamicJsonDocument(data.memoryUsage());
-        doc->set(data);
-        response = std::unique_ptr<DynamicJsonDocument>(doc);
       }
 
       constexpr static const char *Name = "ha-command";
-
-      std::unique_ptr<DynamicJsonDocument> response;
     };
 
   }  // namespace ha

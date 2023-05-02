@@ -509,8 +509,8 @@ namespace esp32m {
                 },
         };
         ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
-        LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i, duty_res=%i",
-             _channel, _timer, freq_hz, duty_resolution);
+        /*LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i, duty_res=%i",
+             _channel, _timer, freq_hz, duty_resolution);*/
         return ESP_OK;
       }
       esp_err_t setDuty(uint32_t duty) override {
@@ -520,7 +520,7 @@ namespace esp32m {
             ledc_set_duty(_speedMode, (ledc_channel_t)_channel, duty));
         ESP_CHECK_RETURN(
             ledc_update_duty(_speedMode, (ledc_channel_t)_channel));
-        LOGI(_pin, "LEDC set duty %i", duty);
+        // LOGI(_pin, "LEDC set duty %i", duty);
         return ESP_OK;
       }
 

@@ -8,6 +8,7 @@
 #include "esp32m/config/configurable.hpp"
 #include "esp32m/events/request.hpp"
 #include "esp32m/json.hpp"
+#include "esp32m/log/udp.hpp"
 #include "esp32m/logging.hpp"
 #include "esp32m/props.hpp"
 
@@ -112,6 +113,26 @@ namespace esp32m {
     }
   };
 
+  class EventStateChanged : public Event {
+   public:
+    EventStateChanged(const EventStateChanged &) = delete;
+    AppObject *object() const {
+      return _object;
+    }
+    static void publish(AppObject *object) {
+      EventStateChanged evt(object);
+      evt.Event::publish();
+    }
+    static bool is(Event &ev) {
+      return ev.is(Type);
+    }
+
+   private:
+    EventStateChanged(AppObject *object) : Event(Type), _object(object) {}
+    AppObject *_object;
+    constexpr static const char *Type = "state-changed";
+  };
+
   class App : public AppObject {
    public:
     class Init {
@@ -174,6 +195,7 @@ namespace esp32m {
     uint8_t _maxInitLevel = 0;
     uint8_t _curInitLevel = 0;
     std::unique_ptr<Config> _config;
+    log::Udp *_udpLogger = nullptr;
     TaskHandle_t _task = nullptr;
     unsigned long _configDirty = 0;
     App(const char *name, const char *verson);

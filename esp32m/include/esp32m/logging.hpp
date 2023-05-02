@@ -28,15 +28,15 @@
   loggable->logger().logf(log::Level::Verbose, format, ##__VA_ARGS__)
 
 #define loge(format, ...) \
-  log::system().logf(log::Level::Error, format, ##__VA_ARGS__)
+  ::esp32m::log::system().logf(::esp32m::log::Level::Error, format, ##__VA_ARGS__)
 #define logw(format, ...) \
-  log::system().logf(log::Level::Warning, format, ##__VA_ARGS__)
+  ::esp32m::log::system().logf(::esp32m::log::Level::Warning, format, ##__VA_ARGS__)
 #define logi(format, ...) \
-  log::system().logf(log::Level::Info, format, ##__VA_ARGS__)
+  ::esp32m::log::system().logf(::esp32m::log::Level::Info, format, ##__VA_ARGS__)
 #define logd(format, ...) \
-  log::system().logf(log::Level::Debug, format, ##__VA_ARGS__)
+  ::esp32m::log::system().logf(::esp32m::log::Level::Debug, format, ##__VA_ARGS__)
 #define logv(format, ...) \
-  log::system().logf(log::Level::Verbose, format, ##__VA_ARGS__)
+  ::esp32m::log::system().logf(::esp32m::log::Level::Verbose, format, ##__VA_ARGS__)
 
 namespace esp32m {
   namespace log {

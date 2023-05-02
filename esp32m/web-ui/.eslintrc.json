@@ -1,0 +1,89 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2018,
+    "sourceType": "module"
+  },
+  "env": {
+    "browser": false,
+    "node": true,
+    "es6": true
+  },
+  "ignorePatterns": ["!.github"],
+  "globals": {
+    "Atomics": "readonly",
+    "SharedArrayBuffer": "readonly"
+  },
+  "extends": [
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:prettier/recommended",
+    "prettier"
+  ],
+  "plugins": [
+    "react",
+    "react-hooks",
+    "json-format",
+    "yaml",
+    "html",
+    "prettier"
+  ],
+  "settings": {
+    "react": {
+      "version": "detect"
+    },
+    "html/report-bad-indent": "warn"
+  },
+  "rules": {
+    "linebreak-style": ["error", "windows"],
+    "prettier/prettier": [
+      "error",
+      {
+        "endOfLine": "auto"
+      }
+    ],
+    "quotes": [
+      "warn",
+      "single",
+      {
+        "avoidEscape": true
+      }
+    ],
+    "semi": ["error", "always"]
+  },
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "extends": [],
+      "rules": {
+        "@typescript-eslint/no-unused-vars": [
+          "warn", // or "error"
+          {
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^_",
+            "caughtErrorsIgnorePattern": "^_"
+          }
+        ],
+        "react/react-in-jsx-scope": "off",
+        // "react-hooks/rules-of-hooks": "error",
+        "react-hooks/exhaustive-deps": "warn",
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-empty-function": "warn",
+        "@typescript-eslint/ban-types": "warn",
+        "@typescript-eslint/type-annotation-spacing": [
+          "off",
+          {
+            "before": true,
+            "after": true
+          }
+        ]
+      }
+    },
+    {
+      "files": ["*.yaml", "*.yml"],
+      "plugins": ["yaml"],
+      "extends": ["plugin:yaml/recommended"]
+    }
+  ]
+}

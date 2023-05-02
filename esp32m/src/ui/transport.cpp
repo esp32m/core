@@ -8,6 +8,8 @@ namespace esp32m {
     void Transport::incoming(uint32_t cid, void *data, size_t len) {
       if (!len || !data)
         return;
+      /*std::string str((const char *)data, len);
+      logd("%d: incoming %s", cid, str.c_str());*/
       DynamicJsonDocument *dp = json::parse((const char *)data, len);
       _ui->incoming(cid, dp);
     }

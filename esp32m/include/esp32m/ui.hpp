@@ -27,6 +27,9 @@ namespace esp32m {
     const char *name() const override {
       return "ui";
     }
+    ui::Transport *transport() const {
+      return _transport;
+    }
     std::vector<ui::Asset> &assets() {
       return _assets;
     }
@@ -45,7 +48,7 @@ namespace esp32m {
     std::mutex _mutex, _sendMutex;
     TaskHandle_t _task;
     ui::Transport *_transport;
-    std::map<uint32_t, ui::Client> _clients;
+    std::map<uint32_t, std::unique_ptr<ui::Client> > _clients;
     std::vector<ui::Asset> _assets;
     void run();
     void incoming(uint32_t cid, DynamicJsonDocument *json);

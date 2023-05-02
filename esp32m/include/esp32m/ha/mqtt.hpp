@@ -10,6 +10,9 @@ namespace esp32m {
   namespace ha {
 
     namespace mqtt {
+
+      void wakeUp();
+
       class Dev {
        public:
         std::string stateTopic;
@@ -31,10 +34,21 @@ namespace esp32m {
         const char *name() const {
           return _name.c_str();
         }
+        bool isStateChanged() {
+          return _stateChanged;
+        }
+        void resetStateChanged() {
+          _stateChanged = false;
+        }
+        void setStateChanged() {
+          _stateChanged = true;
+          wakeUp();
+        }
 
        private:
         std::string _name;
         net::mqtt::Subscription *_sub = nullptr;
+        bool _stateChanged = false;
         void command(std::string payload) {
           auto doc = new DynamicJsonDocument(JSON_STRING_SIZE(payload.size()));
           auto root = doc->to<JsonVariant>();
@@ -55,12 +69,22 @@ namespace esp32m {
         static Mqtt i;
         return i;
       }
+      void wakeUp() {
+        if (_task)
+          xTaskNotifyGive(_task);
+      }
 
      protected:
       void handleEvent(Event &ev) override {
         if (EventInited::is(ev)) {
           xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/ha-mqtt",
                       4096, this, tskIDLE_PRIORITY, &_task);
+        } else if (EventStateChanged::is(ev)) {
+          auto name = ((EventStateChanged &)ev).object()->name();
+          // logI("state changed %s", name);
+          auto it = _devices.find(name);
+          if (it != _devices.end())
+            it->second->setStateChanged();
         }
       }
 
@@ -75,15 +99,17 @@ namespace esp32m {
         auto &mqtt = net::Mqtt::instance();
         for (;;) {
           esp_task_wdt_reset();
-          ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+          if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)))
+            requestState(true);
           if (!mqtt.isReady())
             continue;
 
           auto curtime = millis();
-          if (_describeRequested == 0 || (curtime - _describeRequested > 60000))
+          if (_describeRequested == 0 ||
+              (curtime - _describeRequested > 24 * 60 * 60 * 1000))
             describe();
           if (_stateRequested == 0 || (curtime - _stateRequested > 5000))
-            requestState();
+            requestState(false);
         }
       }
       void describe() {
@@ -111,7 +137,10 @@ namespace esp32m {
           auto stateTopic =
               string_printf("%s/%s/%s/%s/state", dtp, component, nodeid, id);
           std::string commandTopic;
-          bool acceptsCommands = DescribeRequest::getAcceptsCommands(data);
+          auto commandTopicNames =
+              data["commandTopicNames"].as<JsonArrayConst>();
+          bool acceptsCommands = DescribeRequest::getAcceptsCommands(data) ||
+                                 commandTopicNames.size();
           if (acceptsCommands) {
             commandTopic = string_printf("%s/%s/%s/%s/command", dtp, component,
                                          nodeid, id);
@@ -126,7 +155,10 @@ namespace esp32m {
                                      JSON_STRING_SIZE(stateTopic.size()) *
                                          stateTopicNames.size()
                                : JSON_STRING_SIZE(stateTopic.size())) +
-              JSON_STRING_SIZE(commandTopic.size()));
+              (commandTopicNames ? JSON_OBJECT_SIZE(commandTopicNames.size()) +
+                                       JSON_STRING_SIZE(commandTopic.size()) *
+                                           commandTopicNames.size()
+                                 : JSON_STRING_SIZE(commandTopic.size())));
           configPayloadDoc->set(configInput);
           auto configPayloadRoot = configPayloadDoc->as<JsonObject>();
           if (addName)
@@ -136,8 +168,13 @@ namespace esp32m {
               configPayloadRoot[name] = stateTopic;
           else
             configPayloadRoot["state_topic"] = stateTopic;
-          if (acceptsCommands)
-            configPayloadRoot["command_topic"] = commandTopic;
+          if (acceptsCommands) {
+            if (commandTopicNames.size())
+              for (const char *name : commandTopicNames)
+                configPayloadRoot[name] = commandTopic;
+            else
+              configPayloadRoot["command_topic"] = commandTopic;
+          }
           json::check(this, configPayloadDoc, "HA config payload");
           auto configPayload =
               json::allocSerialize(configPayloadDoc->as<JsonVariantConst>());
@@ -155,7 +192,7 @@ namespace esp32m {
           }
         }
       }
-      void requestState() {
+      void requestState(bool changedOnly) {
         const size_t MaxStaticIdLength = 32;
         _stateRequested = millis();
         StaticJsonDocument<JSON_OBJECT_SIZE(1) +
@@ -164,6 +201,9 @@ namespace esp32m {
         auto reqData = reqDoc.to<JsonObject>();
         auto &mqtt = net::Mqtt::instance();
         for (auto const &[id, dev] : _devices) {
+          if (changedOnly && !dev->isStateChanged())
+            continue;
+          dev->resetStateChanged();
           DynamicJsonDocument *dynReqDoc = nullptr;
           JsonObject safeReqData = reqData;
           if (id.size() > MaxStaticIdLength) {  // very unlikely, but still need
@@ -208,5 +248,11 @@ namespace esp32m {
     Mqtt *useMqtt() {
       return &Mqtt::instance();
     }
-  }  // namespace ha
+
+    namespace mqtt {
+      void wakeUp() {
+        ha::Mqtt::instance().wakeUp();
+      }
+    }  // namespace mqtt
+  }    // namespace ha
 }  // namespace esp32m

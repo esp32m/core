@@ -1,9 +1,9 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/fs/cache.hpp"
 #include "esp32m/resources.hpp"
 #include "esp32m/sleep.hpp"
-#include "esp32m/fs/cache.hpp"
 
 #include <mqtt_client.h>
 #include <mutex>
@@ -143,7 +143,7 @@ namespace esp32m {
       fs::CachedResource _certCache;
       char *_sensorsTopic = nullptr;
       char *_broadcastTopic = nullptr;
-      uint32_t _pubcnt = 0;
+      uint32_t _pubcnt = 0, _recvcnt = 0;
       unsigned long _timer = 0;
       int _timeout = 30;
       esp_err_t handle(int32_t event_id, void *event_data);

@@ -1,0 +1,33 @@
+{
+  "name": "@ts-libs/log",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "",
+  "sideEffects": false,
+  "main": "src/index.ts",
+  "exports": {
+    ".": {
+      "node": "src/node/index.ts",
+      "browser": "src/web/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "jest",
+    "cover": "jest --coverage"
+  },
+  "devDependencies": {
+    "@types/debug": "^4.1.7",
+    "@types/jest": "^29.5.1",
+    "@types/node": "^18.16.2",
+    "jest": "^29.5.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.4"
+  },
+  "dependencies": {
+    "@ts-libs/plugins": "*",
+    "debug": "^4.3.4",
+    "rxjs": "^7.8.1",
+    "winston": "^3.8.2"
+  }
+}

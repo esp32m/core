@@ -1,0 +1,34 @@
+{
+  "name": "@ts-libs/ui-i18n",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "DY",
+  "sideEffects": false,
+  "type": "module",
+  "main": "src/index.ts",
+  "devDependencies": {
+    "@types/node": "^18.16.2",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.1",
+    "@types/react-redux": "^7.1.25",
+    "@types/react-router": "^5.1.20",
+    "@types/react-router-dom": "^5.3.3",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.0.4"
+  },
+  "dependencies": {
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.12.2",
+    "@reduxjs/toolkit": "^1.9.5",
+    "@ts-libs/plugins": "*",
+    "@ts-libs/tools": "*",
+    "i18next": "^22.4.15",
+    "i18next-browser-languagedetector": "^7.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^12.2.2",
+    "react-redux": "^8.0.5",
+    "react-router": "^6.10.0",
+    "react-router-dom": "^6.10.0"
+  }
+}

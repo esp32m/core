@@ -166,7 +166,6 @@ namespace esp32m {
 
     esp_err_t Httpd::incomingWs(httpd_req_t *req) {
       if (req->method == HTTP_GET) {
-        logI("WS client connected");
         return ESP_OK;
       }
       httpd_ws_frame_t ws_pkt;

@@ -1,0 +1,43 @@
+{
+  "name": "@esp32m/monorepo",
+  "private": true,
+  "sideEffects": false,
+  "workspaces": [
+    "ts-libs/*",
+    "esp32m/*"
+  ],
+  "scripts": {
+    "format": "prettier --loglevel log --config .prettierrc.json --write .",
+    "format-check": "prettier --loglevel log --config .prettierrc.json --check .",
+    "infra": "yarn workspaces foreach run infra \"$@\"",
+    "lint": "eslint . --ext .js,.ts,.tsx,.json,.yml,.yaml",
+    "lint-fix": "eslint . --ext .js,.ts,.tsx,.json,.yml,.yaml --fix",
+    "test": "jest",
+    "package:doctor": "yarn dlx @yarnpkg/doctor ."
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.1",
+    "@types/node": "^18.16.2",
+    "@typescript-eslint/eslint-plugin": "^5.59.1",
+    "@typescript-eslint/parser": "^5.59.1",
+    "eslint": "^8.39.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-config-react": "^1.1.7",
+    "eslint-plugin-html": "^7.1.0",
+    "eslint-plugin-json-format": "^2.0.1",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-yaml": "^0.5.0",
+    "jest": "^29.5.0",
+    "prettier": "^2.8.8",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.4"
+  },
+  "author": "DY",
+  "license": "MIT",
+  "packageManager": "yarn@3.5.0",
+  "dependencies": {
+    "firebase": "^9.21.0"
+  }
+}
