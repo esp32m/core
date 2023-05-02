@@ -21,7 +21,6 @@ build/
 coverage/
 *.log
 *.pem
-!esp32m/web-ui/ts-libs/dev/dist
 
 dependencies.lock
 sdkconfig
