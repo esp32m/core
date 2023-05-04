@@ -12,7 +12,7 @@ export const System: TContentPlugin & Ti18nPlugin = {
       de: {
         System: 'System',
         Administration: 'Verwaltung',
-        'Do you really want to restart the CPU':
+        'Do you really want to restart the CPU ?':
           'Wollen Sie die CPU wirklich neu starten?',
         'Do you really want to reset settings to their defaults ?':
           'Möchten Sie die Einstellungen wirklich auf die Standardwerte zurücksetzen?',
@@ -54,11 +54,12 @@ export const System: TContentPlugin & Ti18nPlugin = {
         'System settings': 'Systemeinstellungen',
         'System summary': 'Systemzusammenfassung',
         'Enable remote logging': 'Remoteprotokollierung aktivieren',
+        'Firmware update is in progress': 'Firmware-Update wird durchgeführt',
       },
       uk: {
         System: 'Система',
         Administration: 'Управління',
-        'Do you really want to restart the CPU':
+        'Do you really want to restart the CPU ?':
           'Ви дійсно бажаєте пезавантажити процесор?',
         'Do you really want to reset settings to their defaults ?':
           'Ви дійсно бажаєте скинути всі налаштування?',
@@ -101,6 +102,7 @@ export const System: TContentPlugin & Ti18nPlugin = {
         'System settings': 'Налаштування системи',
         'System summary': 'Огляд системи',
         'Enable remote logging': 'Увімкнути віддалене ведення журналу',
+        'Firmware update is in progress': 'Триває оновлення прошивки',
       },
     },
   },

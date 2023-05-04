@@ -18,6 +18,7 @@ export const Mqtt: TContentPlugin & Ti18nPlugin = {
   i18n: {
     resources: {
       de: {
+        'Client name': 'Client Name',
         'MQTT client': 'MQTT Client',
         'MQTT client state': 'MQTT Client Status',
         'Enable MQTT client': 'MQTT Client aktivieren',

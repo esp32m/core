@@ -9,6 +9,7 @@ import { IBackendApi } from './types';
 import { useSelector } from 'react-redux';
 import { TStateRoot } from '@ts-libs/redux';
 import { isNumber } from '@ts-libs/tools';
+import { Name } from './state';
 
 export const ClientContext = createContext<IBackendApi | undefined>(undefined);
 
@@ -78,7 +79,7 @@ export const useModuleState = <T>(
   options?: TGetStateOptions
 ): T | undefined => {
   const api = useBackendApi();
-  const device = api.device(name);
+  const device = api.module(name);
   const { condition, once, data } = options || {};
   useEffect(() => {
     if (once) api.getState(name, data);
@@ -101,3 +102,8 @@ export function useModuleConfig<T = unknown>(
   }, [api, name, gen]);
   return [config, () => setGen(gen + 1)];
 }
+
+export const moduleStateSelector =
+  <T>(name: string) =>
+  (state: TStateRoot) =>
+    state[Name].modules[name]?.state as T;

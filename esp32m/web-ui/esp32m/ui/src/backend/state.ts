@@ -4,14 +4,14 @@ import { TStateRoot } from '@ts-libs/redux';
 
 export const Name = 'backend';
 
-type TDeviceState = {
+type TModuleState = {
   state: any;
 };
 
 type TBackendState = {
   status: ConnectionStatus;
   error?: unknown;
-  devices: Record<string, TDeviceState>;
+  modules: Record<string, TModuleState>;
 };
 
 declare module '@ts-libs/redux' {
@@ -22,7 +22,7 @@ declare module '@ts-libs/redux' {
 
 const initialState: TBackendState = {
   status: ConnectionStatus.Disconnected,
-  devices: {},
+  modules: {},
 };
 
 const slice = createSlice({
@@ -38,16 +38,16 @@ const slice = createSlice({
     },
     deviceState: (
       state,
-      { payload: [name, deviceState] }: PayloadAction<[string, unknown]>
+      { payload: [name, moduleState] }: PayloadAction<[string, unknown]>
     ) => {
-      const ds = state.devices[name] || (state.devices[name] = { state: {} });
-      ds.state = deviceState;
+      const ds = state.modules[name] || (state.modules[name] = { state: {} });
+      ds.state = moduleState;
     },
   },
 });
 
 export const selectors = {
-  devices: (state: TStateRoot) => state[Name].devices,
+  modules: (state: TStateRoot) => state[Name].modules,
 };
 
 export const { actions, reducer } = slice;

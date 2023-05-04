@@ -1,8 +1,8 @@
 import content from './Content';
 import { INettoolsPlugin, Nettools } from '..';
-import { IReduxPlugin } from '../../app';
 import { ILocalState, StartAction, Name } from './types';
 import { AnyAction } from 'redux';
+import { TReduxPlugin } from '@ts-libs/redux';
 
 const reducer = (
   state: ILocalState = {},
@@ -21,10 +21,10 @@ const reducer = (
   return state;
 };
 
-export const Ping: INettoolsPlugin & IReduxPlugin = {
+export const Ping: INettoolsPlugin & TReduxPlugin = {
   name: 'ping',
   use: Nettools,
-  reducer,
+  redux: { reducer },
   nettools: {
     content,
   },

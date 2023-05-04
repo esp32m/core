@@ -1,10 +1,11 @@
 import { TReduxPlugin, TStateRoot } from '@ts-libs/redux';
 import { Action, Dispatch, Middleware } from 'redux';
 import { Name, actions, reducer } from './state';
+import { actions as publicActions } from './types';
 import { TAppLoadingPlugin, TUiRootPlugin } from '@ts-libs/ui-base';
 import { Hoc } from './hoc';
 import { ConnectionStatus } from './types';
-import { client, isResponse } from './client';
+import { client, isBroadcast, isResponse } from './client';
 
 export const uiBackendPlugin = (): TReduxPlugin &
   TAppLoadingPlugin &
@@ -15,7 +16,8 @@ export const uiBackendPlugin = (): TReduxPlugin &
       api.dispatch(actions.status(c.status.value));
     });
     c.incoming.subscribe((msg) => {
-      if (isResponse(msg) && !msg.error)
+      if (isBroadcast(msg)) api.dispatch(publicActions.broadcast(msg));
+      else if (isResponse(msg) && !msg.error)
         if (msg.name == 'state-get')
           api.dispatch(actions.deviceState([msg.source, msg.data]));
     });

@@ -1,3 +1,4 @@
+import { createAction } from '@reduxjs/toolkit';
 import { TStateRoot } from '@ts-libs/redux';
 import { DiscreteStatus } from '@ts-libs/tools';
 import { Observable } from 'rxjs';
@@ -15,18 +16,26 @@ export type TMessage = {
 };
 
 export type TRequest = TMessage & {
+  type: 'request';
   name: string;
   target?: string;
 };
 
 export type TResponse = TMessage & {
+  type: 'response';
   name: string;
   source: string;
   partial: boolean;
   error?: any;
 };
 
-export interface IDeviceApi {
+export type TBroadcast = TMessage & {
+  type: 'broadcast';
+  name: string;
+  source: string;
+};
+
+export interface IModuleApi {
   readonly api: IBackendApi;
   readonly name: string;
   readonly selectors: {
@@ -40,10 +49,14 @@ export interface IBackendApi {
   readonly incoming: Observable<TMessage>;
   open(): Promise<void>;
   close(): void;
-  device(name: string): IDeviceApi;
+  module(name: string): IModuleApi;
   request(target: string, name: string, data?: any): Promise<TResponse>;
   getState(target: string, data?: any): Promise<TResponse>;
   setState(target: string, data?: any): Promise<TResponse>;
   getConfig(target: string, data?: any): Promise<TResponse>;
   setConfig(target: string, data?: any): Promise<TResponse>;
 }
+
+export const actions = {
+  broadcast: createAction<TBroadcast>('esp32m/broadcast'),
+};

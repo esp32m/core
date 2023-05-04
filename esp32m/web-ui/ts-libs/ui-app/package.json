@@ -7,9 +7,9 @@
   "type": "module",
   "main": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^18.16.2",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.1",
+    "@types/node": "^18.16.3",
+    "@types/react": "^18.2.3",
+    "@types/react-dom": "^18.2.3",
     "@types/react-redux": "^7.1.25",
     "@types/react-router": "^5.1.20",
     "@types/react-router-dom": "^5.3.3",
@@ -17,12 +17,12 @@
     "typescript": "^5.0.4"
   },
   "dependencies": {
-    "@emotion/react": "^11.10.6",
-    "@emotion/styled": "^11.10.6",
+    "@emotion/react": "^11.10.8",
+    "@emotion/styled": "^11.10.8",
     "@fingerprintjs/fingerprintjs": "^3.4.1",
     "@iconify/react": "^4.1.0",
     "@mui/icons-material": "^5.11.16",
-    "@mui/material": "^5.12.2",
+    "@mui/material": "^5.12.3",
     "@reduxjs/toolkit": "^1.9.5",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",
@@ -30,8 +30,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-redux": "^8.0.5",
-    "react-router": "^6.10.0",
-    "react-router-dom": "^6.10.0",
+    "react-router": "^6.11.1",
+    "react-router-dom": "^6.11.1",
     "tss-react": "^4.8.3",
     "yup": "^1.1.1"
   }

@@ -7,8 +7,8 @@
   "type": "module",
   "main": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^18.16.2",
-    "@types/react": "^18.2.0",
+    "@types/node": "^18.16.3",
+    "@types/react": "^18.2.3",
     "rimraf": "^5.0.0",
     "typescript": "^5.0.4"
   },
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@mui/icons-material": "^5.11.16",
-    "@mui/material": "^5.12.2",
+    "@mui/material": "^5.12.3",
     "@reduxjs/toolkit": "^1.9.5",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",

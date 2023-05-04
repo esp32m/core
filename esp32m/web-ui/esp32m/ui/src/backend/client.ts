@@ -8,7 +8,8 @@ import {
 import {
   ConnectionStatus,
   IBackendApi,
-  IDeviceApi,
+  IModuleApi,
+  TBroadcast,
   TMessage,
   TRequest,
   TResponse,
@@ -39,13 +40,16 @@ type TPendingRequest = {
 export function isResponse(msg: TMessage): msg is TResponse {
   return msg.type === 'response' && isString((msg as TResponse).source);
 }
+export function isBroadcast(msg: TMessage): msg is TBroadcast {
+  return msg.type === 'broadcast' && isString((msg as TBroadcast).source);
+}
 
-class Device implements IDeviceApi {
+class Device implements IModuleApi {
   readonly selectors;
   constructor(readonly api: Client, readonly name: string) {
     this.selectors = {
       state: createSelector(
-        selectors.devices,
+        selectors.modules,
         (devices) => devices[name]?.state
       ),
     };
@@ -96,7 +100,7 @@ class Client implements IBackendApi {
       }
     };
   }
-  device(name: string): IDeviceApi {
+  module(name: string): IModuleApi {
     return (
       this._devices[name] || (this._devices[name] = new Device(this, name))
     );

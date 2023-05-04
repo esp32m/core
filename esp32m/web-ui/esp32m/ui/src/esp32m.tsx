@@ -10,6 +10,7 @@ import { SystemSummary } from './system';
 import { ApInfoBox, MqttStateBox, StaInfoBox } from './net';
 import { TContentPlugin, TUiThemePlugin } from '@ts-libs/ui-base';
 import { ui18nPlugin, Ti18nPlugin, useTranslation } from '@ts-libs/ui-i18n';
+import { OtaPlugin } from './net/ota/plugin';
 
 const header = (
   <VerticalMenuHeader
@@ -89,6 +90,7 @@ export function startUi(config?: TEsp32mUiConfig) {
       uiSnackPlugin(),
       ui18nPlugin(),
       uiNavbarPlugin(),
+      OtaPlugin,
     ]
   );
   if (!findPlugin('home'))
