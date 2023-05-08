@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
-import { cloneDeep } from "@ts-libs/tools";
-import { FormikProps } from "formik";
-import * as Yup from "yup";
+import React, { useMemo } from 'react';
+import { cloneDeep } from '@ts-libs/tools';
+import { FormikProps } from 'formik';
+import * as Yup from 'yup';
 
 import {
   Alert,
@@ -11,7 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
-} from "@mui/material";
+} from '@mui/material';
 import {
   PinConfig,
   PinMode,
@@ -25,72 +25,72 @@ import {
   LedcIntr,
   PcntCountMode,
   TouchTieOpt,
-} from "./types";
-import { LedcModes, LedcTimers, toMenuItem } from "./tools";
-import { FieldSelect, FieldText, MuiForm } from "@ts-libs/ui-forms";
-import { useBackendApi } from "../../backend";
+} from './types';
+import { LedcModes, LedcTimers, toMenuItem } from './tools';
+import { FieldSelect, FieldText, MuiForm } from '@ts-libs/ui-forms';
+import { useBackendApi } from '../../backend';
 
 const PinModes = [
-  [PinMode.Undefined, "Undefined"],
-  [PinMode.Digital, "Digital"],
-  [PinMode.Adc, "Analog-to-Digital (ADC)"],
-  [PinMode.Dac, "Digital-to-Analog (DAC)"],
-  [PinMode.CosineWave, "Cosine wave generator"],
-  [PinMode.Ledc, "LED control"],
-  [PinMode.SigmaDelta, "Sigma-delta generator"],
-  [PinMode.PulseCounter, "Pulse counter"],
-  [PinMode.Touch, "Touch sensor"],
+  [PinMode.Undefined, 'Undefined'],
+  [PinMode.Digital, 'Digital'],
+  [PinMode.Adc, 'Analog-to-Digital (ADC)'],
+  [PinMode.Dac, 'Digital-to-Analog (DAC)'],
+  [PinMode.CosineWave, 'Cosine wave generator'],
+  [PinMode.Ledc, 'LED control'],
+  [PinMode.SigmaDelta, 'Sigma-delta generator'],
+  [PinMode.PulseCounter, 'Pulse counter'],
+  [PinMode.Touch, 'Touch sensor'],
 ];
 
 const GpioModes: Array<[GpioMode, string]> = [
-  [GpioMode.Disabled, "Disabled"],
-  [GpioMode.Input, "Input only"],
-  [GpioMode.Output, "Output only"],
-  [GpioMode.InputOutput, "Input and output"],
-  [GpioMode.OutputOd, "Output only with open-drain"],
-  [GpioMode.InputOutputOd, "Input and output with open-drain"],
+  [GpioMode.Disabled, 'Disabled'],
+  [GpioMode.Input, 'Input only'],
+  [GpioMode.Output, 'Output only'],
+  [GpioMode.InputOutput, 'Input and output'],
+  [GpioMode.OutputOd, 'Output only with open-drain'],
+  [GpioMode.InputOutputOd, 'Input and output with open-drain'],
 ];
 
 const PullModes = [
-  [PullMode.Up, "Pull-up only"],
-  [PullMode.Down, "Pull-down only"],
-  [PullMode.Both, "Pull-up and pull-down"],
-  [PullMode.Floating, "Floating pin"],
+  [PullMode.Up, 'Pull-up only'],
+  [PullMode.Down, 'Pull-down only'],
+  [PullMode.Both, 'Pull-up and pull-down'],
+  [PullMode.Floating, 'Floating pin'],
 ];
 
 const AdcAttens = [
-  [AdcAtten.Db0, "No attenuation (<800mv)"],
-  [AdcAtten.Db2_5, "2.5dB (<1100mv)"],
-  [AdcAtten.Db6, "6dB (<1350mv)"],
-  [AdcAtten.Db11, "11dB (<2600mv)"],
+  [AdcAtten.Db0, 'No attenuation (<800mv)'],
+  [AdcAtten.Db2_5, '2.5dB (<1100mv)'],
+  [AdcAtten.Db6, '6dB (<1350mv)'],
+  [AdcAtten.Db11, '11dB (<2600mv)'],
 ];
 
 const CwScales = [
-  [CwScale.A1, "Maximum"],
-  [CwScale.A1_2, "1/2"],
-  [CwScale.A1_4, "1/4"],
-  [CwScale.A1_8, "1/8"],
+  [CwScale.A1, 'Maximum'],
+  [CwScale.A1_2, '1/2'],
+  [CwScale.A1_4, '1/4'],
+  [CwScale.A1_8, '1/8'],
 ];
 
 const CwPhases = [
-  [CwPhase.P0, "No phase shift"],
-  [CwPhase.P180, "180 degrees shift"],
+  [CwPhase.P0, 'No phase shift'],
+  [CwPhase.P180, '180 degrees shift'],
 ];
 
 const LedcIntrs = [
-  [LedcIntr.Disable, "Disabled"],
-  [LedcIntr.FadeEnd, "Enabled"],
+  [LedcIntr.Disable, 'Disabled'],
+  [LedcIntr.FadeEnd, 'Enabled'],
 ];
 
 const PcntCountModes = [
-  [PcntCountMode.Disable, "Disabled"],
-  [PcntCountMode.Increment, "Increment"],
-  [PcntCountMode.Decrement, "Decrement"],
+  [PcntCountMode.Disable, 'Disabled'],
+  [PcntCountMode.Increment, 'Increment'],
+  [PcntCountMode.Decrement, 'Decrement'],
 ];
 
 const TouchTieOpts = [
-  [TouchTieOpt.Low, "Low"],
-  [TouchTieOpt.High, "High"],
+  [TouchTieOpt.Low, 'Low'],
+  [TouchTieOpt.High, 'High'],
 ];
 
 interface IPinConfig {
@@ -427,7 +427,7 @@ const LedcForm = (props: ISubformProps) => {
       <Grid item xs={6}>
         <FieldSelect name="ledc.channel" label="LEDC channel" fullWidth>
           {Array.from(Array(8).keys())
-            .map((v) => [v, "Channel #" + v])
+            .map((v) => [v, 'Channel #' + v])
             .map(toMenuItem)}
         </FieldSelect>
       </Grid>
@@ -462,7 +462,7 @@ const SdForm = (props: ISubformProps) => {
       <Grid item xs={6}>
         <FieldSelect name="sd.channel" label="Sigma-delta channel" fullWidth>
           {Array.from(Array(8).keys())
-            .map((v) => [v, "Channel #" + v])
+            .map((v) => [v, 'Channel #' + v])
             .map(toMenuItem)}
         </FieldSelect>
       </Grid>
@@ -482,14 +482,14 @@ const PcntForm = (props: ISubformProps) => {
       <Grid item xs={6}>
         <FieldSelect name="pc.unit" label="Pulse counter unit" fullWidth>
           {Array.from(Array(8).keys())
-            .map((v) => [v, "Unit #" + v])
+            .map((v) => [v, 'Unit #' + v])
             .map(toMenuItem)}
         </FieldSelect>
       </Grid>
       <Grid item xs={6}>
         <FieldSelect name="pc.channel" label="Pulse counter channel" fullWidth>
           {Array.from(Array(2).keys())
-            .map((v) => [v, "Channel #" + v])
+            .map((v) => [v, 'Channel #' + v])
             .map(toMenuItem)}
         </FieldSelect>
       </Grid>
@@ -584,7 +584,7 @@ const PinConfigForm = (props: {
   onClose: () => void;
   config: PinConfig;
 }) => {
-  const api=useBackendApi();
+  const api = useBackendApi();
   const cfg = useMemo(() => fromConciseConfig(props.config), [props.config]);
   const { onClose, pin } = props;
   const open = pin >= 0;

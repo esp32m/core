@@ -2,131 +2,131 @@
 #include "esp32m/io/pins.hpp"
 
 namespace esp32m {
-  namespace aw9523 {
+  namespace io {
+    namespace aw9523 {
 
-    enum Register {
-      InP0,  ///< Register for reading input values
-      InP1,
-      OutP0,  ///< Register for writing output values
-      OutP1,
-      CfgP0,  ///< Register for configuring direction
-      CfgP1,
-      IntP0,  ///< Register for enabling interrupt
-      IntP1,
-      ChipId = 0x10,  ///< Register for hardcode chip ID
-      Gcr,            ///< Register for general configuration
-      ModeP0,         ///< Register for configuring const current
-      ModeP1,         ///< Register for configuring const current
-      Dim0 = 0x20,
-      Dim1,
-      Dim3,
-      Dim4,
-      Dim5,
-      Dim6,
-      Dim7,
-      Dim8,
-      Dim9,
-      Dim10,
-      Dim11,
-      Dim12,
-      Dim13,
-      Dim14,
-      Dim15,
-      Rst = 0x7f,  ///< Register for soft resetting
-    };
-
-    class Pin : public io::IPin {
-     public:
-      Pin(io::Aw9523 *owner, int id) : io::IPin(id), _owner(owner) {
-        snprintf(_name, sizeof(_name), "AW9523-%02u", id - owner->pinBase());
+      enum Register {
+        InP0,  ///< Register for reading input values
+        InP1,
+        OutP0,  ///< Register for writing output values
+        OutP1,
+        CfgP0,  ///< Register for configuring direction
+        CfgP1,
+        IntP0,  ///< Register for enabling interrupt
+        IntP1,
+        ChipId = 0x10,  ///< Register for hardcode chip ID
+        Gcr,            ///< Register for general configuration
+        ModeP0,         ///< Register for configuring const current
+        ModeP1,         ///< Register for configuring const current
+        Dim0 = 0x20,
+        Dim1,
+        Dim3,
+        Dim4,
+        Dim5,
+        Dim6,
+        Dim7,
+        Dim8,
+        Dim9,
+        Dim10,
+        Dim11,
+        Dim12,
+        Dim13,
+        Dim14,
+        Dim15,
+        Rst = 0x7f,  ///< Register for soft resetting
       };
-      const char *name() const override {
-        return _name;
-      }
-      int num() {
-        return _owner->id2num(_id);
-      }
-      io::pin::Features features() override {
-        return io::pin::Features::DigitalInput |
-               io::pin::Features::DigitalOutput | io::pin::Features::PullUp |
-               io::pin::Features::DAC;
-      }
 
-      esp_err_t analogWrite(float value) {
-        return _owner->analogWrite(num(), value);
-      }
+      class Pin : public IPin {
+       public:
+        Pin(Aw9523 *owner, int id) : IPin(id), _owner(owner) {
+          snprintf(_name, sizeof(_name), "AW9523-%02u", id);
+        };
+        const char *name() const override {
+          return _name;
+        }
+        pin::Flags flags() override {
+          return pin::Flags::DigitalInput | pin::Flags::DigitalOutput |
+                 pin::Flags::PullUp | pin::Flags::DAC;
+        }
 
-     protected:
-      io::pin::Impl *createImpl(io::pin::Type type) override;
+        esp_err_t analogWrite(float value) {
+          return _owner->analogWrite(_id, value);
+        }
 
-     private:
-      io::Aw9523 *_owner;
-      char _name[11];
-      friend class Digital;
-    };
+       protected:
+        esp_err_t createFeature(pin::Type type,
+                                pin::Feature **feature) override;
 
-    class Digital : public io::pin::IDigital {
-     public:
-      Digital(Pin *pin) : _pin(pin) {}
+       private:
+        Aw9523 *_owner;
+        char _name[11];
+        friend class Digital;
+      };
 
-      esp_err_t setDirection(gpio_mode_t mode) override {
-        switch (mode) {
-          case GPIO_MODE_INPUT:
-            _pin->_owner->setPinMode(_pin->num(), PinMode::Input);
+      class Digital : public pin::IDigital {
+       public:
+        Digital(Pin *pin) : _pin(pin) {}
+
+        esp_err_t setDirection(gpio_mode_t mode) override {
+          switch (mode) {
+            case GPIO_MODE_INPUT:
+              _pin->_owner->setPinMode(_pin->id(), PinMode::Input);
+              return ESP_OK;
+            case GPIO_MODE_OUTPUT:
+            case GPIO_MODE_OUTPUT_OD:
+            case GPIO_MODE_INPUT_OUTPUT:
+            case GPIO_MODE_INPUT_OUTPUT_OD:
+              _pin->_owner->setPinMode(_pin->id(), PinMode::Output);
+              return ESP_OK;
+            default:
+              return ESP_FAIL;
+          }
+        }
+        esp_err_t setPull(gpio_pull_mode_t pull) override {
+          if (pull == GPIO_PULLUP_ONLY)
             return ESP_OK;
-          case GPIO_MODE_OUTPUT:
-          case GPIO_MODE_OUTPUT_OD:
-          case GPIO_MODE_INPUT_OUTPUT:
-          case GPIO_MODE_INPUT_OUTPUT_OD:
-            _pin->_owner->setPinMode(_pin->num(), PinMode::Output);
+          return ESP_FAIL;
+        }
+        esp_err_t read(bool &value) override {
+          return _pin->_owner->readPin(_pin->id(), value);
+        }
+        esp_err_t write(bool value) override {
+          return _pin->_owner->writePin(_pin->id(), value);
+        }
+
+       private:
+        Pin *_pin;
+      };
+
+      class DAC : public pin::IDAC {
+       public:
+        DAC(Pin *pin) : _pin(pin) {}
+        esp_err_t write(float value) override;
+
+       private:
+        Pin *_pin;
+      };
+
+      esp_err_t DAC::write(float value) {
+        return _pin->analogWrite(value);
+      }
+
+      esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
+        switch (type) {
+          case pin::Type::Digital:
+            *feature = new Digital(this);
+            return ESP_OK;
+          case pin::Type::DAC:
+            *feature = new DAC(this);
             return ESP_OK;
           default:
-            return ESP_FAIL;
+            break;
         }
-      }
-      esp_err_t setPull(gpio_pull_mode_t pull) override {
-        if (pull == GPIO_PULLUP_ONLY)
-          return ESP_OK;
-        return ESP_FAIL;
-      }
-      esp_err_t read(bool &value) override {
-        return _pin->_owner->readPin(_pin->num(), value);
-      }
-      esp_err_t write(bool value) override {
-        return _pin->_owner->writePin(_pin->num(), value);
+        return IPin::createFeature(type, feature);
       }
 
-     private:
-      Pin *_pin;
-    };
+    }  // namespace aw9523
 
-    class DAC : public io::pin::IDAC {
-     public:
-      DAC(Pin *pin) : _pin(pin) {}
-      esp_err_t write(float value) override;
-
-     private:
-      Pin *_pin;
-    };
-
-    esp_err_t DAC::write(float value) {
-      return _pin->analogWrite(value);
-    }
-
-    io::pin::Impl *Pin::createImpl(io::pin::Type type) {
-      switch (type) {
-        case io::pin::Type::Digital:
-          return new Digital(this);
-        case io::pin::Type::DAC:
-          return new DAC(this);
-        default:
-          return nullptr;
-      }
-      return nullptr;
-    }
-
-  }  // namespace aw9523
-  namespace io {
     Aw9523::Aw9523(I2C *i2c) : _i2c(i2c) {
       init();
     }

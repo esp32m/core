@@ -9,16 +9,16 @@ namespace esp32m {
       class Pin : public IPin {
        public:
         Pin(CD74HC4067 *owner, int id) : IPin(id), _owner(owner) {
-          snprintf(_name, sizeof(_name), "CD74HC4067-%02u",
-                   id - owner->pinBase());
+          snprintf(_name, sizeof(_name), "CD74HC4067-%02u", id);
         };
         const char *name() const override {
           return _name;
         }
-        io::pin::Features features() override {
-          return _owner->_sig->features();
+        pin::Flags flags() override {
+          return _owner->_sig->flags();
         }
-        pin::Impl *createImpl(pin::Type type) override;
+        esp_err_t createFeature(pin::Type type,
+                                pin::Feature **feature) override;
 
         esp_err_t select() {
           return _owner->selectChannel(_id);
@@ -115,22 +115,26 @@ namespace esp32m {
         adc_atten_t _atten = ADC_ATTEN_DB_11;
       };
 
-      pin::Impl *Pin::createImpl(pin::Type type) {
+      esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
         auto *sig = _owner->_sig;
         switch (type) {
           case pin::Type::Digital:
-            if ((sig->features() & (io::pin::Features::DigitalInput |
-                                    io::pin::Features::DigitalOutput)) != 0)
-              return new Digital(this);
+            if ((sig->flags() & (io::pin::Flags::DigitalInput |
+                                    io::pin::Flags::DigitalOutput)) != 0) {
+              *feature = new Digital(this);
+              return ESP_OK;
+            }
             break;
           case pin::Type::ADC:
-            if ((sig->features() & io::pin::Features::ADC) != 0)
-              return new ADC(this);
+            if ((sig->flags() & io::pin::Flags::ADC) != 0) {
+              *feature = new ADC(this);
+              return ESP_OK;
+            }
             break;
           default:
-            return nullptr;
+            break;
         }
-        return nullptr;
+        return IPin::createFeature(type, feature);
       }
     }  // namespace cd74hc4067
 
@@ -168,7 +172,6 @@ namespace esp32m {
     }
 
     esp_err_t CD74HC4067::selectChannel(int c) {
-      c -= _pinBase;
       if (c < 0 || c > 15)
         return ESP_ERR_INVALID_ARG;
       esp_err_t err = ESP_OK;

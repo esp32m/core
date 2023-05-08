@@ -1,7 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { actions, moduleStateSelector } from '../../backend';
 import { TStateRoot } from '@ts-libs/redux';
-import { selectors as backendSelectors } from '../../backend/state';
 import { TOtaState } from './types';
 
 export const Name = 'ota';

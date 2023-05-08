@@ -41,7 +41,7 @@ export interface IModuleApi {
   readonly selectors: {
     readonly state: (state: TStateRoot) => any;
   };
-  useState(): VoidFunction;
+  useState(data?: any): VoidFunction;
 }
 
 export interface IBackendApi {

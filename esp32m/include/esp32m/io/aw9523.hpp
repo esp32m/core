@@ -4,14 +4,17 @@
 #include "esp32m/io/pins.hpp"
 
 namespace esp32m {
-  namespace aw9523 {
-    enum class PinMode { Input, Output, DAC };
-  }
   namespace io {
+    namespace aw9523 {
+      enum class PinMode { Input, Output, DAC };
+    }
     class Aw9523 : public pin::ITxFinalizer, public IPins {
      public:
       Aw9523(I2C *i2c);
       Aw9523(const Aw9523 &) = delete;
+      const char *name() const override {
+        return "AW9523";
+      }
 
       esp_err_t setRst(io::IPin *pin);
 

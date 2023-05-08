@@ -1,47 +1,78 @@
 #include "esp32m/io/pins.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/io/softpwm.hpp"
 
 #include <map>
 #include <mutex>
 
 namespace esp32m {
   namespace io {
-    std::map<int, IPin *> IPins::_pins;
-    std::mutex IPins::_pinsMutex;
-    int IPins::_reservedIds = 0;
+    namespace pwm {
+      class Pin : public pin::IPWM {
+       public:
+        Pin(pin::IDigital *digital) : _digital(digital) {
+          _pwm = std::unique_ptr<SoftPwm>(
+              new SoftPwm([this](bool high) { _digital->write(high); }));
+        };
+        esp_err_t setDuty(float value) override {
+          return _pwm->setDuty(value);
+        }
+        float getDuty() const override {
+          return _pwm->getDuty();
+        }
+        esp_err_t setFreq(uint32_t value) override {
+          logd("freq=%d", value);
+          return _pwm->setFreq(value);
+        }
+        uint32_t getFreq() const override {
+          return _pwm->getFreq();
+        }
+        esp_err_t enable(bool on) override {
+          if (on)
+            _digital->setDirection(GPIO_MODE_OUTPUT);
+          return _pwm->enable(on);
+        }
+        bool isEnabled() const override {
+          return _pwm->isEnabled();
+        }
 
-    void IPins::init(int pinCount) {
-      _pinCount = pinCount;
-      std::lock_guard guard(_pinsMutex);
-      _pinBase = _reservedIds + 1;
-      _reservedIds += pinCount;
+       private:
+        pin::IDigital *_digital;
+        std::unique_ptr<SoftPwm> _pwm;
+      };
+    }  // namespace pwm
+
+    namespace pins {
+      std::mutex mutex;
+      std::map<std::string, IPins *> providers;
+      std::map<std::string, IPins *> getProviders() {
+        return providers;
+      }
+      IPin *pin(const char *provider, int id) {
+        if (!provider)
+          return nullptr;
+        std::lock_guard guard(mutex);
+        auto p = providers.find(provider);
+        if (p == providers.end())
+          return nullptr;
+        return p->second->pin(id);
+      }
+    }  // namespace pins
+
+    void IPins::init(int count) {
+      _count = count;
+      std::lock_guard guard(pins::mutex);
+      pins::providers[name()] = this;
     }
 
-    int IPins::id2num(int id) {
-      auto p = id - _pinBase;
-      if (p < 0 || p >= _pinCount)
-        return -1;
-      return p;
-    }
-
-    esp_err_t IPins::add(IPin *pin) {
-      if (!pin)
-        return ESP_ERR_INVALID_ARG;
-      auto id = pin->id();
-      if (_pins.find(id) != _pins.end())
-        return ESP_FAIL;
-      _pins[id] = pin;
-      return ESP_OK;
-    }
-
-    IPin *IPins::pin(int num) {
-      if (num < 0 || num >= _pinCount)
+    IPin *IPins::pin(int id) {
+      if (id < 0 || id >= _count)
         return nullptr;
-      auto id = num + _pinBase;
-      std::lock_guard guard(_pinsMutex);
+      std::lock_guard guard(_mutex);
       auto pin = _pins.find(id);
       if (pin == _pins.end()) {
         auto p = newPin(id);
+        // p may be nullptr !
         _pins[id] = p;
         return p;
       }
@@ -50,22 +81,40 @@ namespace esp32m {
 
     void IPin::reset() {
       std::lock_guard guard(_mutex);
-      _impls.clear();
+      _features.clear();
     }
-    pin::Impl *IPin::impl(pin::Type type) {
-      std::lock_guard guard(_mutex);
-      pin::Impl *result = nullptr;
-      auto it = _impls.find(type);
-      if (it == _impls.end()) {
-        auto i = createImpl(type);
-        if (i) {
-          if (i->valid())
-            _impls[type] = std::unique_ptr<pin::Impl>(result = i);
-          else
-            delete i;
-        }
-      } else
-        result = it->second.get();
+
+    esp_err_t IPin::createFeature(pin::Type type, pin::Feature **feature) {
+      switch (type) {
+        case pin::Type::PWM:
+          if ((flags() & pin::Flags::DigitalOutput) != 0) {
+            auto dig = digital();
+            if (dig) {
+              *feature = new pwm::Pin(dig);
+              return ESP_OK;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      *feature = nullptr;
+      return ESP_ERR_NOT_FOUND;
+    }
+
+    pin::Feature *IPin::feature(pin::Type type) {
+      {
+        std::lock_guard guard(_mutex);
+        auto it = _features.find(type);
+        if (it != _features.end())
+          return it->second.get();
+      }
+      // make sure createFeature is not wrappend in mutex - it may be re-entrant
+      pin::Feature *result = nullptr;
+      if (createFeature(type, &result) == ESP_OK) {
+        std::lock_guard guard(_mutex);
+        _features[type] = std::unique_ptr<pin::Feature>(result);
+      }
       return result;
     }
 

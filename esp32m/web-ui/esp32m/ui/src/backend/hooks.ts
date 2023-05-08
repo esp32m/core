@@ -3,13 +3,16 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import { IBackendApi } from './types';
-import { useSelector } from 'react-redux';
-import { TStateRoot } from '@ts-libs/redux';
-import { isNumber } from '@ts-libs/tools';
+import { useDispatch, useSelector } from 'react-redux';
+import { TSelector, TStateRoot } from '@ts-libs/redux';
+import { isNumber, noop } from '@ts-libs/tools';
 import { Name } from './state';
+import { AnyAction } from 'redux';
+import { ActionCreator } from 'redux';
 
 export const ClientContext = createContext<IBackendApi | undefined>(undefined);
 
@@ -19,36 +22,66 @@ export const useBackendApi = () => {
   return ctx;
 };
 
-type TRequestOptions = {
+type TBaseRequestOptions = {
   condition?: boolean;
   data?: any;
+};
+
+type TRequestOptions = TBaseRequestOptions & {
   delay?: number;
   interval?: number;
 };
+
+class Pending<T> {
+  readonly promise: Promise<T>;
+  get resolve() {
+    return this._resolve || noop;
+  }
+  get reject() {
+    return this._reject || noop;
+  }
+  constructor() {
+    this.promise = new Promise<T>((resolve, reject) => {
+      this._resolve = resolve;
+      this._reject = reject;
+    });
+  }
+  private _resolve?: (value: T | PromiseLike<T>) => void;
+  private _reject?: (reason: any) => void;
+}
 
 export function useRequest<T = unknown>(
   target: string,
   name: string,
   options?: TRequestOptions
-): [T | undefined, () => void, boolean] {
-  const [gen, setGen] = useState(0);
+) {
+  const [refreshPending, setRefreshPending] = useState<
+    Pending<T> | undefined
+  >();
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<T>();
   const { condition, data, delay, interval } = options || {};
-  const update = useCallback(() => setGen(gen + 1), [gen]);
+  const refresh = useCallback(() => {
+    let pending = refreshPending;
+    if (!pending) setRefreshPending((pending = new Pending<T>()));
+    return pending.promise;
+  }, [refreshPending]);
   const api = useBackendApi();
   const doit = useCallback(async () => {
-    if (condition === undefined || condition)
+    if (refreshPending || condition === undefined || condition)
       try {
         setRunning(true);
         const response = await api.request(target, name, data);
+        refreshPending?.resolve(response.data);
         setResult(response.data);
       } catch (e) {
+        refreshPending?.reject(e);
         console.error(e);
       } finally {
+        setRefreshPending(undefined);
         setRunning(false);
       }
-  }, [api, data, name, target, condition]);
+  }, [api, data, name, target, condition, refreshPending]);
   useEffect(() => {
     let th: ReturnType<typeof setTimeout>;
     let ti: ReturnType<typeof setInterval>;
@@ -59,15 +92,39 @@ export function useRequest<T = unknown>(
           if (!done) ti = setTimeout(run, interval);
         }
       : doit;
-    if (isNumber(delay) && gen == 0) th = setTimeout(run, delay);
+    if (isNumber(delay)) th = setTimeout(run, delay);
     else run();
     return () => {
       done = true;
       clearTimeout(th);
       clearInterval(ti);
     };
-  }, [gen, delay, interval, doit]);
-  return [result, update, running];
+  }, [delay, interval, doit]);
+  return [result, refresh, running] as const;
+}
+
+type TCachedRequestOptions<T = unknown> = TRequestOptions & {
+  action: ActionCreator<AnyAction>;
+  selector: TSelector<T>;
+};
+
+export function useCachedRequest<T = unknown>(
+  target: string,
+  name: string,
+  options: TCachedRequestOptions<T>
+) {
+  const { action, selector, ...rest } = options;
+  const selected = useSelector(selector);
+  const dispatch = useDispatch();
+  const condition = selected == null;
+  const [result, update, running] = useRequest<T>(target, name, {
+    ...rest,
+    condition,
+  });
+  useEffect(() => {
+    if (condition) dispatch(action(result));
+  }, [condition, action, result, dispatch]);
+  return [condition ? result : selected, update, running] as const;
 }
 
 type TGetStateOptions = TRequestOptions & {
@@ -83,7 +140,7 @@ export const useModuleState = <T>(
   const { condition, once, data } = options || {};
   useEffect(() => {
     if (once) api.getState(name, data);
-    else if (condition === undefined || condition) return device.useState();
+    else if (condition === undefined || condition) return device.useState(data);
   }, [api, device, name, condition, once, data]);
   return useSelector((state: TStateRoot) => device.selectors.state(state));
 };

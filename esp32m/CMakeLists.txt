@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 20)
 idf_component_register(
     SRC_DIRS "src" "src/events" "src/log" "src/config" "src/bus" "src/net" "src/fs" "src/io" "src/bt" "src/ui" "src/dev" "src/dev/opentherm" "src/debug"
     INCLUDE_DIRS "include"
-    REQUIRES idf::nvs_flash idf::bootloader_support idf::app_update idf::spiffs idf::esp_http_client idf::esp_https_ota idf::esp_http_server idf::console idf::esp_wifi idf::esp_adc idf::mqtt idf::spi_flash idf::driver idf::bt idf::wpa_supplicant idf::esp_eth
+    REQUIRES esp_common nvs_flash bootloader_support app_update spiffs esp_http_client esp_https_ota esp_http_server console esp_wifi esp_adc mqtt spi_flash driver bt wpa_supplicant esp_eth
 )
 
 set(web_ui_build_dir "${CMAKE_BINARY_DIR}/web-ui")

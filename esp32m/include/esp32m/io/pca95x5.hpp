@@ -9,6 +9,9 @@ namespace esp32m {
      public:
       Pca95x5(I2C *i2c);
       Pca95x5(const Pca95x5 &) = delete;
+      const char *name() const override {
+        return "PCA95x5";
+      }
       esp_err_t readPin(int pin, bool &value);
       esp_err_t writePin(int pin, bool value);
       esp_err_t setPinMode(int pin, bool input);

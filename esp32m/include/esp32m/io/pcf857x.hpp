@@ -13,6 +13,9 @@ namespace esp32m {
       };
       Pcf857x(Flavor f, I2C *i2c);
       Pcf857x(const Pcf857x &) = delete;
+      const char *name() const override {
+        return "PCF857x";
+      }
       Flavor flavor() const {
         return _flavor;
       }

@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { Grid } from '@mui/material';
-import { IDebugPlugin } from './types';
+import { TDebugPlugin } from './types';
 import { getPlugins } from '@ts-libs/plugins';
 
 export default () => {
-  const plugins = getPlugins<IDebugPlugin>();
+  const plugins = getPlugins<TDebugPlugin>();
   const widgets: Array<React.ReactElement> = useMemo(
     () =>
       plugins

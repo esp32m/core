@@ -1,9 +1,9 @@
 import { Debug } from '../shared';
-import { IDebugPlugin } from '../types';
-import content from './Content';
+import { TDebugPlugin } from '../types';
+import { content } from './content';
 import { Name } from './types';
 
-export const DebugTasks: IDebugPlugin = {
+export const DebugTasks: TDebugPlugin = {
   name: Name,
   use: Debug,
   debug: { content },

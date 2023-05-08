@@ -548,31 +548,12 @@ namespace esp32m {
             pins[numbuf] = gpio_get_level(pin);
             break;
           case PinMode::Adc: {
-            int raw;
             adc_unit_t unit;
             adc_channel_t channel;
             ESP_ERROR_CHECK_WITHOUT_ABORT(
                 adc_oneshot_io_to_channel(pin, &unit, &channel));
             auto c = pins.createNestedArray(numbuf);
-            adc_oneshot_unit_handle_t adchandle;
-            if (ESP_ERROR_CHECK_WITHOUT_ABORT(
-                    gpio::getADCUnitHandle(unit, &adchandle)) == 0) {
-              /*adc_oneshot_chan_cfg_t ccfg = {
-                  .atten = i.second.adc.atten,  // ADC_ATTEN_DB_11,
-                  .bitwidth = ADC_BITWIDTH_DEFAULT,
-              };
-              ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  adc_oneshot_config_channel(adchandle, channel, &ccfg));*/
-              ESP_ERROR_CHECK_WITHOUT_ABORT(
-                  adc_oneshot_read(adchandle, channel, &raw));
-            } else
-              /*if (c1 >= 0)
-                c.add(adc1_get_raw((adc1_channel_t)c1));
-              else if (!ESP_ERROR_CHECK_WITHOUT_ABORT(adc2_get_raw(
-                           (adc2_channel_t)c2, ADC_BITWIDTH_12, &raw)))
-                c.add(raw);
-              else*/
-              c.add(nullptr);
+            c.add(nullptr);
           } break;
           case PinMode::PulseCounter: /* {
              int16_t count;

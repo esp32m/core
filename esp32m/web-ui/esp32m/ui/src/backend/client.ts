@@ -44,7 +44,7 @@ export function isBroadcast(msg: TMessage): msg is TBroadcast {
   return msg.type === 'broadcast' && isString((msg as TBroadcast).source);
 }
 
-class Device implements IModuleApi {
+class Module implements IModuleApi {
   readonly selectors;
   constructor(readonly api: Client, readonly name: string) {
     this.selectors = {
@@ -54,19 +54,26 @@ class Device implements IModuleApi {
       ),
     };
   }
-  useState(): VoidFunction {
+  useState(data?: any): VoidFunction {
+    if (data && this._statePollRefs)
+      throw new Error(
+        'state polling with arguments by multiple consumers is not supported'
+      );
     this._statePollRefs++;
+    this.stateGetData = data;
     return () => {
       if (this._statePollRefs <= 0)
         console.error(
           `esp32m UI bug: ${this.name}.statePollRefs=${this._statePollRefs}`
         );
       else this._statePollRefs--;
+      if (this._statePollRefs == 0) delete this.stateGetData;
     };
   }
   isPolling() {
     return this._statePollRefs > 0;
   }
+  stateGetData?: any;
   private _statePollRefs = 0;
 }
 
@@ -102,7 +109,7 @@ class Client implements IBackendApi {
   }
   module(name: string): IModuleApi {
     return (
-      this._devices[name] || (this._devices[name] = new Device(this, name))
+      this._devices[name] || (this._devices[name] = new Module(this, name))
     );
   }
   async open() {
@@ -198,11 +205,11 @@ class Client implements IBackendApi {
 
   private _seq: number = Math.floor(Math.random() * (Math.pow(2, 31) / 2));
   private readonly _pending: { [key: number]: TPendingRequest } = {};
-  private readonly _devices: Record<string, Device> = {};
+  private readonly _devices: Record<string, Module> = {};
   private readonly _statePoller = new Periodic(async () => {
     const tasks = Object.values(this._devices)
       .filter((d) => d.isPolling())
-      .map((d) => this.getState(d.name));
+      .map((d) => this.getState(d.name, d.stateGetData));
     await Promise.allSettled(tasks);
   }, 1000);
 }

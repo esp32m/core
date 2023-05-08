@@ -9,16 +9,17 @@ namespace esp32m {
       class Pin : public IPin {
        public:
         Pin(Pcf857x *owner, int id) : IPin(id), _owner(owner) {
-          snprintf(_name, sizeof(_name), "PCF857x-%02u", id - owner->pinBase());
+          snprintf(_name, sizeof(_name), "PCF857x-%02u", id);
         };
         const char *name() const override {
           return _name;
         }
-        io::pin::Features features() override {
-          return io::pin::Features::DigitalInput |
-                 io::pin::Features::DigitalOutput | io::pin::Features::PullUp;
+        io::pin::Flags flags() override {
+          return io::pin::Flags::DigitalInput |
+                 io::pin::Flags::DigitalOutput | io::pin::Flags::PullUp;
         }
-        pin::Impl *createImpl(pin::Type type) override;
+        esp_err_t createFeature(pin::Type type,
+                                pin::Feature **feature) override;
 
        private:
         Pcf857x *_owner;
@@ -60,13 +61,15 @@ namespace esp32m {
         Pin *_pin;
       };
 
-      pin::Impl *Pin::createImpl(pin::Type type) {
+      esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
         switch (type) {
           case pin::Type::Digital:
-            return new Digital(this);
+            *feature = new Digital(this);
+            return ESP_OK;
           default:
-            return nullptr;
+            break;
         }
+        return IPin::createFeature(type, feature);
       }
     }  // namespace pcf857x
 
@@ -101,7 +104,6 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::readPin(int pin, bool &value) {
-      pin = id2num(pin);
       auto tx = pin::Tx::current();
       if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
                   !tx->getReadPerformed())) {
@@ -114,7 +116,6 @@ namespace esp32m {
       return ESP_OK;
     }
     esp_err_t Pcf857x::writePin(int pin, bool value) {
-      pin = id2num(pin);
       auto tx = pin::Tx::current();
       if (tx && (tx->type() & pin::Tx::Type::Read) != 0 &&
           !tx->getReadPerformed()) {
@@ -133,7 +134,6 @@ namespace esp32m {
       return ESP_OK;
     }
     esp_err_t Pcf857x::setPinMode(int pin, bool input) {
-      pin = id2num(pin);
       if (input)
         _inputMap |= (1 << pin);
       else

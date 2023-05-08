@@ -26,38 +26,31 @@
 namespace esp32m {
   namespace gpio {
 
-    adc_cali_scheme_ver_t calischeme = (adc_cali_scheme_ver_t)0;
+    using namespace io;
 
-    enum ADCFlags {
-      None = 0,
-      Valid = BIT0,
-      CharsDirty = BIT1,
-    };
-
-    ENUM_FLAG_OPERATORS(ADCFlags)
     class ISRArg;
 
-    class Pin : public io::IPin {
+    class Pin : public IPin {
      public:
       Pin(int id);
       const char *name() const override {
         return _name;
       }
       gpio_num_t num();
-      io::pin::Features features() override {
+      pin::Flags flags() override {
         return _features;
       }
       void reset() override;
 
      protected:
-      io::pin::Impl *createImpl(io::pin::Type type) override;
+      esp_err_t createFeature(pin::Type type, pin::Feature **feature) override;
 
      private:
-      io::pin::Features _features;
+      pin::Flags _features;
       char _name[5];
     };
 
-    class Digital : public io::pin::IDigital {
+    class Digital : public pin::IDigital {
      public:
       Digital(Pin *pin) : _pin(pin) {}
       ~Digital() override {
@@ -104,58 +97,105 @@ namespace esp32m {
       friend IRAM_ATTR void gpio_isr_handler(void *self);
     };
 
-    class ADC : public io::pin::IADC {
+    namespace adc {
+      class Unit;
+      static adc_cali_scheme_ver_t calischeme = (adc_cali_scheme_ver_t)0;
+      static std::map<adc_unit_t, std::unique_ptr<Unit> > _units;
+
+      enum Flags {
+        None = 0,
+        Dirty = BIT0,
+        CharsDirty = BIT1,
+      };
+
+      ENUM_FLAG_OPERATORS(Flags)
+
+      class Unit {
+       public:
+        Unit(const Unit &) = delete;
+        ~Unit() {
+          ESP_ERROR_CHECK_WITHOUT_ABORT(adc_oneshot_del_unit(_handle));
+        }
+        static esp_err_t claim(adc_unit_t unit, Unit **u) {
+          if (!u)
+            return ESP_ERR_INVALID_ARG;
+          Unit *result = nullptr;
+          auto it = _units.find(unit);
+          if (it == _units.end()) {
+            adc_oneshot_unit_init_cfg_t ucfg = {
+                .unit_id = unit,
+                .clk_src = (adc_oneshot_clk_src_t)0,
+                .ulp_mode = ADC_ULP_MODE_DISABLE};
+            adc_oneshot_unit_handle_t handle;
+            ESP_CHECK_RETURN(adc_oneshot_new_unit(&ucfg, &handle));
+            result = new Unit(unit, handle);
+            _units[unit] = std::unique_ptr<Unit>(result);
+          } else
+            result = it->second.get();
+          result->_refs++;
+          *u = result;
+          return ESP_OK;
+        }
+        void release() {
+          if (_refs <= 0) {
+            logw("invalid ADC unit release, %d refs", _refs);
+            return;
+          }
+          _refs--;
+          if (_refs == 0)
+            _units.erase(_unit);
+        }
+        std::mutex &mutex() {
+          return _mutex;
+        }
+        adc_oneshot_unit_handle_t handle() const {
+          return _handle;
+        }
+        adc_unit_t unit() const {
+          return _unit;
+        }
+
+       private:
+        int _refs = 0;
+        adc_unit_t _unit;
+        adc_oneshot_unit_handle_t _handle;
+        std::mutex _mutex;
+        Unit(adc_unit_t unit, adc_oneshot_unit_handle_t handle)
+            : _unit(unit), _handle(handle) {}
+      };
+
+    }  // namespace adc
+
+    class ADC : public pin::IADC {
      public:
-      ADC(Pin *pin) : _pin(pin) {
-        if (init() == ESP_OK)
-          _flags |= ADCFlags::Valid;
-      }
-      bool valid() override {
-        return (_flags & ADCFlags::Valid) != 0;
+      ~ADC() override {
+        _unit->release();
       }
       esp_err_t read(int &value, uint32_t *mv) override {
-        if (!valid())
-          return ESP_FAIL;
-        adc_oneshot_unit_handle_t handle;
-        ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
-        /*
-        esp_err_t err = ESP_OK;
-        for (int attempt = 0; attempt < 3; attempt++) {
-          // unfortunately it doesnt't wait for the other thread to release ADC,
-        so we have to do ugly retries.
-          // we can add our own mutex, but what if
-          err = adc_oneshot_read(handle, _channel, &value);
-          if (err == ESP_ERR_TIMEOUT)
-            delay(attempt);
-          else
-            break;
-        }
-        ESP_CHECK_RETURN(err);
-        */
-        auto &mutex = getADCUnitMutex(_unit);
+        ESP_CHECK_RETURN(update());
         {
-          std::lock_guard guard(mutex);
-          ESP_CHECK_RETURN(adc_oneshot_read(handle, _channel, &value));
+          std::lock_guard guard(_unit->mutex());
+          ESP_CHECK_RETURN(adc_oneshot_read(_unit->handle(), _channel, &value));
         }
         if (mv) {
-          if (!_calihandle || (_flags & ADCFlags::CharsDirty) != 0) {
-            _flags &= ~ADCFlags::CharsDirty;
+          if (!_calihandle || (_flags & adc::Flags::CharsDirty) != 0) {
+            _flags &= ~adc::Flags::CharsDirty;
             if (_calihandle) {
 #if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-              if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0)
+              if ((adc::calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0)
                 adc_cali_delete_scheme_line_fitting(_calihandle);
 #endif
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-              if ((calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0)
+              if ((adc::calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0)
                 adc_cali_delete_scheme_curve_fitting(_calihandle);
 #endif
             }
             _calihandle = nullptr;
 
 #if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-            if ((calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0) {
+            if ((adc::calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0) {
               adc_cali_line_fitting_config_t cali_config = {
-                  .unit_id = _unit,
+                  .unit_id = _unit->unit(),
                   .atten = _atten,
                   .bitwidth = _width,
                   .default_vref = DEFAULT_VREF};
@@ -165,9 +205,9 @@ namespace esp32m {
 #endif
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
             if (!_calihandle &&
-                (calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
+                (adc::calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
               adc_cali_curve_fitting_config_t cali_config = {
-                  .unit_id = _unit,
+                  .unit_id = _unit->unit(),
                   .atten = _atten,
                   .bitwidth = _width,
               };
@@ -253,8 +293,8 @@ namespace esp32m {
         if (atten == _atten)
           return ESP_OK;
         _atten = atten;
-        _flags |= ADCFlags::CharsDirty;
-        return update();
+        _flags |= adc::Flags::CharsDirty | adc::Flags::Dirty;
+        return ESP_OK;
       }
       int getWidth() override {
         return _width == ADC_BITWIDTH_DEFAULT ? SOC_ADC_RTC_MAX_BITWIDTH
@@ -265,79 +305,92 @@ namespace esp32m {
         if (width == _width)
           return ESP_OK;
         _width = width;
-        _flags |= ADCFlags::CharsDirty;
-        return update();
+        _flags |= adc::Flags::CharsDirty | adc::Flags::Dirty;
+        return ESP_OK;
+      }
+
+      static esp_err_t create(Pin *pin, pin::Feature **feature) {
+        if (!adc::calischeme)
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              adc_cali_check_scheme(&adc::calischeme));
+        adc_unit_t unit;
+        adc_channel_t channel;
+        ESP_CHECK_RETURN(
+            adc_oneshot_io_to_channel(pin->num(), &unit, &channel));
+        adc::Unit *u = nullptr;
+        ESP_CHECK_RETURN(adc::Unit::claim(unit, &u));
+        *feature = new ADC(pin, u, channel);
+        /*logd("initialized oneshot ADC on gpio %d, ADC%d, channel %d",
+             _pin->num(), _unit + 1, _channel);*/
+        return ESP_OK;
       }
 
      private:
       Pin *_pin;
-      adc_unit_t _unit;
+      adc::Unit *_unit;
       adc_channel_t _channel;
       adc_cali_handle_t _calihandle = nullptr;
       adc_bitwidth_t _width = ADC_BITWIDTH_DEFAULT;
       adc_atten_t _atten = ADC_ATTEN_DB_11;
-      ADCFlags _flags = ADCFlags::None;
-      esp_err_t init() {
-        if (!calischeme)
-          ESP_ERROR_CHECK_WITHOUT_ABORT(adc_cali_check_scheme(&calischeme));
-        ESP_CHECK_RETURN(
-            adc_oneshot_io_to_channel(_pin->num(), &_unit, &_channel));
-        /*logd("initialized oneshot ADC on gpio %d, ADC%d, channel %d",
-             _pin->num(), _unit + 1, _channel);*/
-        return update();
-      }
+      adc::Flags _flags = adc::Flags::Dirty;
+      ADC(Pin *pin, adc::Unit *unit, adc_channel_t channel)
+          : _pin(pin), _unit(unit), _channel(channel) {}
       esp_err_t update() {
-        adc_oneshot_chan_cfg_t ccfg = {
-            .atten = _atten,
-            .bitwidth = _width,
-        };
-        adc_oneshot_unit_handle_t handle;
-        ESP_CHECK_RETURN(getADCUnitHandle(_unit, &handle));
-        ESP_CHECK_RETURN(adc_oneshot_config_channel(handle, _channel, &ccfg));
+        if ((_flags & adc::Flags::Dirty) != 0) {
+          _flags &= ~adc::Flags::Dirty;
+
+          adc_oneshot_chan_cfg_t ccfg = {
+              .atten = _atten,
+              .bitwidth = _width,
+          };
+          ESP_CHECK_RETURN(
+              adc_oneshot_config_channel(_unit->handle(), _channel, &ccfg));
+        }
         return ESP_OK;
       }
     };
 
 #if SOC_DAC_SUPPORTED
-    class DAC : public io::pin::IDAC {
+    class DAC : public pin::IDAC {
      public:
-      DAC(Pin *pin) {
-        switch (pin->num()) {
-          case DAC_CHANNEL_1_GPIO_NUM:
-            _channel = DAC_CHAN_0;
-            break;
-          case DAC_CHANNEL_2_GPIO_NUM:
-            _channel = DAC_CHAN_1;
-            break;
-          default:
-            _channel = (dac_channel_t)-1;
-            break;
-        }
-      }
-      bool valid() override {
-        return _channel >= 0;
+      virtual ~DAC() {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(dac_oneshot_del_channel(_handle));
       }
       esp_err_t write(float value) override {
-        if (value >= 0) {
-          if (!_handle) {
-            dac_oneshot_config_t cfg = {.chan_id = _channel};
-            ESP_CHECK_RETURN(dac_oneshot_new_channel(&cfg, &_handle));
-          }
-          ESP_CHECK_RETURN(dac_oneshot_output_voltage(_handle, 255 * value));
+        if (value < 0)
+          return ESP_ERR_INVALID_ARG;
+        ESP_CHECK_RETURN(dac_oneshot_output_voltage(_handle, 255 * value));
+        return ESP_OK;
+      }
+
+      static esp_err_t create(Pin *pin, pin::Feature **feature) {
+        dac_channel_t channel;
+        switch (pin->num()) {
+          case DAC_CHANNEL_1_GPIO_NUM:
+            channel = DAC_CHAN_0;
+            break;
+          case DAC_CHANNEL_2_GPIO_NUM:
+            channel = DAC_CHAN_1;
+            break;
+          default:
+            return ESP_ERR_INVALID_ARG;
         }
+        dac_oneshot_handle_t handle;
+        dac_oneshot_config_t cfg = {.chan_id = channel};
+        ESP_CHECK_RETURN(dac_oneshot_new_channel(&cfg, &handle));
+        *feature = new DAC(pin, channel, handle);
         return ESP_OK;
       }
 
      private:
       dac_channel_t _channel;
-      dac_oneshot_handle_t _handle = nullptr;
+      dac_oneshot_handle_t _handle;
+      DAC(Pin *pin, dac_channel_t channel, dac_oneshot_handle_t handle)
+          : _channel(channel), _handle(handle) {}
     };
 #endif
-    class Pcnt : public io::pin::IPcnt {
+    class Pcnt : public pin::IPcnt {
      public:
-      Pcnt(Pin *pin) : _pin(pin) {
-        _valid = install() == ESP_OK;
-      }
       ~Pcnt() override {
         if (_channel && _unit)
           pcnt_unit_stop(_unit);
@@ -350,9 +403,6 @@ namespace esp32m {
           pcnt_del_unit(_unit);
           _unit = nullptr;
         }
-      }
-      bool valid() override {
-        return _valid;
       }
       esp_err_t read(int &value, bool reset = false) override {
         int c;
@@ -382,29 +432,34 @@ namespace esp32m {
         return ESP_OK;
       };
 
-     private:
-      Pin *_pin;
-      pcnt_unit_handle_t _unit = nullptr;
-      pcnt_channel_handle_t _channel = nullptr;
-      bool _valid = false;
-      esp_err_t install() {
+      static esp_err_t create(Pin *pin, pin::Feature **feature) {
         pcnt_unit_config_t unit_config = {.low_limit = SHRT_MIN,
                                           .high_limit = SHRT_MAX,
                                           .flags = {
                                               .accum_count = true,
                                           }};
-        ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &_unit));
+        pcnt_unit_handle_t unit;
+        pcnt_channel_handle_t channel;
+        ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &unit));
         pcnt_chan_config_t chan_config = {
-            .edge_gpio_num = _pin->num(),
+            .edge_gpio_num = pin->num(),
             .level_gpio_num = -1,
             .flags = {},
         };
-        ESP_CHECK_RETURN(pcnt_new_channel(_unit, &chan_config, &_channel));
-        ESP_CHECK_RETURN(pcnt_unit_enable(_unit));
-        ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
-        ESP_CHECK_RETURN(pcnt_unit_start(_unit));
+        ESP_CHECK_RETURN(pcnt_new_channel(unit, &chan_config, &channel));
+        ESP_CHECK_RETURN(pcnt_unit_enable(unit));
+        ESP_CHECK_RETURN(pcnt_unit_clear_count(unit));
+        ESP_CHECK_RETURN(pcnt_unit_start(unit));
+        *feature = new Pcnt(pin, unit, channel);
         return ESP_OK;
       };
+
+     private:
+      Pin *_pin;
+      pcnt_unit_handle_t _unit;
+      pcnt_channel_handle_t _channel;
+      Pcnt(Pin *pin, pcnt_unit_handle_t unit, pcnt_channel_handle_t channel)
+          : _pin(pin), _unit(unit), _channel(channel) {}
     };
 
     struct LedcTimer {
@@ -414,7 +469,7 @@ namespace esp32m {
 
     LedcTimer *ledcTimers[LEDC_TIMER_MAX] = {};
     std::mutex ledcTimersMutex;
-    uint8_t _ledcUnits = 0;
+    uint16_t _ledcChannels = 0;
 
     bool ledcTimersEqual(LedcTimer *a, LedcTimer *b) {
       if (!a || !b)
@@ -459,34 +514,16 @@ namespace esp32m {
       return freeSlot;
     }
 
-    class LEDC : public io::pin::ILEDC {
+    class LEDC : public pin::ILEDC {
      public:
-      LEDC(Pin *pin) : _pin(pin) {
-        std::lock_guard lock(ledcTimersMutex);
-        for (auto i = 0; i < LEDC_CHANNEL_MAX; i++)
-          if ((_ledcUnits & (1 << i)) == 0) {
-            _channel = i;
-            break;
-          }
-        if (_channel < 0)
-          return;
-        if (valid())
-          _ledcUnits |= (1 << _channel);
-      }
       ~LEDC() override {
         std::lock_guard lock(ledcTimersMutex);
-        if (valid())
-          _ledcUnits &= ~(1 << _channel);
+        _ledcChannels &= ~(1 << _channel);
         ledcTimerUnref(_timer);
-      }
-      bool valid() override {
-        return _channel >= 0;
       }
       esp_err_t config(uint32_t freq_hz, ledc_mode_t mode,
                        ledc_timer_bit_t duty_resolution,
                        ledc_clk_cfg_t clk_cfg) override {
-        if (!valid())
-          return ESP_FAIL;
         std::lock_guard lock(ledcTimersMutex);
         ledcTimerUnref(_timer);
         _timer = ledcTimerGet(mode, duty_resolution, freq_hz, clk_cfg);
@@ -509,19 +546,27 @@ namespace esp32m {
                 },
         };
         ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
-        /*LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i, duty_res=%i",
-             _channel, _timer, freq_hz, duty_resolution);*/
+        /*LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i,
+           duty_res=%i", _channel, _timer, freq_hz, duty_resolution);*/
         return ESP_OK;
       }
       esp_err_t setDuty(uint32_t duty) override {
-        if (!valid())
-          return ESP_FAIL;
         ESP_CHECK_RETURN(
             ledc_set_duty(_speedMode, (ledc_channel_t)_channel, duty));
         ESP_CHECK_RETURN(
             ledc_update_duty(_speedMode, (ledc_channel_t)_channel));
         // LOGI(_pin, "LEDC set duty %i", duty);
         return ESP_OK;
+      }
+      static esp_err_t create(Pin *pin, pin::Feature **feature) {
+        std::lock_guard lock(ledcTimersMutex);
+        for (auto i = 0; i < LEDC_CHANNEL_MAX; i++)
+          if ((_ledcChannels & (1 << i)) == 0) {
+            _ledcChannels |= (1 << i);
+            *feature = new LEDC(pin, (ledc_channel_t)i);
+            return ESP_OK;
+          }
+        return ESP_FAIL;
       }
 
      private:
@@ -531,37 +576,36 @@ namespace esp32m {
 #else
       ledc_mode_t _speedMode = LEDC_LOW_SPEED_MODE;
 #endif
-      int _channel = -1;
+      ledc_channel_t _channel;
       int _timer = -1;
+
+      LEDC(Pin *pin, ledc_channel_t channel) : _pin(pin), _channel(channel) {}
     };
 
     Pin::Pin(int id) : IPin(id) {
       gpio_num_t num = this->num();
       snprintf(_name, sizeof(_name), "IO%02u", num);
-      _features = io::pin::Features::None;
-      if (!GPIO_IS_VALID_GPIO(num))
-        return;
+      _features = pin::Flags::None;
       if (GPIO_IS_VALID_DIGITAL_IO_PAD(num))
-        _features |=
-            io::pin::Features::DigitalInput | io::pin::Features::PulseCounter;
+        _features |= pin::Flags::DigitalInput | pin::Flags::PulseCounter;
       if (GPIO_IS_VALID_OUTPUT_GPIO(num))
-        _features |= io::pin::Features::DigitalOutput |
-                     io::pin::Features::PullUp | io::pin::Features::PullDown;
+        _features |= pin::Flags::DigitalOutput | pin::Flags::PullUp |
+                     pin::Flags::PullDown | pin::Flags::LEDC;
 #if SOC_DAC_SUPPORTED
       if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
-        _features |= io::pin::Features::DAC;
+        _features |= pin::Flags::DAC;
 #endif
       adc_unit_t unit;
       adc_channel_t channel;
       if (adc_oneshot_io_to_channel(num, &unit, &channel) == ESP_OK)
-        _features |= io::pin::Features::ADC;
-      ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num));
+        _features |= pin::Flags::ADC;
     };
     gpio_num_t Pin::num() {
-      return (gpio_num_t)(_id - io::Gpio::instance().pinBase());
+      return (gpio_num_t)_id;
     }
 
     void Pin::reset() {
+      ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(num()));
       IPin::reset();
     };
 
@@ -627,41 +671,53 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    io::pin::Impl *Pin::createImpl(io::pin::Type type) {
+    esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
       switch (type) {
-        case io::pin::Type::Digital:
-          if ((_features & (io::pin::Features::DigitalInput |
-                            io::pin::Features::DigitalOutput)) != 0)
-            return new gpio::Digital(this);
+        case pin::Type::Digital:
+          if ((_features & (pin::Flags::DigitalInput |
+                            pin::Flags::DigitalOutput)) != 0) {
+            *feature = new gpio::Digital(this);
+            return ESP_OK;
+          }
           break;
-        case io::pin::Type::ADC:
-          if ((_features & io::pin::Features::ADC) != 0)
-            return new gpio::ADC(this);
+        case pin::Type::ADC:
+          if ((_features & pin::Flags::ADC) != 0) {
+            gpio::ADC::create(this, feature);
+            return ESP_OK;
+          }
           break;
 #if SOC_DAC_SUPPORTED
-        case io::pin::Type::DAC:
-          if ((_features & io::pin::Features::DAC) != 0)
-            return new gpio::DAC(this);
+        case pin::Type::DAC:
+          if ((_features & pin::Flags::DAC) != 0) {
+            gpio::DAC::create(this, feature);
+            return ESP_OK;
+          }
           break;
 #endif
-        case io::pin::Type::Pcnt:
-          if ((_features & io::pin::Features::PulseCounter) != 0)
-            return new gpio::Pcnt(this);
+        case pin::Type::Pcnt:
+          if ((_features & pin::Flags::PulseCounter) != 0) {
+            gpio::Pcnt::create(this, feature);
+            return ESP_OK;
+          }
           break;
-        case io::pin::Type::LEDC:
-          if ((_features & io::pin::Features::DigitalOutput) != 0)
-            return new gpio::LEDC(this);
+        case pin::Type::LEDC:
+          if ((_features & pin::Flags::DigitalOutput) != 0) {
+            gpio::LEDC::create(this, feature);
+            return ESP_OK;
+          }
           break;
         default:
-          return nullptr;
+          break;
       }
-      return nullptr;
+      return IPin::createFeature(type, feature);
     }
   }  // namespace gpio
 
   namespace io {
     IPin *Gpio::newPin(int id) {
-      return new gpio::Pin(id);
+      if (GPIO_IS_VALID_GPIO(id))
+        return new gpio::Pin(id);
+      return nullptr;
     }
 
     Gpio &Gpio::instance() {
@@ -679,7 +735,7 @@ namespace esp32m {
       return io::Gpio::instance().pin(n);
     }
 
-    adc_oneshot_unit_handle_t adc_handles[] = {nullptr, nullptr};
+    /*adc_oneshot_unit_handle_t adc_handles[] = {nullptr, nullptr};
     std::map<adc_unit_t, std::mutex> _adc_locks;
 
     esp_err_t getADCUnitHandle(adc_unit_t unit,
@@ -687,8 +743,8 @@ namespace esp32m {
       auto h = adc_handles[unit];
       if (!h) {
         adc_oneshot_unit_init_cfg_t ucfg = {.unit_id = unit,
-                                            .clk_src = (adc_oneshot_clk_src_t)0,
-                                            .ulp_mode = ADC_ULP_MODE_DISABLE};
+                                            .clk_src =
+    (adc_oneshot_clk_src_t)0, .ulp_mode = ADC_ULP_MODE_DISABLE};
         ESP_CHECK_RETURN(adc_oneshot_new_unit(&ucfg, &h));
         adc_handles[unit] = h;
       }
@@ -701,7 +757,7 @@ namespace esp32m {
       if (it != _adc_locks.end())
         return it->second;
       return _adc_locks[unit];
-    }
+    }*/
 
   }  // namespace gpio
 }  // namespace esp32m

@@ -43,7 +43,6 @@ namespace esp32m {
     namespace wifi {
 
       Sta::Sta() {
-        _persistent = true;
         _role = Role::DhcpClient;
       };
 
@@ -121,7 +120,6 @@ namespace esp32m {
           PP_HTONL(LWIP_MAKEU32(192, 168, 4, 1))};
 
       Ap::Ap() {
-        _persistent = true;
         _role = Role::DhcpServer;
         _ip = {DefaultApIp, DefaultNetmask, DefaultApIp};
         _dhcpsLease.enable = true;

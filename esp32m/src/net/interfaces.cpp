@@ -11,6 +11,7 @@ namespace esp32m {
 
     void Interface::init(const char *key) {
       _key = key;
+      _handle = esp_netif_get_handle_from_ifkey(_key.c_str());
       Interfaces::instance().reg(this);
       ErrorList el;
       syncHandle(el);
@@ -25,7 +26,6 @@ namespace esp32m {
     }
 
     void Interface::syncHandle(ErrorList &errl) {
-      _handle = esp_netif_get_handle_from_ifkey(_key.c_str());
       if (_handle) {
         if (!_configLoaded) {
           errl.check(esp_netif_get_mac(_handle, _mac));
@@ -121,9 +121,10 @@ namespace esp32m {
           if (_role != Role::DhcpClient)
             for (auto &kv : _dns) {
               // only set primary DNS for DhcpServer
-              if (_role == Role::DhcpServer && kv.first > ESP_NETIF_DNS_MAIN) 
+              if (_role == Role::DhcpServer && kv.first > ESP_NETIF_DNS_MAIN)
                 break;
-              // logI("set DNS: %d, %x", kv.first, kv.second.ip.u_addr.ip4.addr);
+              // logI("set DNS: %d, %x", kv.first,
+              // kv.second.ip.u_addr.ip4.addr);
               errl.check(esp_netif_set_dns_info(_handle, kv.first, &kv.second));
             }
           if (_role == Role::DhcpServer) {
@@ -212,6 +213,7 @@ namespace esp32m {
                               DynamicJsonDocument **result) {
       ErrorList el;
       bool changed = false;
+//      json::dump(this, cfg, "setConfig");
       JsonObjectConst root = cfg.as<JsonObjectConst>();
       if (json::fromIntCastable(root["role"], _role, &changed))
         apply(ConfigItem::Role, el);
@@ -231,7 +233,7 @@ namespace esp32m {
       _configLoaded = true;
       return changed;
     }
-    DynamicJsonDocument *Interface::getConfig(RequestContext &ctx) {
+    DynamicJsonDocument *Interface::getConfig() {
       auto hasIp = _ip.ip.addr || _ip.gw.addr || _ip.netmask.addr;
       auto hasMac = !isEmptyMac(_mac);
       auto ip6count = _ipv6.size();
@@ -297,7 +299,7 @@ namespace esp32m {
     DynamicJsonDocument *Interfaces::getConfig(RequestContext &ctx) {
       json::ConcatToObject c;
       for (const auto &i : _map) {
-        auto config = i.second->getConfig(ctx);
+        auto config = i.second->getConfig();
         if (config) {
           json::check(this, config, "getConfig()");
           c.add(i.first.c_str(), config);
@@ -328,7 +330,7 @@ namespace esp32m {
           if (!cif)
             break;
           const char *key = esp_netif_get_ifkey(cif);
-          getOrAddInterface(key)->syncHandle(el);
+          getOrAddInterface(key);
           ac++;
         }
         logI("%d configured, %d active", _map.size(), ac);
@@ -352,9 +354,21 @@ namespace esp32m {
       std::lock_guard guard(_mapMutex);
       auto old = _map.find(key);
       if (old != _map.end() && old->second) {
-        logw("deleting orphaned interface %s", key.c_str());
-        if (!old->second->_persistent)
+        // this happens if config was loaded before the interface was created
+        // in this case we have Interface object without a _handle in the _map,
+        // but with the loaded config and we move it over to the real interfce
+        // that is being added now
+        logd("configuring interface %s", key.c_str());
+        if (old->second->_configLoaded && i->_handle) {
+          auto doc = old->second->getConfig();
+          i->setConfig(*doc, nullptr);
+          delete doc;
+        }
+        if (!old->second->_handle)
           delete old->second;
+        else
+          logw("BUG: trying to register interface %s more than once",
+               key.c_str());
         old->second = i;
       } else
         _map[key] = i;

@@ -1,9 +1,9 @@
 import { TPlugin } from '@ts-libs/plugins';
 import React from 'react';
 
-export type IDebugPlugin = TPlugin & {
+export type TDebugPlugin = TPlugin & {
   debug: {
     content: React.ComponentType;
     props?: React.Attributes;
   };
-}
+};

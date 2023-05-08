@@ -47,14 +47,12 @@ namespace esp32m {
       }
       esp_err_t getIpInfo(esp_netif_ip_info_t &info);
 
-      void syncHandle(ErrorList &errl);
       void apply(ConfigItem item, ErrorList &errl);
       void apply(ErrorList &errl);
       void stopDhcp();
       bool isUp();
 
      protected:
-      bool _persistent = false;
       // config
       bool _configLoaded = false;
       Role _role = Role::Default;
@@ -66,11 +64,12 @@ namespace esp32m {
       void init(const char *key);
       DynamicJsonDocument *getState(const JsonVariantConst args);
       bool setConfig(const JsonVariantConst cfg, DynamicJsonDocument **result);
-      DynamicJsonDocument *getConfig(RequestContext &ctx);
+      DynamicJsonDocument *getConfig();
 
      private:
       std::string _key;
-      esp_netif_t *_handle;
+      esp_netif_t *_handle = nullptr;
+      void syncHandle(ErrorList &errl);
       friend class Interfaces;
     };
 

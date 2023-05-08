@@ -16,6 +16,9 @@ namespace esp32m {
                  io::pin::IDigital* pinS1, io::pin::IDigital* pinS2,
                  io::pin::IDigital* pinS3, IPin* pinSig);
       CD74HC4067(const CD74HC4067&) = delete;
+      const char *name() const override {
+        return "74HC4067";
+      }
       esp_err_t enable(bool en);
 
      protected:

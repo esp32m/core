@@ -19,8 +19,17 @@ namespace esp32m {
     class IPin;
 
     namespace pin {
-      enum class Type { Digital, ADC, DAC, Pcnt, LEDC };
-      enum class Features {
+      enum class Type {
+        Invalid = -1,
+        Digital = 0,
+        ADC,
+        DAC,
+        PWM,
+        Pcnt,
+        LEDC,
+        MAX
+      };
+      enum class Flags {
         None = 0,
         PullUp = BIT0,
         PullDown = BIT1,
@@ -29,19 +38,18 @@ namespace esp32m {
         ADC = BIT4,
         DAC = BIT5,
         PulseCounter = BIT6,
+        LEDC = BIT7,
       };
-      ENUM_FLAG_OPERATORS(Features)
+      ENUM_FLAG_OPERATORS(Flags)
+      enum class FeatureStatus { NotSupported, Supported, Enabled };
 
-      class Impl {
+      class Feature {
        public:
-        virtual ~Impl() {}
+        virtual ~Feature() {}
         virtual Type type() = 0;
-        virtual bool valid() {
-          return true;
-        }
       };
 
-      class IDigital : public Impl {
+      class IDigital : public Feature {
        public:
         Type type() override {
           return Type::Digital;
@@ -59,7 +67,7 @@ namespace esp32m {
         }
       };
 
-      class IADC : public Impl {
+      class IADC : public Feature {
        public:
         Type type() override {
           return Type::ADC;
@@ -74,7 +82,7 @@ namespace esp32m {
         virtual esp_err_t setWidth(adc_bitwidth_t width) = 0;
       };
 
-      class IDAC : public Impl {
+      class IDAC : public Feature {
        public:
         Type type() override {
           return Type::DAC;
@@ -82,7 +90,20 @@ namespace esp32m {
         virtual esp_err_t write(float value) = 0;
       };
 
-      class IPcnt : public Impl {
+      class IPWM : public Feature {
+       public:
+        Type type() override {
+          return Type::PWM;
+        };
+        virtual esp_err_t setDuty(float value) = 0;
+        virtual float getDuty() const = 0;
+        virtual esp_err_t setFreq(uint32_t value) = 0;
+        virtual uint32_t getFreq() const = 0;
+        virtual esp_err_t enable(bool on) = 0;
+        virtual bool isEnabled() const = 0;
+      };
+
+      class IPcnt : public Feature {
        public:
         Type type() override {
           return Type::Pcnt;
@@ -94,7 +115,7 @@ namespace esp32m {
         virtual esp_err_t setFilter(uint16_t filter) = 0;
       };
 
-      class ILEDC : public Impl {
+      class ILEDC : public Feature {
        public:
         Type type() override {
           return Type::LEDC;
@@ -109,23 +130,20 @@ namespace esp32m {
       typedef std::function<void(void)> ISR;
     }  // namespace pin
 
-    class IPins {
+    class IPins : public log::Loggable {
      public:
       IPin *pin(int num);
-      int pinBase() const {
-        return _pinBase;
+      int count() const {
+        return _count;
       }
-      int id2num(int id);
 
      protected:
-      int _pinBase = 0, _pinCount = 0;
-      static int _reservedIds;
-      static std::map<int, IPin *> _pins;
-      static std::mutex _pinsMutex;
+      int _count = 0;
+      std::mutex _mutex;
+      std::map<int, IPin *> _pins;
       IPins(){};
-      void init(int pinCount);
+      void init(int count);
       virtual IPin *newPin(int id) = 0;
-      static esp_err_t add(IPin *pin);
     };
 
     class IPin : public virtual log::Loggable {
@@ -139,46 +157,77 @@ namespace esp32m {
         return _mutex;
       }
       virtual void reset();
-      virtual pin::Features features() = 0;
-      /*virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
-      virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
-      virtual esp_err_t digitalRead(bool &value) = 0;
-      virtual esp_err_t digitalWrite(bool value) = 0;
-      virtual esp_err_t attach(QueueHandle_t queue,
-                               gpio_int_type_t type = GPIO_INTR_ANYEDGE) {
-        return ESP_ERR_NOT_SUPPORTED;
-      }
-      virtual esp_err_t detach() {
-        return ESP_ERR_NOT_SUPPORTED;
-      }*/
+      virtual pin::Flags flags() = 0;
+      virtual pin::FeatureStatus featureStatus(pin::Type type) {
+        auto it = _features.find(type);
+        if (it != _features.end())
+          return pin::FeatureStatus::Enabled;
+        auto f = flags();
+        switch (type) {
+          case pin::Type::Digital:
+            if ((f & (pin::Flags::DigitalInput | pin::Flags::DigitalOutput)) !=
+                0)
+              return pin::FeatureStatus::Supported;
+            break;
+          case pin::Type::ADC:
+            if ((f & pin::Flags::ADC) != 0)
+              return pin::FeatureStatus::Supported;
+            break;
+          case pin::Type::DAC:
+            if ((f & pin::Flags::DAC) != 0)
+              return pin::FeatureStatus::Supported;
+            break;
+          case pin::Type::PWM:
+            if ((f & pin::Flags::DigitalOutput) != 0)
+              return pin::FeatureStatus::Supported;
+            break;
+          case pin::Type::Pcnt:
+            if ((f & pin::Flags::PulseCounter) != 0)
+              return pin::FeatureStatus::Supported;
+            break;
+          case pin::Type::LEDC:
+            if ((f & pin::Flags::LEDC) != 0)
+              return pin::FeatureStatus::Supported;
+            break;
+          default:
+            break;
+        }
+        return pin::FeatureStatus::NotSupported;
+      };
 
+      pin::Feature *feature(pin::Type type);
       pin::IDigital *digital() {
-        return (pin::IDigital *)impl(pin::Type::Digital);
+        return (pin::IDigital *)feature(pin::Type::Digital);
       }
       pin::IADC *adc() {
-        return (pin::IADC *)impl(pin::Type::ADC);
+        return (pin::IADC *)feature(pin::Type::ADC);
       }
       pin::IDAC *dac() {
-        return (pin::IDAC *)impl(pin::Type::DAC);
+        return (pin::IDAC *)feature(pin::Type::DAC);
+      }
+      pin::IPWM *pwm() {
+        return (pin::IPWM *)feature(pin::Type::PWM);
       }
       pin::IPcnt *pcnt() {
-        return (pin::IPcnt *)impl(pin::Type::Pcnt);
+        return (pin::IPcnt *)feature(pin::Type::Pcnt);
       }
       pin::ILEDC *ledc() {
-        return (pin::ILEDC *)impl(pin::Type::LEDC);
+        return (pin::ILEDC *)feature(pin::Type::LEDC);
       }
 
      protected:
       int _id;
       std::mutex _mutex;
-      virtual pin::Impl *createImpl(pin::Type type) {
-        return nullptr;
-      };
+      virtual esp_err_t createFeature(pin::Type type, pin::Feature **feature);
 
      private:
-      std::map<pin::Type, std::unique_ptr<pin::Impl> > _impls;
-      pin::Impl *impl(pin::Type type);
+      std::map<pin::Type, std::unique_ptr<pin::Feature> > _features;
     };
+
+    namespace pins {
+      std::map<std::string, IPins *> getProviders();
+      IPin *pin(const char *provider, int id);
+    }  // namespace pins
 
     namespace pin {
       class ITxFinalizer {
