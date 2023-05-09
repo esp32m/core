@@ -1,7 +1,10 @@
-
 import { Grid } from '@mui/material';
-import { Interfaces } from './Interfaces';
+import { Interfaces } from './interfaces';
 
-export default () => {
-  return <Grid container><Interfaces/></Grid>;
+export const Content = () => {
+  return (
+    <Grid container>
+      <Interfaces />
+    </Grid>
+  );
 };

@@ -1,13 +1,66 @@
-import Content from './Content';
+import { Content } from './content';
 import { Network } from '../shared';
 import { TContentPlugin } from '@ts-libs/ui-base';
+import { Ti18nPlugin } from '@ts-libs/ui-i18n';
 
-export const NetworkInterfaces: TContentPlugin = {
+export const NetworkInterfaces: TContentPlugin & Ti18nPlugin = {
   name: 'netifs',
   use: Network,
   content: {
     title: 'Interfaces',
     component: Content,
     menu: { parent: Network.name },
+  },
+  i18n: {
+    resources: {
+      de: {
+        initial: 'initial',
+        started: 'gestartet',
+        stopped: 'gestoppt',
+        Default: 'Standard',
+        'Static IP': 'Statische IP',
+        'DHCP client': 'DHCP-Client',
+        'DHCP server': 'DHCP-Server',
+        'IP address': 'IP Adresse',
+        Netmask: 'Netzmaske',
+        Gateway: 'Gateway',
+        'Primary DNS': 'Primärer DNS',
+        'Secondary DNS': 'Sekundäre DNS',
+        'Fallback DNS': 'Fallback-DNS',
+        'MAC address': 'MAC-Adresse',
+        'IP gateway': 'IP-Gateway',
+        'IPv6 address': 'IPv6-Adresse',
+        'DNS servers': 'DNS-Server',
+        Priority: 'Priorität',
+        up: 'eingeschaltet',
+        down: 'heruntergefahren',
+        'Configure interface': 'Netzwerkschnittstelle konfigurieren',
+        'Interface role': 'Schnittstellenrolle',
+      },
+      uk: {
+        initial: 'початковий',
+        started: 'працює',
+        stopped: 'зупинений',
+        Default: 'За замовчанням',
+        'Static IP': 'Статичний IP',
+        'DHCP client': 'DHCP клієнт',
+        'DHCP server': 'DHCP сервер',
+        'IP address': 'IP адреса',
+        Netmask: 'Маска мережі',
+        Gateway: 'Шлюз',
+        'Primary DNS': 'Головний DNS',
+        'Secondary DNS': 'Другорядний DNS',
+        'Fallback DNS': 'Аварійний DNS',
+        'MAC address': 'MAC адреса',
+        'IP gateway': 'IP шлюз',
+        'IPv6 address': 'IPv6 адреса',
+        'DNS servers': 'DNS сервер',
+        Priority: 'Приорітет',
+        up: 'працює',
+        down: 'зупинений',
+        'Configure interface': 'Конфігурація інтерфейсу',
+        'Interface role': 'Роль інтерфейсу',
+      },
+    },
   },
 };

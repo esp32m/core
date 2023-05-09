@@ -14,7 +14,7 @@ export const enum InterfaceRole {
 }
 
 export interface IInterfaceState {
-  up:boolean;
+  up: boolean;
   desc: string;
   hostname: string;
   mac: string;

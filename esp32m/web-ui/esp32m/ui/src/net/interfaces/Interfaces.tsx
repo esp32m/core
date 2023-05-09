@@ -1,7 +1,7 @@
-import { Settings } from "@mui/icons-material";
-import { Grid, IconButton, MenuItem } from "@mui/material";
-import { useBackendApi, useModuleConfig, useModuleState } from "../..";
-import { netmask2cidr } from "../../utils";
+import { Settings } from '@mui/icons-material';
+import { Grid, IconButton, MenuItem } from '@mui/material';
+import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { netmask2cidr } from '../../utils';
 import {
   Config,
   IInterfaceConfig,
@@ -9,24 +9,25 @@ import {
   InterfaceRole,
   Name,
   State,
-} from "./types";
+} from './types';
 import {
   DialogForm,
   FieldSelect,
   FieldText,
   useDialogForm,
-} from "@ts-libs/ui-forms";
-import { useYup } from "../../validation";
-import { CardBox } from "@ts-libs/ui-app";
-import { NameValueList } from "../../app";
+} from '@ts-libs/ui-forms';
+import { useYup } from '../../validation';
+import { CardBox } from '@ts-libs/ui-app';
+import { NameValueList } from '../../app';
+import { useTranslation } from '@ts-libs/ui-i18n';
 
-const DhcpStatusNames = ["initial", "started", "stopped"];
+const DhcpStatusNames = ['initial', 'started', 'stopped'];
 
 const InterfaceRoles = [
-  [InterfaceRole.Default, "Default"],
-  [InterfaceRole.Static, "Static IP"],
-  [InterfaceRole.DhcpClient, "DHCP client"],
-  [InterfaceRole.DhcpServer, "DHCP server"],
+  [InterfaceRole.Default, 'Default'],
+  [InterfaceRole.Static, 'Static IP'],
+  [InterfaceRole.DhcpClient, 'DHCP client'],
+  [InterfaceRole.DhcpServer, 'DHCP server'],
 ];
 
 const toMenuItem = (e: Array<any>, i: number) => (
@@ -95,32 +96,32 @@ const Interface = ({
     },
     validationSchema,
   });
+  const { t } = useTranslation();
 
   if (!state) return null;
   const { up, desc, hostname, mac, ip, ipv6, dns, dhcpc, dhcps, prio } = state;
   const list = [];
-  if (hostname) list.push(["Hostname", hostname]);
-  if (mac) list.push(["MAC address", mac]);
+  if (hostname) list.push(['Hostname', hostname]);
+  if (mac) list.push(['MAC address', mac]);
   if (ip[0] && ip[2])
-    list.push(["IP address", `${ip[0]} / ${netmask2cidr(ip[2])}`]);
-  if (ip[1]) list.push(["IP gateway", ip[1]]);
-  if (ipv6?.length)
-    for (const i in ipv6) list.push(["IPv6 address #" + i, ipv6[i]]);
+    list.push(['IP address', `${ip[0]} / ${netmask2cidr(ip[2])}`]);
+  if (ip[1]) list.push(['IP gateway', ip[1]]);
+  if (ipv6?.length) for (const i in ipv6) list.push(['IPv6 address', ipv6[i]]);
   if (dns?.length)
-    list.push(["DNS servers", dns.filter((a) => !!a).join(", ")]);
+    list.push(['DNS servers', dns.filter((a) => !!a).join(', ')]);
   if (dhcpc != undefined || dhcps != undefined) {
-    let dhcp = "";
+    let dhcp = '';
     if (dhcpc != undefined) dhcp += `client (${DhcpStatusNames[dhcpc]})`;
     if (dhcps != undefined) {
-      if (dhcp) dhcp += " / ";
+      if (dhcp) dhcp += ' / ';
       dhcp += `server (${DhcpStatusNames[dhcps]})`;
     }
-    list.push(["DHCP", dhcp]);
+    list.push(['DHCP', dhcp]);
   }
-  if (prio != undefined) list.push(["Priority", prio]);
+  if (prio != undefined) list.push(['Priority', prio]);
   let title = name;
   if (desc) title += ` (${desc})`;
-  if (up != undefined) title += ` - ${up ? "up" : "down"}`;
+  if (up != undefined) title += ` - ${t(up ? 'up' : 'down')}`;
   return (
     <CardBox
       title={title}
@@ -136,7 +137,7 @@ const Interface = ({
       }
     >
       <NameValueList list={list} />
-      <DialogForm title={`Configure interface ${name}`} hook={hook}>
+      <DialogForm title={`${t('Configure interface')} ${name}`} hook={hook}>
         <Grid container spacing={3}>
           <Grid item xs>
             <FieldSelect name="role" label="Interface role" fullWidth>

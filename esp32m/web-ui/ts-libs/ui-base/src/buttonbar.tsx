@@ -2,6 +2,7 @@ import { MouseEventHandler } from 'react';
 
 import { Button, ButtonProps } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useTranslation } from '@ts-libs/ui-i18n';
 
 const Bar = styled('div')(({ theme }) => ({
   display: 'flex',
@@ -42,6 +43,7 @@ export function ButtonBar({
   onSubmit,
   onCancel,
 }: IProps) {
+  const { t } = useTranslation();
   return (
     <Bar>
       {buttons.map((b) => {
@@ -59,7 +61,7 @@ export function ButtonBar({
         };
         return (
           <Btn key={b.name} {...bp}>
-            {b.title || b.name}
+            {t(b.title || b.name)}
           </Btn>
         );
       })}
