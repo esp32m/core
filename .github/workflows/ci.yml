@@ -1,0 +1,29 @@
+name: Continuous Integration
+
+on: [push, pull_request]
+
+jobs:
+  esp-idf:
+    name: ESP-IDF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.espressif
+          key: ${{ runner.os }}-esp-idf
+      - name: Checkout esp32m
+        uses: actions/checkout@v3
+      - name: Checkout ESP-IDF
+        uses: actions/checkout@v3
+        with:
+          repository: espressif/esp-idf
+          path: esp-idf
+          submodules: true
+      - name: Install ESP-IDF
+        run: ./esp-idf/install.sh
+      - name: Build example
+        run: |
+          source esp-idf/export.sh
+          cd examples/basic
+          idf.py build
