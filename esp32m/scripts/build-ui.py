@@ -1,15 +1,30 @@
 import os
 import re
+import sys
 import glob
 import gzip
 import json
 import base64
 import shutil
+import string
+import asyncio
 import hashlib
 import logging
 import argparse
 import subprocess
 from packaging import version
+
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+# this is to strip non-ascii chars from yarn output because ESP-IDF doesn't seem to like it
+async def strip_non_ascii(input_stream, output_stream):
+    ascii_chars = set(string.printable)
+    while not input_stream.at_eof():
+        output = await input_stream.readline()
+        output=ansi_escape.sub('', output.decode())
+        output=''.join(filter(lambda x: x in ascii_chars, output))
+        output_stream.buffer.write(output.encode("ascii"))
+        output_stream.flush()
 
 class Yarn:
     def __init__(self, dir):
@@ -30,13 +45,29 @@ class Yarn:
        
     def link(self, target):
         logging.info(f"linking {self.dir} to {target}")
-        subprocess.run([self.yarn, 'link', target, '-A'], cwd=self.dir)
+        # subprocess.run([self.yarn, 'link', target, '-A'], cwd=self.dir)
+        self.run([self.yarn, 'link', target, '-A'])
         return
 
     def build(self):
         logging.info(f"building {self.dir}")
-        subprocess.run([self.yarn, 'build'], cwd=self.dir)
+        # subprocess.run([self.yarn, 'build'], cwd=self.dir)
+        self.run([self.yarn, 'build'])
         return
+
+    async def run_async(self, command):
+        process = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=self.dir
+        )
+        await asyncio.gather(
+            strip_non_ascii(process.stderr, sys.stderr),
+            strip_non_ascii(process.stdout, sys.stdout),
+        )
+        await process.communicate()
+
+    def run(self, command):
+        asyncio.run(self.run_async(command))
+    
 
 class PackageJson:
     def __init__(self, path):
