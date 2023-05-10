@@ -1,2 +1,6 @@
-idf_component_register(SRCS "main.cpp" PRIV_REQUIRES esp32m web-ui)
+set(src_dirs ".")
+set(include_dirs ".")
+idf_component_register(SRC_DIRS ${src_dirs}
+                       PRIV_INCLUDE_DIRS ${include_dirs}
+                       PRIV_REQUIRES web-ui)
 

@@ -2,53 +2,23 @@
   "name": "ui",
   "version": "1.0.0",
   "license": "MIT",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
-    "start": "cross-env NODE_ENV=development webpack serve",
-    "prebuild": "rimraf dist",
-    "build": "cross-env NODE_ENV=production webpack",
-    "devbuild": "cross-env NODE_ENV=development webpack",
-    "analyze": "cross-env NODE_ENV=analyze webpack",
-    "prepare": "npm run build"
-  },
-  "dependencies": {
-    "@emotion/react": "^11.9.3",
-    "@emotion/styled": "^11.9.3",
-    "@esp32m/ui": "^0.3.7",
-    "@mui/material": "^5.9.1",
-    "lodash": "^4.17.21",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "build": "NODE_OPTIONS='--preserve-symlinks' webpack --node-env=production",
+    "compile": "NODE_OPTIONS='--preserve-symlinks' webpack --node-env=development",
+    "analyze": "NODE_OPTIONS='--preserve-symlinks' webpack --node-env=production --env destination=analyze",
+    "start": "NODE_OPTIONS='--preserve-symlinks' webpack serve --node-env=development"
   },
   "devDependencies": {
-    "@babel/core": "^7.18.9",
-    "@babel/plugin-proposal-class-properties": "^7.18.6",
-    "@babel/plugin-proposal-object-rest-spread": "^7.18.9",
-    "@babel/plugin-proposal-optional-chaining": "^7.18.9",
-    "@babel/plugin-transform-runtime": "^7.18.9",
-    "@babel/preset-env": "^7.18.9",
-    "@babel/preset-react": "^7.18.6",
-    "@babel/preset-typescript": "^7.18.6",
-    "@types/lodash": "^4.14.182",
-    "@types/react": "^18.0.15",
-    "babel-loader": "^8.2.5",
-    "babel-plugin-import": "^1.13.5",
-    "babel-plugin-lodash": "^3.3.4",
-    "babel-plugin-transform-imports": "^2.0.0",
-    "clean-webpack-plugin": "^4.0.0",
-    "compression-webpack-plugin": "^10.0.0",
-    "cross-env": "^7.0.3",
-    "cross-spawn": "^7.0.3",
-    "html-webpack-plugin": "^5.5.0",
-    "lodash-webpack-plugin": "^0.11.6",
-    "rimraf": "^3.0.2",
-    "terser-webpack-plugin": "^5.3.3",
-    "ts-loader": "^9.3.1",
-    "typescript": "^4.7.4",
-    "webpack": "^5.73.0",
-    "webpack-bundle-analyzer": "^4.5.0",
-    "webpack-cli": "^4.10.0",
-    "webpack-dev-server": "^4.9.3"
-  }
+    "@ts-libs/dev": "*",
+    "webpack": "*",
+    "webpack-cli": "*",
+    "webpack-dev-server": "*"
+  },
+  "dependencies": {
+    "@esp32m/ui": "*",
+    "@ts-libs/ui-app": "*",
+    "react": "*",
+    "lodash": "*"
+  },
+  "packageManager": "yarn@3.5.0"
 }

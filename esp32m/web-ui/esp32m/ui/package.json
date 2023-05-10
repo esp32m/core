@@ -21,8 +21,7 @@
   "main": "src/index.ts",
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint . --ext .ts",
-    "analyze": "source-map-explorer ./dist/**/*.js"
+    "lint": "eslint . --ext .ts"
   },
   "dependencies": {
     "@emotion/react": "^11.10.8",
@@ -33,8 +32,11 @@
     "@reduxjs/toolkit": "^1.9.5",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",
+    "@ts-libs/ui-app": "*",
     "@ts-libs/ui-base": "*",
     "@ts-libs/ui-forms": "*",
+    "@ts-libs/ui-snack": "*",
+    "@ts-libs/ui-navbar": "*",
     "@ts-libs/ui-i18n": "*",
     "deep-object-diff": "^1.1.9",
     "formik": "^2.2.9",

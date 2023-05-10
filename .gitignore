@@ -24,3 +24,5 @@ coverage/
 
 dependencies.lock
 sdkconfig
+
+build.cmd
