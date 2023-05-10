@@ -52,6 +52,13 @@ class PackageJson:
         self.ensureLoaded()
         if "resolutions" in self.json:
             del self.json["resolutions"]
+        self.json["resolutions"]={
+            "react":"*",
+            "lodash":"*",
+            "webpack":"*",
+            "webpack-cli":"*",
+            "webpack-dev-server":"*",
+        }
     def dump(self):
         if not self.json:
             raise Exception("nothing to dump")

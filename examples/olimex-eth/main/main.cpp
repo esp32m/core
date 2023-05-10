@@ -25,7 +25,6 @@ extern "C" void app_main()
   log::hookEsp32Logger();
   log::hookUartLogger();
   net::useOta();
-  net::wifi::addAccessPoint("SSID", "password");
   net::useSntp();
   net::useOlimexEthernet();
   dev::useEsp32();

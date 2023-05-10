@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.1"
+  esp32m:
+    git: https://github.com/esp32m/core.git
+    path: esp32m

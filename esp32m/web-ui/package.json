@@ -6,15 +6,6 @@
     "ts-libs/*",
     "esp32m/*"
   ],
-  "scripts": {
-    "format": "prettier --loglevel log --config .prettierrc.json --write .",
-    "format-check": "prettier --loglevel log --config .prettierrc.json --check .",
-    "infra": "yarn workspaces foreach run infra \"$@\"",
-    "lint": "eslint . --ext .js,.ts,.tsx,.json,.yml,.yaml",
-    "lint-fix": "eslint . --ext .js,.ts,.tsx,.json,.yml,.yaml --fix",
-    "test": "jest",
-    "package:doctor": "yarn dlx @yarnpkg/doctor ."
-  },
   "devDependencies": {
     "@types/jest": "^29.5.1",
     "@types/node": "^18.16.3",
@@ -36,8 +27,5 @@
   },
   "author": "DY",
   "license": "MIT",
-  "packageManager": "yarn@3.5.0",
-  "dependencies": {
-    "firebase": "^9.21.0"
-  }
+  "packageManager": "yarn@3.5.0"
 }

@@ -1,6 +1,8 @@
 #include <esp32m/app.hpp>
 #include <esp32m/net/ota.hpp>
 #include <esp32m/net/wifi.hpp>
+#include <esp32m/net/sntp.hpp>
+#include <esp32m/net/interfaces.hpp>
 // #include <esp32m/net/mqtt.hpp>
 
 #include <esp32m/dev/esp32.hpp>
@@ -14,7 +16,7 @@
 #include <esp32m/ui.hpp>
 #include <esp32m/ui/httpd.hpp>
 
-#include <ui.hpp>
+#include <dist/ui.hpp>
 
 // All ESP32 manager code is in under esp32m namespace
 using namespace esp32m;
@@ -38,9 +40,14 @@ extern "C" void app_main() {
   // and/or other medium.
   log::hookEsp32Logger();
   // Add support for Over The Air firmware updates.
+  net::useWifi();
+  // Replace SSID/password with your WiFi credentials if you would like to hard-code AP credentials
+  // If SSID/password is not set, ESP32 will start in Access Point mode and you will be able configure
+  // WiFi connection via captive portal
+  // net::wifi::addAccessPoint("SSID", "password");
   net::useOta();
-  // Replace SSID/password with your WiFi credentials
-  net::wifi::addAccessPoint("SSID", "password");
+  net::useSntp();
+  net::useInterfaces();
   // Retrieve various pieces of info about ESP32 module to be displayed in the
   // UI.
   dev::useEsp32();

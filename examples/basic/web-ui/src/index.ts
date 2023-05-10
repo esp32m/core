@@ -1,5 +1,3 @@
-import { startUi, CaptivePortal, Wifi, System, Mqtt, use } from "@esp32m/ui";
+import { startUi, CaptivePortal, Wifi, System, Mqtt, Sntp, NetworkInterfaces } from '@esp32m/ui';
 
-use(CaptivePortal, System, Wifi, Mqtt);
-
-startUi();
+startUi({ plugins: [CaptivePortal, System, Wifi, Mqtt, Sntp, NetworkInterfaces] });
