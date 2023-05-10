@@ -1,4 +1,4 @@
-#include "esp32m/dev/Qdy30a.hpp"
+#include "esp32m/dev/qdy30a.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/defs.hpp"
