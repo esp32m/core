@@ -61,8 +61,8 @@ namespace esp32m {
       _i2c->setErrSnooze(30000);
       _reset = resetPin?resetPin->digital():nullptr;
       if (_reset) {
-        _reset->setDirection(GPIO_MODE_INPUT_OUTPUT);
-        _reset->setPull(GPIO_PULLUP_ONLY);
+        _reset->setDirection(true, true);
+        _reset->setPull(true, false);
         _reset->write(true);
       }
       return reset(Mode::Single, Repeatability::Medium);

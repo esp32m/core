@@ -1,49 +1,44 @@
 import { CardBox } from '@ts-libs/ui-app';
-import { useCachedRequest, useModuleState, useRequest } from '../../backend';
+import { useCachedRequest, useRequest } from '../../backend';
 import { Name, TPinNames, actions, selectors } from './state';
 import {
   Button,
+  Chip,
   FormControl,
   Grid,
   InputLabel,
   MenuItem,
   Select,
+  Typography,
 } from '@mui/material';
-import { ComponentType, ReactElement, useEffect, useMemo } from 'react';
+import { ReactElement, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { isNumber } from '@ts-libs/tools';
-import { PWM } from './pwm';
+import { enumTool, isNumber } from '@ts-libs/tools';
 import { Form } from './form';
-import { Digital } from './digital';
+import { FeatureStatus, FeatureType, PinFlagBits, TPinState } from './types';
+import { useFeature, useFeaturePlugins } from './hooks';
 
-const FeatureNames = [
-  'Digital',
-  'ADC',
-  'DAC',
-  'PWM',
-  'Pulse counter',
-  'LED control',
-];
-
-const FeatureComponents: Array<ComponentType | null> = [
-  Digital,
-  null,
-  null,
-  PWM,
-];
-
-const enum FeatureStatus {
-  NotSupported,
-  Supported,
-  Enabled,
-}
-
-type TPinState = {
-  features: Array<FeatureStatus>;
-  state: any;
+const Flags = () => {
+  const pinState = useSelector(selectors.pinState);
+  if (!pinState) return null;
+  const flags = enumTool(PinFlagBits).bitsToNames(pinState.flags);
+  const content = flags.map((f, i) => (
+    <Grid key={i} item sx={{ marginLeft: 'auto' }}>
+      <Chip label={f || ''} />
+    </Grid>
+  ));
+  if (!content.length) return null;
+  return (
+    <Grid container spacing={1} item>
+      <Grid item xs={12}>
+        <Typography align="center">Pin capabilities:</Typography>
+      </Grid>
+      {content}
+    </Grid>
+  );
 };
 
-export const content = () => {
+const PinSelect = () => {
   const [pinNames] = useCachedRequest<TPinNames | undefined>(Name, 'enum', {
     action: actions.names,
     selector: selectors.names,
@@ -59,98 +54,123 @@ export const content = () => {
     );
   }, [pinNames]);
   const pin = useSelector(selectors.pin);
+  const dispatch = useDispatch();
+  return (
+    <FormControl variant="standard" fullWidth>
+      <InputLabel>I/O pin</InputLabel>
+      <Select
+        value={pin ? JSON.stringify(pin) : ''}
+        onChange={(e) => {
+          dispatch(
+            actions.pin(e.target.value ? JSON.parse(e.target.value) : undefined)
+          );
+        }}
+      >
+        {namesOptions}
+      </Select>
+    </FormControl>
+  );
+};
+
+const FeatureSelect = () => {
+  const pinState = useSelector(selectors.pinState);
   const feature = useSelector(selectors.feature);
-  const stateRequestData = useMemo(() => ({ pin, feature }), [pin, feature]);
-  const [pinState, pinStateRefresh] = useRequest<TPinState>(Name, 'state-get', {
-    data: stateRequestData,
-    condition: !!pin,
-  });
-  const { features, state } = pinState || {};
+  const { features } = pinState || {};
+  const plugins = useFeaturePlugins();
   const featuresOptions = useMemo(() => {
     if (!features) return [];
     return features.reduce((a, s, i) => {
-      if (s != FeatureStatus.NotSupported) {
+      const f = plugins[i as FeatureType];
+      if (s != FeatureStatus.NotSupported && f) {
         a.push(
           <MenuItem
             value={i}
             key={i}
             sx={{ fontWeight: s == FeatureStatus.Enabled ? 'bold' : 'normal' }}
           >
-            {FeatureNames[i]}
+            {f.name}
           </MenuItem>
         );
       }
       return a;
     }, [] as Array<ReactElement>);
-  }, [features]);
+  }, [features, plugins]);
   const dispatch = useDispatch();
+  const featureStatus = isNumber(feature) && features?.[feature];
+  return (
+    <FormControl
+      variant="standard"
+      fullWidth
+      disabled={featuresOptions.length == 0}
+    >
+      <InputLabel>Feature</InputLabel>
+      <Select
+        value={featureStatus ? feature : ''}
+        onChange={(e) => {
+          dispatch(
+            actions.feature(
+              isNumber(e.target.value) ? e.target.value : undefined
+            )
+          );
+        }}
+      >
+        {featuresOptions}
+      </Select>
+    </FormControl>
+  );
+};
+
+export const content = () => {
+  const pin = useSelector(selectors.pin);
+  const feature = useSelector(selectors.feature);
+  const f = useFeature();
+  const [pinState, pinStateRefresh] = useRequest<TPinState>(Name, 'state-get', {
+    data: f.stateRequestData,
+    condition: !!pin,
+  });
+  const dispatch = useDispatch();
+  useEffect(() => {
+    dispatch(actions.pinState(pinState));
+  }, [pinState, dispatch]);
+  const { features, state } = pinState || {};
   useEffect(() => {
     if (isNumber(feature) && !features?.[feature])
       dispatch(actions.feature(undefined));
   }, [feature, features, dispatch]);
-  const [featureResponse, featureRequest, featureRequestRunning] = useRequest(
+  const [, featureRequest, featureRequestRunning] = useRequest(
     Name,
     'feature',
     { data: [pin, feature], condition: false }
   );
-  const featureStatus = isNumber(feature) && features?.[feature];
-  const FC = FeatureComponents[feature || 0];
   return (
     <CardBox title="Pins">
       <Grid container spacing={2}>
-        <Grid item xs={6}>
-          <FormControl variant="standard" fullWidth>
-            <InputLabel>I/O pin</InputLabel>
-            <Select
-              value={pin ? JSON.stringify(pin) : ''}
-              onChange={(e) => {
-                dispatch(
-                  actions.pin(
-                    e.target.value ? JSON.parse(e.target.value) : undefined
-                  )
-                );
-              }}
-            >
-              {namesOptions}
-            </Select>
-          </FormControl>
+        <Grid container spacing={2} item xs={pin ? 4 : 12}>
+          <Grid item xs={12}>
+            <PinSelect />
+          </Grid>
+          <Grid item xs={12}>
+            {pin && <FeatureSelect />}
+          </Grid>
         </Grid>
-        <Grid item xs={6}>
-          <FormControl
-            variant="standard"
-            fullWidth
-            disabled={featuresOptions.length == 0}
-          >
-            <InputLabel>Feature</InputLabel>
-            <Select
-              value={featureStatus ? feature : ''}
-              onChange={(e) => {
-                dispatch(
-                  actions.feature(
-                    isNumber(e.target.value) ? e.target.value : undefined
-                  )
-                );
-              }}
-            >
-              {featuresOptions}
-            </Select>
-          </FormControl>
-        </Grid>
-        {featureStatus == FeatureStatus.Supported && (
+        {pin && (
+          <Grid container spacing={2} item xs={8}>
+            <Flags />
+          </Grid>
+        )}
+
+        {f.status == FeatureStatus.Supported && f.info && (
           <Grid item xs>
             <Button
               disabled={featureRequestRunning}
-              sx={{ float: 'right', clear: 'right' }}
               onClick={() => {
                 featureRequest().then(() => pinStateRefresh());
               }}
-            >{`Enable ${FeatureNames[feature || 0]} feature`}</Button>
+            >{`Enable ${f.info.name} feature`}</Button>
           </Grid>
         )}
-        {featureStatus == FeatureStatus.Enabled && FC && state && (
-          <Form state={state} onChange={pinStateRefresh}>
-            <FC />
-          </Form>
+        {f.status == FeatureStatus.Enabled && state && (
+          <Form onChange={pinStateRefresh} />
         )}
       </Grid>
     </CardBox>

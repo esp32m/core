@@ -45,8 +45,8 @@ namespace esp32m {
           return _name;
         }
         pin::Flags flags() override {
-          return pin::Flags::DigitalInput | pin::Flags::DigitalOutput |
-                 pin::Flags::PullUp | pin::Flags::DAC;
+          return pin::Flags::Input | pin::Flags::Output | pin::Flags::PullUp |
+                 pin::Flags::DAC;
         }
 
         esp_err_t analogWrite(float value) {
@@ -67,25 +67,33 @@ namespace esp32m {
        public:
         Digital(Pin *pin) : _pin(pin) {}
 
-        esp_err_t setDirection(gpio_mode_t mode) override {
-          switch (mode) {
-            case GPIO_MODE_INPUT:
-              _pin->_owner->setPinMode(_pin->id(), PinMode::Input);
-              return ESP_OK;
-            case GPIO_MODE_OUTPUT:
-            case GPIO_MODE_OUTPUT_OD:
-            case GPIO_MODE_INPUT_OUTPUT:
-            case GPIO_MODE_INPUT_OUTPUT_OD:
-              _pin->_owner->setPinMode(_pin->id(), PinMode::Output);
-              return ESP_OK;
-            default:
-              return ESP_FAIL;
-          }
-        }
-        esp_err_t setPull(gpio_pull_mode_t pull) override {
-          if (pull == GPIO_PULLUP_ONLY)
-            return ESP_OK;
-          return ESP_FAIL;
+        /*        esp_err_t setDirection(gpio_mode_t mode) override {
+                  switch (mode) {
+                    case GPIO_MODE_INPUT:
+                      _pin->_owner->setPinMode(_pin->id(), PinMode::Input);
+                      return ESP_OK;
+                    case GPIO_MODE_OUTPUT:
+                    case GPIO_MODE_OUTPUT_OD:
+                    case GPIO_MODE_INPUT_OUTPUT:
+                    case GPIO_MODE_INPUT_OUTPUT_OD:
+                      _pin->_owner->setPinMode(_pin->id(), PinMode::Output);
+                      return ESP_OK;
+                    default:
+                      return ESP_FAIL;
+                  }
+                }
+                esp_err_t setPull(gpio_pull_mode_t pull) override {
+                  if (pull == GPIO_PULLUP_ONLY)
+                    return ESP_OK;
+                  return ESP_FAIL;
+                }*/
+        esp_err_t setMode(pin::Mode mode) override {
+          mode = deduce(mode, _pin->flags());
+          PinMode pm = ((mode & pin::Mode::Output) != 0) ? PinMode::Output
+                                                         : PinMode::Input;
+          ESP_CHECK_RETURN(_pin->_owner->setPinMode(_pin->id(), pm));
+          _mode = mode;
+          return ESP_OK;
         }
         esp_err_t read(bool &value) override {
           return _pin->_owner->readPin(_pin->id(), value);
@@ -101,15 +109,19 @@ namespace esp32m {
       class DAC : public pin::IDAC {
        public:
         DAC(Pin *pin) : _pin(pin) {}
-        esp_err_t write(float value) override;
+        esp_err_t write(float value) override {
+          ESP_CHECK_RETURN(_pin->analogWrite(value));
+          _value = value;
+          return ESP_OK;
+        }
+        float getValue() override {
+          return _value;
+        }
 
        private:
+        float _value = 0;
         Pin *_pin;
       };
-
-      esp_err_t DAC::write(float value) {
-        return _pin->analogWrite(value);
-      }
 
       esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
         switch (type) {

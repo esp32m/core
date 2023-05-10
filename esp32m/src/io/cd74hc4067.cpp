@@ -34,7 +34,7 @@ namespace esp32m {
       class Digital : public io::pin::IDigital {
        public:
         Digital(Pin *pin) : _pin(pin) {}
-        esp_err_t setDirection(gpio_mode_t mode) override {
+/*        esp_err_t setDirection(gpio_mode_t mode) override {
           switch (mode) {
             case GPIO_MODE_INPUT:
             case GPIO_MODE_OUTPUT:
@@ -48,6 +48,10 @@ namespace esp32m {
         esp_err_t setPull(gpio_pull_mode_t pull) override {
           _pull = pull;
           return ESP_OK;
+        }*/
+        esp_err_t setMode(pin::Mode mode) override {
+          _mode = deduce(mode, _pin->flags());
+          return ESP_OK;
         }
         esp_err_t read(bool &value) override {
           /*if (_mode == GPIO_MODE_INPUT_OUTPUT && _set) {
@@ -60,8 +64,7 @@ namespace esp32m {
           ESP_CHECK_RETURN(_pin->_owner->enable(false));
           ESP_CHECK_RETURN(_pin->select());
           ESP_CHECK_RETURN(_pin->_owner->enable(true));
-          ESP_CHECK_RETURN(sd->setDirection(_mode));
-          ESP_CHECK_RETURN(sd->setPull(_pull));
+          ESP_CHECK_RETURN(sd->setMode(_mode));
           ESP_CHECK_RETURN(sd->read(value));
           return ESP_OK;
         }
@@ -71,7 +74,7 @@ namespace esp32m {
           auto sd = sig->digital();
           ESP_CHECK_RETURN(_pin->_owner->enable(false));
           ESP_CHECK_RETURN(_pin->select());
-          ESP_CHECK_RETURN(sd->setDirection(_mode));
+          ESP_CHECK_RETURN(sd->setMode(_mode));
           ESP_CHECK_RETURN(sd->write(value));
           ESP_CHECK_RETURN(_pin->_owner->enable(true));
           if (_mode == GPIO_MODE_INPUT_OUTPUT) {
@@ -83,8 +86,8 @@ namespace esp32m {
 
        private:
         Pin *_pin;
-        gpio_mode_t _mode = GPIO_MODE_INPUT;
-        gpio_pull_mode_t _pull = GPIO_FLOATING;
+        //gpio_mode_t _mode = GPIO_MODE_INPUT;
+        //gpio_pull_mode_t _pull = GPIO_FLOATING;
         bool _value = false, _set = false;
       };
 
@@ -119,8 +122,8 @@ namespace esp32m {
         auto *sig = _owner->_sig;
         switch (type) {
           case pin::Type::Digital:
-            if ((sig->flags() & (io::pin::Flags::DigitalInput |
-                                    io::pin::Flags::DigitalOutput)) != 0) {
+            if ((sig->flags() & (io::pin::Flags::Input |
+                                    io::pin::Flags::Output)) != 0) {
               *feature = new Digital(this);
               return ESP_OK;
             }
@@ -152,11 +155,11 @@ namespace esp32m {
 
     esp_err_t CD74HC4067::init() {
       if (_en)
-        ESP_CHECK_RETURN(_en->setDirection(GPIO_MODE_OUTPUT));
-      ESP_CHECK_RETURN(_s0->setDirection(GPIO_MODE_OUTPUT));
-      ESP_CHECK_RETURN(_s1->setDirection(GPIO_MODE_OUTPUT));
-      ESP_CHECK_RETURN(_s2->setDirection(GPIO_MODE_OUTPUT));
-      ESP_CHECK_RETURN(_s3->setDirection(GPIO_MODE_OUTPUT));
+        ESP_CHECK_RETURN(_en->setDirection(false, true));
+      ESP_CHECK_RETURN(_s0->setDirection(false, true));
+      ESP_CHECK_RETURN(_s1->setDirection(false, true));
+      ESP_CHECK_RETURN(_s2->setDirection(false, true));
+      ESP_CHECK_RETURN(_s3->setDirection(false, true));
       IPins::init(16);
       return ESP_OK;
     }

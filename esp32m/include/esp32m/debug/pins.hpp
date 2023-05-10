@@ -78,10 +78,26 @@ namespace esp32m {
                   digital->write(v);
                 v = state["mode"];
                 if (!v.isNull() && v.is<int>())
-                  digital->setDirection((gpio_mode_t)v.as<int>());
-                v = state["pull"];
-                if (!v.isNull() && v.is<int>())
-                  digital->setPull((gpio_pull_mode_t)v.as<int>());
+                  digital->setMode((pin::Mode)v.as<int>());
+              }
+            } break;
+            case pin::Type::ADC: {
+              auto adc = pin->adc();
+              if (adc) {
+                v = state["atten"];
+                if (v.is<int>())
+                  adc->setAtten((adc_atten_t)v.as<int>());
+                v = state["width"];
+                if (v.is<int>())
+                  adc->setWidth((adc_bitwidth_t)v.as<int>());
+              }
+            } break;
+            case pin::Type::DAC: {
+              auto dac = pin->dac();
+              if (dac) {
+                v = state["value"];
+                if (v.is<float>())
+                  dac->write(v.as<float>());
               }
             } break;
             case pin::Type::PWM: {
@@ -110,14 +126,20 @@ namespace esp32m {
         if (!pin || (type != pin::Type::Invalid &&
                      pin->featureStatus(type) != pin::FeatureStatus::Enabled))
           type = pin::Type::Invalid;
-        size_t size = JSON_OBJECT_SIZE(1) +
+        size_t size = JSON_OBJECT_SIZE(2) +                 // features, flags
                       JSON_ARRAY_SIZE((int)pin::Type::MAX)  // features
             ;
         if (type != pin::Type::Invalid) {
           size += JSON_OBJECT_SIZE(1);  // state
           switch (type) {
             case pin::Type::Digital:
-              size += JSON_OBJECT_SIZE(3);
+              size += JSON_OBJECT_SIZE(2);
+              break;
+            case pin::Type::ADC:
+              size += JSON_OBJECT_SIZE(4);
+              break;
+            case pin::Type::DAC:
+              size += JSON_OBJECT_SIZE(1);
               break;
             case pin::Type::PWM:
               size += JSON_OBJECT_SIZE(3);
@@ -129,6 +151,7 @@ namespace esp32m {
         auto doc = new DynamicJsonDocument(size);
         auto root = doc->to<JsonObject>();
         if (pin) {
+          root["flags"] = (int)pin->flags();
           auto features = root.createNestedArray("features");
           for (int t = 0; t < (int)pin::Type::MAX; t++)
             features.add((int)pin->featureStatus((pin::Type)t));
@@ -141,6 +164,26 @@ namespace esp32m {
                   bool high = false;
                   digital->read(high);
                   state["high"] = high;
+                  state["mode"] = (int)digital->getMode();
+                }
+              } break;
+              case pin::Type::ADC: {
+                auto adc = pin->adc();
+                if (adc) {
+                  state["atten"] = (int)adc->getAtten();
+                  state["width"] = (int)adc->getWidth();
+                  float value;
+                  uint32_t mv;
+                  if (adc->read(value, &mv) == ESP_OK) {
+                    state["value"] = value;
+                    state["mv"] = mv;
+                  }
+                }
+              } break;
+              case pin::Type::DAC: {
+                auto dac = pin->dac();
+                if (dac) {
+                  state["value"] = dac->getValue();
                 }
               } break;
               case pin::Type::PWM: {

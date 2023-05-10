@@ -7,8 +7,8 @@
 namespace esp32m {
   namespace dev {
     esp_err_t HBridge::init() {
-      ESP_CHECK_RETURN(_pinFwd->setDirection(GPIO_MODE_INPUT_OUTPUT));
-      ESP_CHECK_RETURN(_pinRev->setDirection(GPIO_MODE_INPUT_OUTPUT));
+      ESP_CHECK_RETURN(_pinFwd->setDirection(true, true));
+      ESP_CHECK_RETURN(_pinRev->setDirection(true, true));
       return refresh();
     }
 

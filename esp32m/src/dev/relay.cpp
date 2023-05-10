@@ -10,20 +10,20 @@ namespace esp32m {
     void Relay::init() {
       Device::init(Flags::AcceptsCommands);
       ESP_ERROR_CHECK_WITHOUT_ABORT(
-          _pinOn->setDirection(GPIO_MODE_INPUT_OUTPUT));
+          _pinOn->setDirection(true, true));
       setOnLevel(Pin::On, true);
       if (_pinOff != _pinOn) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(
-            _pinOff->setDirection(GPIO_MODE_INPUT_OUTPUT));
+            _pinOff->setDirection(true, true));
         setOnLevel(Pin::Off, true);
       }
       if (_pinSenseOn) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(
-            _pinSenseOn->setDirection(GPIO_MODE_INPUT));
+            _pinSenseOn->setDirection(true, false));
         setOnLevel(Pin::SenseOn, false);
         if (_pinSenseOff) {
           ESP_ERROR_CHECK_WITHOUT_ABORT(
-              _pinSenseOff->setDirection(GPIO_MODE_INPUT));
+              _pinSenseOff->setDirection(true, false));
           setOnLevel(Pin::SenseOff, false);
         }
         if (!isPersistent())
@@ -40,12 +40,11 @@ namespace esp32m {
       switch (pin) {
         case Pin::SenseOn:
           if (_pinSenseOn)
-            _pinSenseOn->setPull(level ? GPIO_PULLDOWN_ONLY : GPIO_PULLUP_ONLY);
+            _pinSenseOn->setPull(!level, level);
           break;
         case Pin::SenseOff:
           if (_pinSenseOff)
-            _pinSenseOff->setPull(level ? GPIO_PULLDOWN_ONLY
-                                        : GPIO_PULLUP_ONLY);
+            _pinSenseOff->setPull(!level, level);
           break;
 
         default:

@@ -31,16 +31,30 @@ namespace esp32m {
       };
       enum class Flags {
         None = 0,
-        PullUp = BIT0,
-        PullDown = BIT1,
-        DigitalInput = BIT2,
-        DigitalOutput = BIT3,
-        ADC = BIT4,
-        DAC = BIT5,
-        PulseCounter = BIT6,
-        LEDC = BIT7,
+        Input = BIT0,
+        Output = BIT1,
+        OpenDrain = BIT2,
+        PullUp = BIT3,
+        PullDown = BIT4,
+        ADC = BIT5,
+        DAC = BIT6,
+        PulseCounter = BIT7,
+        LEDC = BIT8,
+        PAD = BIT9
       };
       ENUM_FLAG_OPERATORS(Flags)
+
+      enum class Mode {
+        Default = 0,
+        Input = BIT0,
+        Output = BIT1,
+        OpenDrain = BIT2,
+        PullUp = BIT3,
+        PullDown = BIT4,
+        PullUpDown = BIT3 | BIT4
+      };
+      ENUM_FLAG_OPERATORS(Mode)
+
       enum class FeatureStatus { NotSupported, Supported, Enabled };
 
       class Feature {
@@ -54,8 +68,26 @@ namespace esp32m {
         Type type() override {
           return Type::Digital;
         };
-        virtual esp_err_t setDirection(gpio_mode_t mode) = 0;
-        virtual esp_err_t setPull(gpio_pull_mode_t pull) = 0;
+        virtual esp_err_t setMode(Mode mode) = 0;
+        virtual Mode getMode() const {
+          return _mode;
+        }
+        esp_err_t setPull(bool up, bool down) {
+          auto desired = _mode & ~(Mode::PullUp | Mode::PullDown);
+          if (up)
+            desired |= Mode::PullUp;
+          if (down)
+            desired |= Mode::PullDown;
+          return setMode(desired);
+        }
+        esp_err_t setDirection(bool input, bool output) {
+          auto desired = _mode & ~(Mode::Input | Mode::Output);
+          if (input)
+            desired |= Mode::Input;
+          if (output)
+            desired |= Mode::Output;
+          return setMode(desired);
+        }
         virtual esp_err_t read(bool &value) = 0;
         virtual esp_err_t write(bool value) = 0;
         virtual esp_err_t attach(QueueHandle_t queue,
@@ -64,6 +96,30 @@ namespace esp32m {
         }
         virtual esp_err_t detach() {
           return ESP_ERR_NOT_SUPPORTED;
+        }
+
+       protected:
+        Mode _mode = Mode::Default;
+        static Mode deduce(Mode desired, Flags flags) {
+          Mode result = Mode::Default;
+          if ((desired & pin::Mode::Input) != 0 &&
+              (flags & pin::Flags::Input) != 0)
+            result |= pin::Mode::Input;
+          if ((desired & pin::Mode::Output) != 0 &&
+              (flags & pin::Flags::Output) != 0) {
+            result |= pin::Mode::Output;
+            if ((desired & pin::Mode::OpenDrain) != 0 &&
+                (flags & pin::Flags::OpenDrain) != 0) {
+              result |= pin::Mode::OpenDrain;
+            }
+          }
+          if ((desired & pin::Mode::PullUp) != 0 &&
+              (flags & pin::Flags::PullUp) != 0)
+            result |= pin::Mode::PullUp;
+          if ((desired & pin::Mode::PullDown) != 0 &&
+              (flags & pin::Flags::PullDown) != 0)
+            result |= pin::Mode::PullDown;
+          return result;
         }
       };
 
@@ -88,6 +144,7 @@ namespace esp32m {
           return Type::DAC;
         };
         virtual esp_err_t write(float value) = 0;
+        virtual float getValue() = 0;
       };
 
       class IPWM : public Feature {
@@ -165,8 +222,7 @@ namespace esp32m {
         auto f = flags();
         switch (type) {
           case pin::Type::Digital:
-            if ((f & (pin::Flags::DigitalInput | pin::Flags::DigitalOutput)) !=
-                0)
+            if ((f & (pin::Flags::Input | pin::Flags::Output)) != 0)
               return pin::FeatureStatus::Supported;
             break;
           case pin::Type::ADC:
@@ -178,7 +234,7 @@ namespace esp32m {
               return pin::FeatureStatus::Supported;
             break;
           case pin::Type::PWM:
-            if ((f & pin::Flags::DigitalOutput) != 0)
+            if ((f & pin::Flags::Output) != 0)
               return pin::FeatureStatus::Supported;
             break;
           case pin::Type::Pcnt:

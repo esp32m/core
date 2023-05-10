@@ -15,8 +15,8 @@ namespace esp32m {
           return _name;
         }
         io::pin::Flags flags() override {
-          return io::pin::Flags::DigitalInput |
-                 io::pin::Flags::DigitalOutput | io::pin::Flags::PullUp;
+          return io::pin::Flags::Input |
+                 io::pin::Flags::Output | io::pin::Flags::PullUp;
         }
         esp_err_t createFeature(pin::Type type,
                                 pin::Feature **feature) override;
@@ -30,7 +30,7 @@ namespace esp32m {
       class Digital : public io::pin::IDigital {
        public:
         Digital(Pin *pin) : _pin(pin) {}
-        esp_err_t setDirection(gpio_mode_t mode) override {
+/*        esp_err_t setDirection(gpio_mode_t mode) override {
           switch (mode) {
             case GPIO_MODE_INPUT:
               _pin->_owner->setPinMode(_pin->id(), true);
@@ -49,6 +49,14 @@ namespace esp32m {
           if (pull == GPIO_PULLUP_ONLY)
             return ESP_OK;
           return ESP_FAIL;
+        }*/
+        esp_err_t setMode(pin::Mode mode) override {
+          mode = deduce(mode, _pin->flags());
+          bool input = ((mode & pin::Mode::Output) == 0);
+          ESP_CHECK_RETURN(
+              _pin->_owner->setPinMode(_pin->id(), input));
+          _mode = mode;
+          return ESP_OK;
         }
         esp_err_t read(bool &value) override {
           return _pin->_owner->readPin(_pin->id(), value);

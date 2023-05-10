@@ -22,7 +22,7 @@ namespace esp32m {
     void Sysled::blink(int count) {
       auto digital = _pin->digital();
       if (digital) {
-        digital->setDirection(GPIO_MODE_OUTPUT);
+        digital->setDirection(false, true);
         for (int i = 0; i < count; i++) {
           digital->write(true);
           delay(200);

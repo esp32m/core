@@ -1,24 +1,17 @@
 import { PayloadAction, createSlice } from '@reduxjs/toolkit';
 import { TStateRoot } from '@ts-libs/redux';
+import { FeatureType, TPinState } from './types';
 
 export const Name = 'debug-pins';
 
 export type TPinNames = Record<string, Array<number>>;
 export type TPinKey = [provider: string, id: number];
 
-export const enum FeatureType {
-  Digital,
-  ADC,
-  DAC,
-  PWM,
-  Pcnt,
-  LEDC,
-}
-
 type TLocalState = {
   names?: TPinNames;
   pin?: TPinKey;
   feature?: FeatureType;
+  pinState?: TPinState;
 };
 
 declare module '@ts-libs/redux' {
@@ -42,12 +35,17 @@ const slice = createSlice({
     feature: (state, { payload }: PayloadAction<FeatureType | undefined>) => {
       state.feature = payload;
     },
+    pinState: (state, { payload }: PayloadAction<TPinState | undefined>) => {
+      state.pinState = payload;
+    },
   },
 });
 
 export const { actions, reducer } = slice;
+
 export const selectors = {
   names: (state: TStateRoot) => state[Name].names,
   pin: (state: TStateRoot) => state[Name].pin,
   feature: (state: TStateRoot) => state[Name].feature,
+  pinState: (state: TStateRoot) => state[Name].pinState,
 };

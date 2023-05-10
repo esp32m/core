@@ -173,7 +173,7 @@ namespace esp32m {
     Ethernet *useOlimexEthernet(const char *name) {
       // power up LAN8710 chip
       auto pin = gpio::pin(GPIO_NUM_12)->digital();
-      pin->setDirection(GPIO_MODE_OUTPUT);
+      pin->setDirection(false, true);
       pin->write(true);
       delay(10);
 

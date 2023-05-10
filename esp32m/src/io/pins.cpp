@@ -21,7 +21,6 @@ namespace esp32m {
           return _pwm->getDuty();
         }
         esp_err_t setFreq(uint32_t value) override {
-          logd("freq=%d", value);
           return _pwm->setFreq(value);
         }
         uint32_t getFreq() const override {
@@ -29,7 +28,7 @@ namespace esp32m {
         }
         esp_err_t enable(bool on) override {
           if (on)
-            _digital->setDirection(GPIO_MODE_OUTPUT);
+            _digital->setDirection(false, true);
           return _pwm->enable(on);
         }
         bool isEnabled() const override {
@@ -87,7 +86,7 @@ namespace esp32m {
     esp_err_t IPin::createFeature(pin::Type type, pin::Feature **feature) {
       switch (type) {
         case pin::Type::PWM:
-          if ((flags() & pin::Flags::DigitalOutput) != 0) {
+          if ((flags() & pin::Flags::Output) != 0) {
             auto dig = digital();
             if (dig) {
               *feature = new pwm::Pin(dig);

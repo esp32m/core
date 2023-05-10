@@ -1,9 +1,14 @@
 import { useFormikContext } from 'formik';
-import { TPWMState } from './types';
+import { FeatureType, TDebugPinFeaturePlugin, TPWMState } from './types';
 import { FieldSwitch, FieldText } from '@ts-libs/ui-forms';
 import { Grid } from '@mui/material';
+import * as Yup from 'yup';
 
-export const PWM = () => {
+const validationSchema = Yup.object().shape({
+  freq: Yup.number().integer().min(0).max(1000000),
+});
+
+const component = () => {
   const {
     values: { enabled },
   } = useFormikContext<TPWMState>();
@@ -35,4 +40,15 @@ export const PWM = () => {
       )}
     </Grid>
   );
+};
+
+export const PwmPlugin: TDebugPinFeaturePlugin = {
+  name: 'debug-pin-pwm',
+  debug: {
+    pin: {
+      features: [
+        { name: 'PWM', feature: FeatureType.PWM, component, validationSchema },
+      ],
+    },
+  },
 };

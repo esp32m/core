@@ -58,12 +58,43 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(_pin->num()));
       }
 
-      esp_err_t setDirection(gpio_mode_t mode) override {
+      /*esp_err_t setDirection(gpio_mode_t mode) override {
         return gpio_set_direction(_pin->num(), mode);
       }
       esp_err_t setPull(gpio_pull_mode_t pull) override {
         return gpio_set_pull_mode(_pin->num(), pull);
+      }*/
+      esp_err_t setMode(pin::Mode mode) override {
+        mode = deduce(mode, _pin->flags());
+        auto dir = GPIO_MODE_DEF_DISABLE;
+        if ((mode & pin::Mode::Input) != 0)
+          dir |= GPIO_MODE_DEF_INPUT;
+        if ((mode & pin::Mode::Output) != 0) {
+          dir |= GPIO_MODE_DEF_OUTPUT;
+          if ((mode & pin::Mode::OpenDrain) != 0)
+            dir |= GPIO_MODE_DEF_OD;
+        }
+        ESP_CHECK_RETURN(gpio_set_direction(_pin->num(), (gpio_mode_t)dir));
+        gpio_pull_mode_t pull;
+        switch (mode & pin::Mode::PullUpDown) {
+          case pin::Mode::PullUp:
+            pull = GPIO_PULLUP_ONLY;
+            break;
+          case pin::Mode::PullDown:
+            pull = GPIO_PULLDOWN_ONLY;
+            break;
+          case pin::Mode::PullUpDown:
+            pull = GPIO_PULLUP_PULLDOWN;
+            break;
+          default:
+            pull = GPIO_FLOATING;
+            break;
+        }
+        ESP_CHECK_RETURN(gpio_set_pull_mode(_pin->num(), pull));
+        _mode = mode;
+        return ESP_OK;
       }
+
       esp_err_t read(bool &value) override {
         value = gpio_get_level(_pin->num()) != 0;
         return ESP_OK;
@@ -357,10 +388,14 @@ namespace esp32m {
         ESP_ERROR_CHECK_WITHOUT_ABORT(dac_oneshot_del_channel(_handle));
       }
       esp_err_t write(float value) override {
-        if (value < 0)
+        if (value < 0 || value > 1)
           return ESP_ERR_INVALID_ARG;
         ESP_CHECK_RETURN(dac_oneshot_output_voltage(_handle, 255 * value));
+        _value = value;
         return ESP_OK;
+      }
+      float getValue() override {
+        return _value;
       }
 
       static esp_err_t create(Pin *pin, pin::Feature **feature) {
@@ -385,6 +420,7 @@ namespace esp32m {
      private:
       dac_channel_t _channel;
       dac_oneshot_handle_t _handle;
+      float _value = 0;
       DAC(Pin *pin, dac_channel_t channel, dac_oneshot_handle_t handle)
           : _channel(channel), _handle(handle) {}
     };
@@ -585,12 +621,13 @@ namespace esp32m {
     Pin::Pin(int id) : IPin(id) {
       gpio_num_t num = this->num();
       snprintf(_name, sizeof(_name), "IO%02u", num);
-      _features = pin::Flags::None;
+      _features = pin::Flags::Input | pin::Flags::PulseCounter;
       if (GPIO_IS_VALID_DIGITAL_IO_PAD(num))
-        _features |= pin::Flags::DigitalInput | pin::Flags::PulseCounter;
+        _features |= pin::Flags::PAD;
       if (GPIO_IS_VALID_OUTPUT_GPIO(num))
-        _features |= pin::Flags::DigitalOutput | pin::Flags::PullUp |
-                     pin::Flags::PullDown | pin::Flags::LEDC;
+        _features |= pin::Flags::Output | pin::Flags::PullUp |
+                     pin::Flags::OpenDrain | pin::Flags::PullDown |
+                     pin::Flags::LEDC;
 #if SOC_DAC_SUPPORTED
       if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
         _features |= pin::Flags::DAC;
@@ -674,8 +711,7 @@ namespace esp32m {
     esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {
       switch (type) {
         case pin::Type::Digital:
-          if ((_features & (pin::Flags::DigitalInput |
-                            pin::Flags::DigitalOutput)) != 0) {
+          if ((_features & (pin::Flags::Input | pin::Flags::Output)) != 0) {
             *feature = new gpio::Digital(this);
             return ESP_OK;
           }
@@ -701,7 +737,7 @@ namespace esp32m {
           }
           break;
         case pin::Type::LEDC:
-          if ((_features & pin::Flags::DigitalOutput) != 0) {
+          if ((_features & pin::Flags::Output) != 0) {
             gpio::LEDC::create(this, feature);
             return ESP_OK;
           }
