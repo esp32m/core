@@ -7,9 +7,9 @@
     "type": "module",
     "main": "src/index.ts",
     "devDependencies": {
-        "@types/node": "^18.16.3",
-        "@types/react": "^18.2.3",
-        "@types/react-dom": "^18.2.3",
+        "@types/node": "^20.1.2",
+        "@types/react": "^18.2.6",
+        "@types/react-dom": "^18.2.4",
         "@types/react-redux": "^7.1.25",
         "@types/react-router": "^5.1.20",
         "@types/react-router-dom": "^5.3.3",
@@ -18,7 +18,7 @@
     },
     "dependencies": {
         "@mui/icons-material": "^5.11.16",
-        "@mui/material": "^5.12.3",
+        "@mui/material": "^5.13.0",
         "@reduxjs/toolkit": "^1.9.5",
         "@ts-libs/log": "*",
         "@ts-libs/tools": "*",
