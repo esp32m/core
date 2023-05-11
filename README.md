@@ -1,9 +1,11 @@
+[![Master branch Build Status](https://img.shields.io/github/actions/workflow/status/esp32m/core/ci.yml?branch=master&logo=github)](https://github.com/esp32m/core/actions?query=workflow%3A%22Continuous+Integration%22+branch%3Amaster)
+
 # ESP32 Manager
 
 ## Visit our [Web site](//esp32m.com) for details
 
 ## Introduction
-
+4
 ESP32 Manager is a framework on top of [Espressif's](//espressif.com) native [ESP-IDF](//docs.espressif.com/projects/esp-idf) development environment,
 designed to streamline firmware development for the most common use cases of home automation. It may be useful for those who want to explore ESP32 beyond the Arduino's simplicity and ESP-IDF's complexity.
 
