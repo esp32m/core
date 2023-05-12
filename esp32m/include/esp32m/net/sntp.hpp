@@ -13,8 +13,11 @@ namespace esp32m {
       const char *name() const override {
         return "sntp";
       }
-      std::string host() const {
-        return _host;
+      std::string host(); 
+      int tzOfs();
+      bool synced()
+      {
+        return _syncedAt > 0;
       }
 
      protected:

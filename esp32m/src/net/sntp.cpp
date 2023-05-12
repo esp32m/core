@@ -55,6 +55,17 @@ namespace esp32m {
       char buf[32];
       time2str(buf, sizeof(buf));
       logD("local time/date was set to %s, (TZ=%s)", buf, _tze.c_str());
+      EventStateChanged::publish(this);
+    }
+
+    int Sntp::tzOfs() {
+      time_t gmt, rawtime;
+      time(&rawtime);
+      struct tm ptm;
+      gmtime_r(&rawtime, &ptm);
+      ptm.tm_isdst = -1;
+      gmt = mktime(&ptm);
+      return (int)(difftime(rawtime, gmt) / 60);
     }
 
     DynamicJsonDocument *Sntp::getState(const JsonVariantConst args) {
@@ -104,6 +115,13 @@ namespace esp32m {
       if (changed)
         update();
       return changed;
+    }
+
+    std::string Sntp::host() {
+      if (!_host.size())
+        return DefaultNtpHost;
+      else
+        return _host;
     }
 
     void Sntp::update() {

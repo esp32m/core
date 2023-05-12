@@ -36,6 +36,9 @@ namespace esp32m {
         static bool is(Event &ev) {
           return ev.is(NAME);
         }
+        static bool is(Event &ev, Status next) {
+          return ev.is(NAME) && ((StatusChanged &)ev).next() == next;
+        }
 
        private:
         StatusChanged(Status next, Status prev)
@@ -118,6 +121,8 @@ namespace esp32m {
       Subscription *subscribe(const char *topic, int qos = 0);
       Subscription *subscribe(const char *topic, HandlerFunction handler,
                               int qos = 0);
+      void setLwt(const char *topic, const char *message, int qos = 0,
+                  bool retain = false);
 
      protected:
       void handleEvent(Event &ev) override;
@@ -138,7 +143,8 @@ namespace esp32m {
       void setState(Status state);
 
       bool _enabled = true, _configChanged = false;
-      std::string _uri, _username, _password, _client, _certurl;
+      std::string _uri, _username, _password, _client, _certurl, _lwtTopic,
+          _lwtMessage;
       std::unique_ptr<Resource> _cert;
       fs::CachedResource _certCache;
       char *_sensorsTopic = nullptr;

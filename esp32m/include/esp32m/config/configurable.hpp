@@ -62,6 +62,10 @@ namespace esp32m {
       static bool is(Event &ev) {
         return ev.is(Type);
       }
+      static bool is(Event &ev, Configurable *c)
+      {
+        return ev.is(Type) && ((Changed &)ev).configurable() == c;
+      }
 
      private:
       Changed(Configurable *configurable, bool saveNow)

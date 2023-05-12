@@ -357,13 +357,32 @@ namespace esp32m {
                        bool retain, bool store) {
       if (!_handle || !isConnected() || !topic || !message)
         return false;
-      // logD("publish %s %s", topic, message);
+      // logD("enqueue %s %s", topic, message);
       auto id = esp_mqtt_client_enqueue(_handle, topic, message,
                                         strlen(message), qos, retain, store);
       if (id >= 0)
         _pubcnt++;
       return id >= 0;
     }
+
+    void Mqtt::setLwt(const char *topic, const char *message, int qos,
+                      bool retain) {
+      if (topic && strlen(topic))
+        _lwtTopic = topic;
+      else
+        _lwtTopic.clear();
+      if (message && strlen(message))
+        _lwtMessage = message;
+      else
+        _lwtMessage.clear();
+      _cfg.session.last_will = {
+          .topic = _lwtTopic.empty() ? nullptr : _lwtTopic.c_str(),
+          .msg = _lwtMessage.empty() ? nullptr : _lwtMessage.c_str(),
+          .msg_len = (int)_lwtMessage.size(),
+          .qos = qos,
+          .retain = retain};
+      _configChanged = true;
+    }  // namespace net
 
     bool Mqtt::intSubscribe(std::string topic, int qos) {
       auto id = esp_mqtt_client_subscribe(_handle, topic.c_str(), qos);

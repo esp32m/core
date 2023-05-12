@@ -126,6 +126,10 @@ namespace esp32m {
     static bool is(Event &ev) {
       return ev.is(Type);
     }
+    static bool is(Event &ev, AppObject *obj)
+    {
+      return ev.is(Type) && ((EventStateChanged &)ev).object() == obj;
+    }
 
    private:
     EventStateChanged(AppObject *object) : Event(Type), _object(object) {}

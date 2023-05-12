@@ -13,8 +13,13 @@ namespace esp32m {
 
   namespace json {
 
-    DynamicJsonDocument *parse(const char *data, int len = -1);
+    DynamicJsonDocument *parse(const char *data, int len,
+                               DeserializationError *error = nullptr);
+    DynamicJsonDocument *parse(const char *data, DeserializationError *error);
+    DynamicJsonDocument *parse(const char *data);
+
     char *allocSerialize(const JsonVariantConst v, size_t *length = nullptr);
+    std::string serialize(const JsonVariantConst v);
     size_t measure(const JsonVariantConst v);
     bool checkEqual(const JsonVariantConst a, const JsonVariantConst b);
 

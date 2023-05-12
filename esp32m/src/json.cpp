@@ -26,11 +26,15 @@ namespace esp32m {
       return doc.as<JsonObjectConst>();
     }
 
-    DynamicJsonDocument *parse(const char *data, int len) {
+    DynamicJsonDocument *parse(const char *data, int len,
+                               DeserializationError *error) {
       if (data && len < 0)
         len = strlen(data);
-      if (!data || !len)
+      if (!data || !len) {
+        if (error)
+          *error = DeserializationError::EmptyInput;
         return nullptr;
+      }
       size_t ds = len * 3;
       for (;;) {
         DynamicJsonDocument *doc = nullptr;
@@ -44,7 +48,9 @@ namespace esp32m {
           return doc;
         }
         delete doc;
-        if (r != DeserializationError::NoMemory) {
+        if (error)
+          *error = r;
+        else if (r != DeserializationError::NoMemory) {
           // we can't safely pass data as a parameter here, because it may not
           // be null-terminated
           char *str = strndup(data, len);
@@ -55,6 +61,14 @@ namespace esp32m {
         ds *= 4;
         ds /= 3;
       }
+    }
+    DynamicJsonDocument *parse(const char *data,
+                                      DeserializationError *error) {
+      return parse(data, -1, error);
+    }
+
+    DynamicJsonDocument *parse(const char *data) {
+      return parse(data, -1, nullptr);
     }
 
     char *allocSerialize(const JsonVariantConst v, size_t *length) {
@@ -73,6 +87,16 @@ namespace esp32m {
       if (length)
         *length = actual;
       return ds;
+    }
+
+    std::string serialize(const JsonVariantConst v) {
+      std::string result;
+      auto buf = allocSerialize(v);
+      if (buf) {
+        result = buf;
+        free(buf);
+      }
+      return result;
     }
 
     bool checkEqual(const JsonVariantConst a, const JsonVariantConst b) {
@@ -146,8 +170,7 @@ namespace esp32m {
           target = source.as<std::string>();
           return true;
         }*/
-    bool from(JsonVariantConst source, std::string &target,
-              bool *changed) {
+    bool from(JsonVariantConst source, std::string &target, bool *changed) {
       if (source.isUnbound())
         return false;
       // special handling for std::string because null.as<std::string>() returns
