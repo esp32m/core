@@ -85,10 +85,7 @@ namespace esp32m {
         present = false;
         ESP_CHECK_RETURN(ensureReady());
         ESP_CHECK_RETURN(_rx->setSignalThresholds(
-            15 * 1000,  // 1000000000 / RmtResolutonHz,
-            (DurationResetPulse + 10) *
-                1000  // (DurationResetPulse + DurationResetWait) * 1000
-            ));
+            3 * 1000, (DurationResetPulse + 10) * 1000));
         ESP_CHECK_RETURN(_rx->beginReceive());
         ESP_CHECK_RETURN(_tx->transmit(&sreset, 1));
         rmt_rx_done_event_data_t data;
@@ -100,7 +97,8 @@ namespace esp32m {
         if (number_of_bits_to_read > 8)
           return ESP_FAIL;
         ESP_CHECK_RETURN(ensureReady());
-        ESP_CHECK_RETURN(_rx->setSignalThresholds(15 * 1000, 70 * 1000));
+        ESP_CHECK_RETURN(
+            _rx->setSignalThresholds(1 * 1000, (DurationBit + 10) * 1000));
         ESP_CHECK_RETURN(_rx->beginReceive());
         rmt_symbol_word_t syms[number_of_bits_to_read];
         for (int i = 0; i < number_of_bits_to_read; i++) syms[i] = sbit1;
