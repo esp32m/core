@@ -330,7 +330,7 @@ namespace esp32m {
 
     bool isDnsResponding() {
       const ip_addr_t *dns = dns_getserver(0);
-      if (!dns)
+      if (!dns || ip_addr_isany(dns))
         return false;
       return isAnyNetifUp();
     }
