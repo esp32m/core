@@ -80,7 +80,7 @@ namespace esp32m {
     bool macParse(const char *macstr, uint8_t target[]);
 
     bool isAnyNetifUp();
-    bool isDnsResponding();
+    bool isDnsAvailable();
 
     esp_err_t useNetif();
     bool isNetifInited();

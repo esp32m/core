@@ -206,7 +206,7 @@ namespace esp32m {
         switch (_status) {
           case Status::Initial:
             _timer = 0;
-            if (net::isDnsResponding() && !_uri.empty()) {
+            if (net::isDnsAvailable() && !_uri.empty()) {
               setState(Status::Connecting);
               logI("connecting to %s", _uri.c_str());
               /*ESP_ERROR_CHECK_WITHOUT_ABORT(
