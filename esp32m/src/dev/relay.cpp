@@ -9,17 +9,14 @@ namespace esp32m {
   namespace dev {
     void Relay::init() {
       Device::init(Flags::AcceptsCommands);
-      ESP_ERROR_CHECK_WITHOUT_ABORT(
-          _pinOn->setDirection(true, true));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(_pinOn->setDirection(true, true));
       setOnLevel(Pin::On, true);
       if (_pinOff != _pinOn) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(
-            _pinOff->setDirection(true, true));
+        ESP_ERROR_CHECK_WITHOUT_ABORT(_pinOff->setDirection(true, true));
         setOnLevel(Pin::Off, true);
       }
       if (_pinSenseOn) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(
-            _pinSenseOn->setDirection(true, false));
+        ESP_ERROR_CHECK_WITHOUT_ABORT(_pinSenseOn->setDirection(true, false));
         setOnLevel(Pin::SenseOn, false);
         if (_pinSenseOff) {
           ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -61,6 +58,7 @@ namespace esp32m {
         return;
       logI("state changed: %s -> %s", toString(_state), toString(state));
       _state = state;
+      EventStateChanged::publish(this);
       if (isPersistent())
         config::Changed::publish(this);
     }
@@ -188,14 +186,11 @@ namespace esp32m {
     bool Relay::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
-      if (!_haAutodiscovery)
-        return false;
       static const char *names[] = {"?", "ON", "OFF"};
       if (req.is(ha::DescribeRequest::Name)) {
         DynamicJsonDocument *doc = new DynamicJsonDocument(
             JSON_OBJECT_SIZE(1 + 2));  // acceptsCommands, component, config
         auto root = doc->to<JsonObject>();
-        ha::DescribeRequest::setAcceptsCommands(root);
         root["component"] = "switch";
         root.createNestedObject("config");
         req.respond(name(), doc->as<JsonVariantConst>());

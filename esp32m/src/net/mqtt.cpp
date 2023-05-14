@@ -226,6 +226,7 @@ namespace esp32m {
             break;
           case Status::Connected: {
             logI("connected");
+            publishBirth();
             std::map<std::string, int> toSubscribe;
             {
               std::lock_guard guard(_mutex);
@@ -321,6 +322,12 @@ namespace esp32m {
           // printf("%s", (const char *)_cfg.broker.verification.certificate);
         }
       }
+      auto topic =
+          string_printf("esp32m/%s/availability", App::instance().hostname());
+      if (_lwt.topic.empty())
+        setLwt(topic.c_str(), "offline");
+      if (_birth.topic.empty() && _birth.qos >= 0)
+        setBirth(topic.c_str(), "online");
     }
 
     bool Mqtt::setConfig(const JsonVariantConst ca,
@@ -367,22 +374,28 @@ namespace esp32m {
 
     void Mqtt::setLwt(const char *topic, const char *message, int qos,
                       bool retain) {
-      if (topic && strlen(topic))
-        _lwtTopic = topic;
-      else
-        _lwtTopic.clear();
-      if (message && strlen(message))
-        _lwtMessage = message;
-      else
-        _lwtMessage.clear();
+      _lwt.set(topic, message, qos, retain);
       _cfg.session.last_will = {
-          .topic = _lwtTopic.empty() ? nullptr : _lwtTopic.c_str(),
-          .msg = _lwtMessage.empty() ? nullptr : _lwtMessage.c_str(),
-          .msg_len = (int)_lwtMessage.size(),
+          .topic = _lwt.topic.empty() ? nullptr : _lwt.topic.c_str(),
+          .msg = _lwt.payload.empty() ? nullptr : _lwt.payload.c_str(),
+          .msg_len = (int)_lwt.payload.size(),
           .qos = qos,
           .retain = retain};
       _configChanged = true;
-    }  // namespace net
+    }
+
+    void Mqtt::setBirth(const char *topic, const char *message, int qos,
+                        bool retain) {
+      _birth.set(topic, message, qos, retain);
+      if (isReady())
+        publishBirth();
+    }
+
+    void Mqtt::publishBirth() {
+      if (_birth.valid())
+        publish(_birth.topic.c_str(), _birth.payload.c_str(), _birth.qos,
+                _birth.retain);
+    }
 
     bool Mqtt::intSubscribe(std::string topic, int qos) {
       auto id = esp_mqtt_client_subscribe(_handle, topic.c_str(), qos);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/ha/config.hpp"
 #include "esp32m/ha/ha.hpp"
 #include "esp32m/net/mqtt.hpp"
 
@@ -80,7 +81,10 @@ namespace esp32m {
           xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/ha-mqtt",
                       4096, this, tskIDLE_PRIORITY, &_task);
         } else if (EventStateChanged::is(ev)) {
-          auto name = ((EventStateChanged &)ev).object()->name();
+          auto &evch = (EventStateChanged &)ev;
+          auto name = evch.id();
+          if (!name)
+            name = evch.object()->name();
           // logI("state changed %s", name);
           auto it = _devices.find(name);
           if (it != _devices.end())
@@ -91,7 +95,6 @@ namespace esp32m {
      private:
       TaskHandle_t _task = nullptr;
       unsigned long _describeRequested = 0, _stateRequested = 0;
-      std::string _dtp = "homeassistant";
       std::map<std::string, std::unique_ptr<mqtt::Dev> > _devices;
       Mqtt(){};
       void run() {
@@ -108,7 +111,7 @@ namespace esp32m {
           if (_describeRequested == 0 ||
               (curtime - _describeRequested > 24 * 60 * 60 * 1000))
             describe();
-          if (_stateRequested == 0 || (curtime - _stateRequested > 5000))
+          if (_stateRequested == 0 || (curtime - _stateRequested > 60 * 1000))
             requestState(false);
         }
       }
@@ -117,78 +120,21 @@ namespace esp32m {
         DescribeRequest req(nullptr);
         req.publish();
         auto &mqtt = net::Mqtt::instance();
-        auto nodeid = App::instance().hostname();
-        auto dtp = _dtp.c_str();
         for (auto const &[key, doc] : req.responses) {
           auto data = doc->as<JsonVariantConst>();
           const char *id = data["id"] | key.c_str();
-          auto component = data["component"].as<const char *>();
-          if (!component || !strlen(component)) {
-            logW("device %s did not provide HA component name", id);
-            continue;
-          }
-          auto configInput = data["config"].as<JsonObjectConst>();
-          if (!configInput) {
-            logW("device %s did not provide HA config ", id);
-            continue;
-          }
-          auto configTopic =
-              string_printf("%s/%s/%s/%s/config", dtp, component, nodeid, id);
-          auto stateTopic =
-              string_printf("%s/%s/%s/%s/state", dtp, component, nodeid, id);
-          std::string commandTopic;
-          auto commandTopicNames =
-              data["commandTopicNames"].as<JsonArrayConst>();
-          bool acceptsCommands = DescribeRequest::getAcceptsCommands(data) ||
-                                 commandTopicNames.size();
-          if (acceptsCommands) {
-            commandTopic = string_printf("%s/%s/%s/%s/command", dtp, component,
-                                         nodeid, id);
-          }
-          bool addName = !configInput.containsKey("name");
-          auto stateTopicNames = data["stateTopicNames"].as<JsonArrayConst>();
-          auto configPayloadDoc = new DynamicJsonDocument(
-              configInput.memoryUsage() +
-              JSON_OBJECT_SIZE(1 + (acceptsCommands ? 1 : 0) +
-                               (addName ? 1 : 0)) +
-              (stateTopicNames ? JSON_OBJECT_SIZE(stateTopicNames.size()) +
-                                     JSON_STRING_SIZE(stateTopic.size()) *
-                                         stateTopicNames.size()
-                               : JSON_STRING_SIZE(stateTopic.size())) +
-              (commandTopicNames ? JSON_OBJECT_SIZE(commandTopicNames.size()) +
-                                       JSON_STRING_SIZE(commandTopic.size()) *
-                                           commandTopicNames.size()
-                                 : JSON_STRING_SIZE(commandTopic.size())));
-          configPayloadDoc->set(configInput);
-          auto configPayloadRoot = configPayloadDoc->as<JsonObject>();
-          if (addName)
-            configPayloadRoot["name"] = id;
-          if (stateTopicNames)
-            for (const char *name : stateTopicNames)
-              configPayloadRoot[name] = stateTopic;
-          else
-            configPayloadRoot["state_topic"] = stateTopic;
-          if (acceptsCommands) {
-            if (commandTopicNames.size())
-              for (const char *name : commandTopicNames)
-                configPayloadRoot[name] = commandTopic;
-            else
-              configPayloadRoot["command_topic"] = commandTopic;
-          }
-          json::check(this, configPayloadDoc, "HA config payload");
-          auto configPayload =
-              json::allocSerialize(configPayloadDoc->as<JsonVariantConst>());
-          delete configPayloadDoc;
+          ConfigBuilder builder(id, data);
+          if (builder.build()) {
+            /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
+                 configTopic.c_str(), configPayload, acceptsCommands);*/
+            mqtt.publish(builder.configTopic.c_str(),
+                         builder.configPayload.c_str());
 
-          /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
-               configTopic.c_str(), configPayload, acceptsCommands);*/
-          mqtt.publish(configTopic.c_str(), configPayload);
-          free(configPayload);
-
-          auto it = _devices.find(id);
-          if (it == _devices.end()) {
-            _devices[id] = std::unique_ptr<mqtt::Dev>(
-                new mqtt::Dev(data["name"], stateTopic, commandTopic));
+            auto it = _devices.find(id);
+            if (it == _devices.end()) {
+              _devices[id] = std::unique_ptr<mqtt::Dev>(new mqtt::Dev(
+                  data["name"], builder.stateTopic, builder.commandTopic));
+            }
           }
         }
       }

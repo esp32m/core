@@ -14,6 +14,7 @@
 #include "esp32m/debug/button.hpp"
 #include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
+#include "esp32m/events/broadcast.hpp"
 
 namespace esp32m {
 
@@ -30,34 +31,6 @@ namespace esp32m {
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
     EventManager::instance().publishBackwards(ev);
-  }
-
-  bool AppObject::handleStateRequest(Request &req) {
-    const char *name = req.name();
-    if (!strcmp(name, KeyStateGet)) {
-      DynamicJsonDocument *state = getState(req.data());
-      if (state) {
-        json::check(this, state, "getState()");
-        req.respond(stateName(), *state, false);
-        delete state;
-      }
-      return true;
-    } else if (!strcmp(name, KeyStateSet)) {
-      DynamicJsonDocument *result = nullptr;
-      JsonVariantConst data =
-          req.isBroadcast() ? req.data()[stateName()] : req.data();
-      if (data.isUnbound())
-        return true;
-      setState(data, &result);
-      if (result) {
-        json::check(this, result, "setState()");
-        req.respond(stateName(), *result);
-        delete result;
-      } else
-        req.respond(stateName(), json::null<JsonVariantConst>(), false);
-      return true;
-    }
-    return false;
   }
 
   AppObject::AppObject() {
@@ -80,6 +53,74 @@ namespace esp32m {
       return true;
     return false;
   };
+
+  bool AppObject::handleStateRequest(Request &req) {
+    const char *name = req.name();
+    const char *iname = interactiveName();
+    if (!strcmp(name, KeyStateGet)) {
+      DynamicJsonDocument *state = getState(req.data());
+      if (state) {
+        json::check(this, state, "getState()");
+        req.respond(iname, *state, false);
+        delete state;
+      }
+      return true;
+    } else if (!strcmp(name, KeyStateSet)) {
+      DynamicJsonDocument *result = nullptr;
+      JsonVariantConst data =
+          req.isBroadcast() ? req.data()[iname] : req.data();
+      if (data.isUnbound())
+        return true;
+      setState(data, &result);
+      if (result) {
+        json::check(this, result, "setState()");
+        req.respond(iname, *result);
+        delete result;
+      } else
+        req.respond(iname, json::null<JsonVariantConst>(), false);
+      return true;
+    }
+    return false;
+  }
+
+  bool AppObject::handleConfigRequest(Request &req) {
+    const char *name = req.name();
+    const char *cname = interactiveName();
+    JsonVariantConst reqData = req.data();
+    bool internalRequest = !req.origin();
+    if (!strcmp(name, Config::KeyConfigGet)) {
+      // internal requests means request to save config
+      // we don't want to save default config (the one that never changed)
+      if (internalRequest && !_configured)
+        return true;
+      RequestContext ctx(req, reqData);
+      DynamicJsonDocument *config = getConfig(ctx);
+      if (config) {
+        json::check(this, config, "getConfig()");
+        req.respond(cname, *config, false);
+        delete config;
+      }
+      return true;
+    } else if (!strcmp(name, Config::KeyConfigSet)) {
+      JsonVariantConst data = req.isBroadcast() ? reqData[cname] : reqData;
+      if (data.isUnbound())
+        return true;
+      RequestContext ctx(req, data);
+      DynamicJsonDocument *result = nullptr;
+      if (setConfig(data, &result)) {
+        config::Changed::publish(this);
+        Broadcast::publish(cname, "config-changed");
+      }
+      if (result) {
+        json::check(this, result, "setConfig()");
+        req.respond(cname, *result);
+        delete result;
+      } else
+        req.respond(cname, json::null<JsonVariantConst>(), false);
+      return true;
+    }
+    return false;
+  }
 
   static uint32_t sketchSize() {
     esp_image_metadata_t data;

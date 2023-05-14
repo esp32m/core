@@ -3,12 +3,6 @@
 namespace esp32m {
   namespace ha {
 
-    class Descriptor {
-     public:
-      bool acceptsCommands = false;
-      std::vector<const char *> stateTopicNames;
-    };
-
     class DescribeRequest : public Request {
      public:
       DescribeRequest(const char *target)
@@ -24,13 +18,6 @@ namespace esp32m {
         doc->set(data);
         doc->as<JsonObject>()["name"] = source;
         responses[id] = std::unique_ptr<DynamicJsonDocument>(doc);
-      }
-
-      static void setAcceptsCommands(JsonObject data) {
-        data["acceptsCommands"] = true;
-      }
-      static bool getAcceptsCommands(const JsonObjectConst data) {
-        return data["acceptsCommands"].as<bool>();
       }
 
       constexpr static const char *Name = "ha-describe";

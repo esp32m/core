@@ -63,7 +63,15 @@ namespace esp32m {
     }
     std::string get(const char *key) {
       std::lock_guard guard(_mutex);
-      return _map[key];
+      auto it = _map.find(key);
+      if (it == _map.end())
+        return std::string{};
+      return it->second;
+    }
+    bool has(const char *key) {
+      std::lock_guard guard(_mutex);
+      auto it = _map.find(key);
+      return it != _map.end();
     }
     std::map<std::string, std::string> get() {
       std::map<std::string, std::string> result;

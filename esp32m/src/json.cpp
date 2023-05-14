@@ -160,16 +160,6 @@ namespace esp32m {
       target[key] = value;
     }
 
-    /*    bool from(JsonVariantConst source, std::string &target,
-                  bool *changed = nullptr) {
-          if (source.isUnbound()  ||
-              source.as<std::string>() == target)
-            return false;
-          if (changed)
-            *changed = true;
-          target = source.as<std::string>();
-          return true;
-        }*/
     bool from(JsonVariantConst source, std::string &target, bool *changed) {
       if (source.isUnbound())
         return false;
@@ -200,37 +190,7 @@ namespace esp32m {
       target = src;
       return true;
     }
-    /*
-        bool fromDup(JsonVariantConst v, char *&target, const char *def,
-                     bool *changed) {
-          bool c = false;
-          if (target && target != def) {
-            free(target);
-            c = true;
-          }
-          bool setToDefault = false;
-          if (!v.isNull()) {
-            const char *c = v.as<const char *>();
-            if (!c)
-              target = nullptr;
-            else if (def && !strcmp(c, def))
-              setToDefault = true;
-            else
-              target = strdup(c);
-          } else
-            setToDefault = true;
-          if (setToDefault) {
-            if (target != def) {
-              target = (char *)def;
-              c = true;
-            }
-          } else
-            c = true;
-          if (c && changed)
-            *changed = true;
-          return c;
-        }
-    */
+
     bool check(log::Loggable *l, DynamicJsonDocument *doc, const char *msg) {
       if (!doc || !l)
         return false;

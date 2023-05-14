@@ -15,9 +15,6 @@ namespace esp32m {
         const char *name() const override {
           return "scanner-i2c";
         }
-        const char *stateName() const override {
-          return "i2c";
-        }
         const char *interactiveName() const override {
           return "i2c";
         }

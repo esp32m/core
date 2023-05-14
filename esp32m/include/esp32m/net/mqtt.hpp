@@ -100,6 +100,31 @@ namespace esp32m {
         friend class net::Mqtt;
       };
 
+      struct Message {
+        std::string topic;
+        std::string payload;
+        int qos = 0;
+        bool retain = false;
+
+        bool valid() const {
+          return !topic.empty() && !payload.empty() && qos >= 0;
+        }
+
+       private:
+        void set(const char *topic, const char *message, int qos, bool retain) {
+          if (topic && strlen(topic))
+            this->topic = topic;
+          else
+            this->topic.clear();
+          if (message && strlen(message))
+            this->payload = message;
+          else
+            this->payload.clear();
+          this->qos = qos;
+          this->retain = retain;
+        }
+        friend class net::Mqtt;
+      };
     }  // namespace mqtt
 
     using namespace mqtt;
@@ -121,8 +146,21 @@ namespace esp32m {
       Subscription *subscribe(const char *topic, int qos = 0);
       Subscription *subscribe(const char *topic, HandlerFunction handler,
                               int qos = 0);
-      void setLwt(const char *topic, const char *message, int qos = 0,
-                  bool retain = false);
+      void setLwt(const char *topic, const char *message, int qos = 1,
+                  bool retain = true);
+      const Message &getLwt() const {
+        return _lwt;
+      }
+      /**
+       * If no birth message is set, the default
+       * ["esp32m/${hostname}/availability", "online"] will be used.
+       * To disable default birth message, call setBirth with qos=-1
+       */
+      void setBirth(const char *topic, const char *message, int qos = 1,
+                    bool retain = true);
+      const Message &getBirth() const {
+        return _birth;
+      }
 
      protected:
       void handleEvent(Event &ev) override;
@@ -143,8 +181,9 @@ namespace esp32m {
       void setState(Status state);
 
       bool _enabled = true, _configChanged = false;
-      std::string _uri, _username, _password, _client, _certurl, _lwtTopic,
-          _lwtMessage;
+      std::string _uri, _username, _password, _client, _certurl;
+      mqtt::Message _birth;
+      mqtt::Message _lwt;
       std::unique_ptr<Resource> _cert;
       fs::CachedResource _certCache;
       char *_sensorsTopic = nullptr;
@@ -158,6 +197,7 @@ namespace esp32m {
       bool intSubscribe(std::string topic, int qos = 0);
       void unsubscribe(Subscription *sub);
       void prepareCfg(bool init);
+      void publishBirth();
       const char *effectiveClient();
       friend class mqtt::Subscription;
     };

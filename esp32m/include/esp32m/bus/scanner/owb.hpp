@@ -15,9 +15,6 @@ namespace esp32m {
           return "scanner-owb";
         }
 
-        const char *stateName() const override {
-          return "owb";
-        }
         const char *interactiveName() const override {
           return "owb";
         }

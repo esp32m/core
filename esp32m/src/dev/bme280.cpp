@@ -271,10 +271,13 @@ namespace esp32m {
   }  // namespace bme280
 
   namespace dev {
-    Bme280::Bme280(uint8_t address)
-        : bme280::Core(new I2C(address)) { Device::init(Flags::HasSensors); }
+    Bme280::Bme280(uint8_t address) : bme280::Core(new I2C(address)) {
+      Device::init(Flags::HasSensors);
+    }
 
-    Bme280::Bme280(I2C *i2c) : bme280::Core(i2c) { Device::init(Flags::HasSensors); }
+    Bme280::Bme280(I2C *i2c) : bme280::Core(i2c) {
+      Device::init(Flags::HasSensors);
+    }
 
     bool Bme280::initSensors() {
       return sync(true) == ESP_OK;
@@ -302,6 +305,34 @@ namespace esp32m {
       if (chipId() == bme280::ChipId::Bme280)
         root["humidity"] = h;
       return doc;
+    }
+
+    bool Bme280::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      /*if (req.is(ha::DescribeRequest::Name)) {
+        DynamicJsonDocument *doc = new DynamicJsonDocument(
+            JSON_OBJECT_SIZE(1 + 6) + JSON_STRING_SIZE(strlen(p.codestr())));
+        auto root = doc->to<JsonObject>();
+        root["id"] =
+            (char *)p.codestr();  // make copy in case this probe gets removed
+        root["component"] = "sensor";
+        root["state_class"] = "measurement";
+        auto config = root.createNestedObject("config");
+        config["device_class"] = "temperature";
+        config["unit_of_measurement"] = "°C";
+        req.respond(name(), doc->as<JsonVariantConst>());
+        delete doc;
+        return true;
+      } else if (req.is(ha::StateRequest::Name)) {
+        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+        auto root = doc->to<JsonObject>();
+        root["state"] = p.temperature();
+        req.respond(name(), doc->as<JsonVariantConst>());
+        delete doc;
+        return true;
+      }*/
+      return false;
     }
 
     void useBme280(uint8_t addr) {

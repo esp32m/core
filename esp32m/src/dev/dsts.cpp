@@ -301,9 +301,12 @@ namespace esp32m {
   }  // namespace dsts
 
   namespace dev {
-    Dsts::Dsts(gpio_num_t pin)
-        : dsts::Core(new Owb(pin)){ Device::init(Flags::HasSensors); };
-    Dsts::Dsts(Owb *owb) : dsts::Core(owb){ Device::init(Flags::HasSensors); };
+    Dsts::Dsts(gpio_num_t pin) : dsts::Core(new Owb(pin)) {
+      Device::init(Flags::HasSensors);
+    };
+    Dsts::Dsts(Owb *owb) : dsts::Core(owb) {
+      Device::init(Flags::HasSensors);
+    };
 
     bool Dsts::pollSensors() {
       StaticJsonDocument<JSON_OBJECT_SIZE(1)> props;
@@ -314,10 +317,13 @@ namespace esp32m {
           if (fc)
             sensor("failures", fc, props.as<JsonObjectConst>());
           sensor("success-rate", p.successRate(), props.as<JsonObjectConst>());
+          float tprev = p.temperature();
           if (getTemperature(p)) {
             float t = p.temperature();
             if (!isnan(t))
               sensor("temperature", t, props.as<JsonObjectConst>());
+            if (tprev != t)
+              EventStateChanged::publish(this, p.codestr());
           }
         }
       return true;
@@ -346,11 +352,12 @@ namespace esp32m {
         auto &pv = probes();
         for (auto &p : pv) {
           DynamicJsonDocument *doc = new DynamicJsonDocument(
-              JSON_OBJECT_SIZE(1 + 4) + JSON_STRING_SIZE(strlen(p.codestr())));
+              JSON_OBJECT_SIZE(1 + 6) + JSON_STRING_SIZE(strlen(p.codestr())));
           auto root = doc->to<JsonObject>();
           root["id"] =
               (char *)p.codestr();  // make copy in case this probe gets removed
           root["component"] = "sensor";
+          root["state_class"] = "measurement";
           auto config = root.createNestedObject("config");
           config["device_class"] = "temperature";
           config["unit_of_measurement"] = "°C";

@@ -4,8 +4,7 @@
 #include <freertos/task.h>
 #include <memory>
 
-#include "esp32m/config.hpp"
-#include "esp32m/config/configurable.hpp"
+#include "esp32m/config/config.hpp"
 #include "esp32m/events/request.hpp"
 #include "esp32m/json.hpp"
 #include "esp32m/log/udp.hpp"
@@ -86,14 +85,17 @@ namespace esp32m {
     friend class App;
   };
 
-  class AppObject : public virtual log::Loggable, public virtual Configurable {
+  class AppObject : public virtual log::Loggable {
    public:
     AppObject(const AppObject &) = delete;
     virtual const char *interactiveName() const {
       return name();
     };
-    virtual const char *stateName() const {
-      return name();
+
+    /** Returns true if this object's configuration was either read and applied
+     * from config store or via UI */
+    bool isConfigured() {
+      return _configured;
     }
 
    protected:
@@ -105,12 +107,29 @@ namespace esp32m {
     virtual const JsonVariantConst descriptor() const {
       return json::emptyArray();
     };
+
     virtual bool handleStateRequest(Request &req);
     virtual void setState(const JsonVariantConst cfg,
                           DynamicJsonDocument **result) {}
     virtual DynamicJsonDocument *getState(const JsonVariantConst args) {
       return nullptr;
     }
+
+    virtual bool handleConfigRequest(Request &req);
+    virtual bool setConfig(const JsonVariantConst cfg,
+                           DynamicJsonDocument **result) {
+      return false;
+    }
+    virtual DynamicJsonDocument *getConfig(RequestContext &ctx) {
+      return nullptr;
+    }
+
+   private:
+    // this flag is modified by config::Changed event
+    // request, this flag, otherwise config manager will not
+    // recognize config changes
+    bool _configured = false;
+    friend class config::Changed;
   };
 
   class EventStateChanged : public Event {
@@ -119,21 +138,25 @@ namespace esp32m {
     AppObject *object() const {
       return _object;
     }
-    static void publish(AppObject *object) {
-      EventStateChanged evt(object);
+    const char *id() const {
+      return _id;
+    }
+    static void publish(AppObject *object, const char *id = nullptr) {
+      EventStateChanged evt(object, id);
       evt.Event::publish();
     }
     static bool is(Event &ev) {
       return ev.is(Type);
     }
-    static bool is(Event &ev, AppObject *obj)
-    {
+    static bool is(Event &ev, AppObject *obj) {
       return ev.is(Type) && ((EventStateChanged &)ev).object() == obj;
     }
 
    private:
-    EventStateChanged(AppObject *object) : Event(Type), _object(object) {}
+    EventStateChanged(AppObject *object, const char *id)
+        : Event(Type), _object(object), _id(id) {}
     AppObject *_object;
+    const char *_id;
     constexpr static const char *Type = "state-changed";
   };
 
@@ -158,12 +181,6 @@ namespace esp32m {
       return _name.c_str();
     }
     const char *interactiveName() const override {
-      return "app";
-    }
-    const char *stateName() const override {
-      return "app";
-    }
-    const char *configName() const override {
       return "app";
     }
     const char *hostname() const {

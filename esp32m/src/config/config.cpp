@@ -1,11 +1,21 @@
-#include "esp32m/config.hpp"
-#include "esp32m/config/configurable.hpp"
+#include "esp32m/config/config.hpp"
+#include "esp32m/app.hpp"
 #include "esp32m/events/request.hpp"
 #include "esp32m/json.hpp"
 
 namespace esp32m {
   const char *Config::KeyConfigGet = "config-get";
   const char *Config::KeyConfigSet = "config-set";
+
+  namespace config {
+
+    void Changed::publish(AppObject *configurable, bool saveNow) {
+      Changed evt(configurable, saveNow);
+      configurable->_configured = true;
+      evt.Event::publish();
+    }
+
+  }  // namespace config
 
   class ConfigRequest : public Request {
    public:
