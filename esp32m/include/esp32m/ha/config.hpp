@@ -115,12 +115,14 @@ namespace esp32m {
         inferDeviceProp(device, "hw_version");
         inferDeviceProp(device, "sw_version");
       }
-      std::string makeTopic(const char* suffix) {
+      std::string makeTopic(bool command) {
+        const char* suffix = command ? "command" : "state";
         auto deviceId = _descriptor["name"].as<const char*>();
         auto componentId = _descriptor["componentId"].as<const char*>();
         auto group = _descriptor["group"].as<int>();
         auto host = App::instance().hostname();
-        if (deviceId && group > 0)
+        if (deviceId &&
+            (group > 0 || !command))  // state topics are always at device level
           return string_printf("esp32m/%s/%s/%s", host, deviceId, suffix);
         if (componentId && deviceId)
           return string_printf("esp32m/%s/%s/%s/%s", host, deviceId,
@@ -137,7 +139,7 @@ namespace esp32m {
             _commandTopicNames.push_back("command_topic");
 
         if (_commandTopicNames.size()) {
-          commandTopic = _descriptor["commandTopic"] | makeTopic("command");
+          commandTopic = _descriptor["commandTopic"] | makeTopic(true);
           _configPayloadSize +=
               JSON_OBJECT_SIZE(_commandTopicNames.size()) +
               JSON_STRING_SIZE(commandTopic.size()) * _commandTopicNames.size();
@@ -152,7 +154,7 @@ namespace esp32m {
           if (_component == "sensor" || _component == "switch")
             _stateTopicNames.push_back("state_topic");
         if (_stateTopicNames.size()) {
-          stateTopic = _descriptor["stateTopic"] | makeTopic("state");
+          stateTopic = _descriptor["stateTopic"] | makeTopic(false);
           _configPayloadSize +=
               JSON_OBJECT_SIZE(_stateTopicNames.size()) +
               JSON_STRING_SIZE(stateTopic.size()) * _stateTopicNames.size();

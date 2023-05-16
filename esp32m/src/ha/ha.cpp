@@ -11,8 +11,10 @@ namespace esp32m {
       if (!unit) {
         if (sensor->is("temperature"))
           unit = "°C";
-        if (sensor->is("humidity"))
+        else if (sensor->is("humidity"))
           unit = "%";
+        else if (sensor->is("signal_strength"))
+          unit = "dBm";
       }
       auto group = sensor->group;
 

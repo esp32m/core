@@ -7,6 +7,7 @@
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
+#include "esp32m/ha/ha.hpp"
 
 // #include <dhcpserver/dhcpserver.h>
 // #include <dhcpserver/dhcpserver_options.h>
@@ -431,7 +432,7 @@ namespace esp32m {
       return result;
     }
 
-    Wifi::Wifi() {
+    Wifi::Wifi() : _rssi(this, "signal_strength", "rssi") {
       Device::init(Flags::HasSensors);
       _eventGroup = xEventGroupCreate();
     }
@@ -475,6 +476,10 @@ namespace esp32m {
         if (!error)
           config::Changed::publish(this);
         req.respond(error);
+        return true;
+      }
+      if (req.is(ha::DescribeRequest::Name)) {
+        ha::DescribeRequest::autoRespond(req, _rssi);
         return true;
       }
       return false;
@@ -1281,8 +1286,10 @@ namespace esp32m {
     bool Wifi::pollSensors() {
       if (isConnected()) {
         wifi_ap_record_t info;
-        if (!esp_wifi_sta_get_ap_info(&info))
+        if (!esp_wifi_sta_get_ap_info(&info)) {
           sensor("rssi", info.rssi);
+          _rssi.set(info.rssi);
+        }
       }
       return true;
     };

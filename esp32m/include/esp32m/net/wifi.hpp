@@ -72,7 +72,7 @@ namespace esp32m {
         ApStatus status() const {
           return _status;
         }
-        
+
         ApOptions &options() {
           return _options;
         }
@@ -220,8 +220,6 @@ namespace esp32m {
      private:
       std::unique_ptr<Ap> _ap;
       Sta _sta;
-      Wifi();
-
       bool _stopped = false;
       TaskHandle_t _task = nullptr;
       EventGroupHandle_t _eventGroup = nullptr;
@@ -243,6 +241,9 @@ namespace esp32m {
 
       Response *_pendingResponse = nullptr;
       std::unique_ptr<ApInfo> _connect;
+      Sensor _rssi;
+
+      Wifi();
       esp_err_t init();
       esp_err_t mode(wifi_mode_t prev, wifi_mode_t next);
       void checkScan();
