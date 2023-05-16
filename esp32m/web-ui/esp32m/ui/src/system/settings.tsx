@@ -28,11 +28,16 @@ const FreqField = ({ name }: { name: string }) => (
 );
 
 export const Settings = () => {
-  const [config] = useModuleConfig<ISystemConfig>(Name);
+  const [config, refresh] = useModuleConfig<ISystemConfig>(Name);
   if (!config || !config.pm) return null;
 
   return (
-    <ConfigBox name={Name} initial={config} title="System settings">
+    <ConfigBox
+      name={Name}
+      initial={config}
+      onChange={refresh}
+      title="System settings"
+    >
       <Expander title="Power management" defaultExpanded>
         <Grid item xs>
           <FieldSwitch

@@ -79,6 +79,7 @@ export const SettingsBox = () => {
     <ConfigBox
       name={Name}
       initial={config}
+      onChange={refreshConfig}
       title="WiFi settings"
       validationSchema={ValidationSchema}
     >

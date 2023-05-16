@@ -138,25 +138,32 @@ namespace esp32m {
     AppObject *object() const {
       return _object;
     }
-    const char *id() const {
-      return _id;
+    JsonVariantConst state() const {
+      return _state;
     }
-    static void publish(AppObject *object, const char *id = nullptr) {
-      EventStateChanged evt(object, id);
+    static void publish(AppObject *object) {
+      EventStateChanged evt(object, JsonVariantConst());
       evt.Event::publish();
     }
-    static bool is(Event &ev) {
-      return ev.is(Type);
+    static void publish(AppObject *object, JsonVariantConst state) {
+      EventStateChanged evt(object, state);
+      evt.Event::publish();
+    }
+    static bool is(Event &ev, EventStateChanged **evsc = nullptr) {
+      auto result = ev.is(Type);
+      if (result && evsc)
+        *evsc = (EventStateChanged *)&ev;
+      return result;
     }
     static bool is(Event &ev, AppObject *obj) {
       return ev.is(Type) && ((EventStateChanged &)ev).object() == obj;
     }
 
    private:
-    EventStateChanged(AppObject *object, const char *id)
-        : Event(Type), _object(object), _id(id) {}
+    EventStateChanged(AppObject *object, JsonVariantConst state)
+        : Event(Type), _object(object), _state(state) {}
     AppObject *_object;
-    const char *_id;
+    JsonVariantConst _state;
     constexpr static const char *Type = "state-changed";
   };
 

@@ -1,4 +1,4 @@
-import content from './Content';
+import { Content } from './Content';
 import { INettoolsPlugin, Nettools } from '..';
 import { ILocalState, StartAction, Name } from './types';
 import { AnyAction } from 'redux';
@@ -26,6 +26,6 @@ export const Ping: INettoolsPlugin & TReduxPlugin = {
   use: Nettools,
   redux: { reducer },
   nettools: {
-    content,
+    content: Content,
   },
 };

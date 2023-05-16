@@ -133,6 +133,7 @@ export const AppSettings = () => {
     <ConfigBox
       name={'app'}
       initial={config}
+      onChange={updateConfig}
       title="Application settings"
       validationSchema={ValidationSchema}
     >

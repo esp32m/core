@@ -1,25 +1,25 @@
-import * as Yup from "yup";
-import { Button, Grid, styled, TextField } from "@mui/material";
+import * as Yup from 'yup';
+import { Button, Grid, styled, TextField } from '@mui/material';
 
-import { Name, IConfig, StartAction, ILocalState } from "./types";
-import { useFormikContext } from "formik";
-import { useDispatch } from "react-redux";
-import { useSelector } from "react-redux";
-import { InterfacesSelect } from "../Nettools";
-import { useBackendApi, useModuleConfig } from "../../backend";
-import { ConfigBox } from "../../app";
-import { FieldText } from "@ts-libs/ui-forms";
+import { Name, IConfig, StartAction, ILocalState } from './types';
+import { useFormikContext } from 'formik';
+import { useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
+import { InterfacesSelect } from '../Nettools';
+import { useBackendApi, useModuleConfig } from '../../backend';
+import { ConfigBox } from '../../app';
+import { FieldText } from '@ts-libs/ui-forms';
 
 const StyledScanButton = styled(Button)({
   marginRight: 12,
   marginTop: 6,
   marginBottom: 6,
 });
-const ActionDiv = styled("div")({
-  display: "flex",
-  width: "100%",
+const ActionDiv = styled('div')({
+  display: 'flex',
+  width: '100%',
   marginTop: 24,
-  justifyContent: "flex-end",
+  justifyContent: 'flex-end',
 });
 
 const ActionButton = ({ action }: { action: string }) => {
@@ -44,12 +44,12 @@ const ActionButton = ({ action }: { action: string }) => {
 
 const ValidationSchema = Yup.object().shape({});
 
-export default () => {
+export const Content = () => {
   const ls = useSelector<any>((s) => s[Name]) as ILocalState;
-  const [config] = useModuleConfig<IConfig>(Name);
+  const [config, refresh] = useModuleConfig<IConfig>(Name);
   if (!config) return null;
   const lines = ls?.results?.map((r) => {
-    let s = "";
+    let s = '';
     switch (r.status) {
       case 0:
         s = `Reply from ${r.addr}: bytes=${r.bytes} time=${r.time}ms TTL=${r.ttl}`;
@@ -65,11 +65,12 @@ export default () => {
     }
     return s;
   });
-  const rtext = lines ? lines.join("\n") : " ";
+  const rtext = lines ? lines.join('\n') : ' ';
   return (
     <ConfigBox
       name={Name}
       initial={config}
+      onChange={refresh}
       title="Ping"
       validationSchema={ValidationSchema}
     >
@@ -107,12 +108,12 @@ export default () => {
         variant="outlined"
         label="Ping results"
         value={rtext}
-        style={{ marginTop: "8px" }}
+        style={{ marginTop: '8px' }}
         InputProps={{
           style: {
-            fontFamily: "monospace",
-            overflow: "auto",
-            whiteSpace: "nowrap",
+            fontFamily: 'monospace',
+            overflow: 'auto',
+            whiteSpace: 'nowrap',
           },
         }}
       ></TextField>

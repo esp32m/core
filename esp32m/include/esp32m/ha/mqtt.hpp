@@ -77,19 +77,17 @@ namespace esp32m {
 
      protected:
       void handleEvent(Event &ev) override {
+        //EventStateChanged *evch;
         if (EventInited::is(ev)) {
           xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/ha-mqtt",
                       4096, this, tskIDLE_PRIORITY, &_task);
-        } else if (EventStateChanged::is(ev)) {
-          auto &evch = (EventStateChanged &)ev;
-          auto name = evch.id();
-          if (!name)
-            name = evch.object()->name();
+        } /*else if (EventStateChanged::is(ev, &evch)) {
+          auto name = evch->object()->name();
           // logI("state changed %s", name);
           auto it = _devices.find(name);
           if (it != _devices.end())
             it->second->setStateChanged();
-        } 
+        }*/
       }
 
      private:

@@ -170,7 +170,7 @@ const Config = () => {
 
 const Settings = () => {
   const state = useModuleState<IState>(Name);
-  const [config] = useModuleConfig<IConfig>(Name);
+  const [config, refresh] = useModuleConfig<IConfig>(Name);
   const { elapsed } = useTimeTranslation();
   const { t } = useTranslation();
   if (!config || !state) return null;
@@ -185,6 +185,7 @@ const Settings = () => {
     <ConfigBox
       name={Name}
       initial={config}
+      onChange={refresh}
       title="SNTP Time Synchronization"
       validationSchema={ValidationSchema}
     >

@@ -119,6 +119,59 @@ namespace esp32m {
       }
     };
 
+    class DynamicObject {
+     public:
+      DynamicObject() {}
+      DynamicObject(const DynamicObject &) = delete;
+      void set(const char *key, JsonVariantConst item) {
+        if (!key)
+          return;
+        size_t capacity = JSON_OBJECT_SIZE(1) + item.memoryUsage();
+        if (_doc) {
+          capacity += _doc->memoryUsage();
+          auto root = _doc->as<JsonObjectConst>();
+          if (root.containsKey(key))
+            capacity -= JSON_OBJECT_SIZE(1) + root[key].memoryUsage();
+        }
+        ensureCapacity(capacity);
+        auto root = _doc->as<JsonObject>();
+        root[key] = item;
+      }
+      void remove(const char *key) {
+        if (_doc && key) {
+          auto root = _doc->as<JsonObject>();
+          root.remove(key);
+        }
+      }
+      JsonObjectConst root() const {
+        if (!_doc)
+          return JsonObjectConst();
+        return _doc->as<JsonObjectConst>();
+      }
+      void clear() {
+        _doc.reset();
+      }
+      void check(log::Loggable *loggable) {
+        if (_doc)
+          json::check(loggable, _doc.get(), "dynamic object");
+      }
+
+     private:
+      std::unique_ptr<DynamicJsonDocument> _doc;
+      void ensureCapacity(size_t capacity) {
+        if (_doc) {
+          if (_doc->capacity() >= capacity)
+            return;
+          capacity = std::max(_doc->capacity() * 2 / 3, capacity);
+        }
+        auto newDoc = new DynamicJsonDocument(capacity);
+        auto root = newDoc->to<JsonObject>();
+        if (_doc)
+          root.set(_doc->as<JsonObjectConst>());
+        _doc.reset(newDoc);
+      }
+    };
+
     class ConcatToArray {
      public:
       void add(DynamicJsonDocument *doc) {

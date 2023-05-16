@@ -1,25 +1,25 @@
-import * as Yup from "yup";
-import { Button, Grid, MenuItem, styled, TextField } from "@mui/material";
+import * as Yup from 'yup';
+import { Button, Grid, MenuItem, styled, TextField } from '@mui/material';
 
-import { Name, IConfig, StartAction, ILocalState, IResult } from "./types";
-import { useFormikContext } from "formik";
-import { useDispatch } from "react-redux";
-import { useSelector } from "react-redux";
-import { InterfacesSelect } from "../Nettools";
-import { useBackendApi, useModuleConfig } from "../../backend";
-import { ConfigBox } from "../../app";
-import { FieldSelect, FieldText } from "@ts-libs/ui-forms";
+import { Name, IConfig, StartAction, ILocalState, IResult } from './types';
+import { useFormikContext } from 'formik';
+import { useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
+import { InterfacesSelect } from '../Nettools';
+import { useBackendApi, useModuleConfig } from '../../backend';
+import { ConfigBox } from '../../app';
+import { FieldSelect, FieldText } from '@ts-libs/ui-forms';
 
 const StyledScanButton = styled(Button)({
   marginRight: 12,
   marginTop: 6,
   marginBottom: 6,
 });
-const ActionDiv = styled("div")({
-  display: "flex",
-  width: "100%",
+const ActionDiv = styled('div')({
+  display: 'flex',
+  width: '100%',
   marginTop: 24,
-  justifyContent: "flex-end",
+  justifyContent: 'flex-end',
 });
 
 const ActionButton = ({ action }: { action: string }) => {
@@ -44,9 +44,9 @@ const ActionButton = ({ action }: { action: string }) => {
 
 const ValidationSchema = Yup.object().shape({});
 
-export default () => {
+export const Content = () => {
   const ls = useSelector<any>((s) => s[Name]) as ILocalState;
-  const [config] = useModuleConfig<IConfig>(Name);
+  const [config, refresh] = useModuleConfig<IConfig>(Name);
   if (!config) return null;
   const rows = ls?.results?.reduce((p, c) => {
     const { row, ...rd } = c;
@@ -58,18 +58,19 @@ export default () => {
   }, [] as Array<Array<IResult>>);
   const lines = rows?.map((r) => {
     const f = r[0];
-    let s = `${f.ttls.toString().padStart(3, " ")}  ${f.ip?.padEnd(16, " ")}`;
+    let s = `${f.ttls.toString().padStart(3, ' ')}  ${f.ip?.padEnd(16, ' ')}`;
     r.forEach((i) => {
-      const item = i.tus ? `${Math.round(i.tus / 1000)}ms` : "*";
-      s += item.padStart(10, " ");
+      const item = i.tus ? `${Math.round(i.tus / 1000)}ms` : '*';
+      s += item.padStart(10, ' ');
     });
     return s;
   });
-  const rtext = lines ? lines.join("\n") : " ";
+  const rtext = lines ? lines.join('\n') : ' ';
   return (
     <ConfigBox
       name={Name}
       initial={config}
+      onChange={refresh}
       title="Traceroute"
       validationSchema={ValidationSchema}
     >
@@ -101,12 +102,12 @@ export default () => {
         variant="outlined"
         label="Traceroute results"
         value={rtext}
-        style={{ marginTop: "8px" }}
+        style={{ marginTop: '8px' }}
         InputProps={{
           style: {
-            fontFamily: "monospace",
-            overflow: "auto",
-            whiteSpace: "nowrap",
+            fontFamily: 'monospace',
+            overflow: 'auto',
+            whiteSpace: 'nowrap',
           },
         }}
       ></TextField>

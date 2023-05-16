@@ -57,7 +57,9 @@ namespace esp32m {
         return;
       logI("state changed: %s -> %s", toString(_state), toString(state));
       _state = state;
-      EventStateChanged::publish(this);
+      StaticJsonDocument<0> doc;
+      doc.set(serialized(toString(state)));
+      EventStateChanged::publish(this, doc);
       if (isPersistent())
         config::Changed::publish(this);
     }
@@ -185,17 +187,19 @@ namespace esp32m {
     bool Relay::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
-      static const char *names[] = {"?", "ON", "OFF"};
       if (req.is(ha::DescribeRequest::Name)) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(
-            JSON_OBJECT_SIZE(1 + 2));  // acceptsCommands, component, config
+        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         auto root = doc->to<JsonObject>();
         root["component"] = "switch";
-        root.createNestedObject("config");
+        auto config = root.createNestedObject("config");
+        config["payload_on"] = "on";
+        config["payload_off"] = "off";
+        config["state_on"] = "on";
+        config["state_off"] = "off";
         req.respond(name(), doc->as<JsonVariantConst>());
         delete doc;
         return true;
-      } else if (req.is(ha::StateRequest::Name)) {
+      } /*else if (req.is(ha::StateRequest::Name)) {
         int si = (int)refreshState();
         if (si < 0 || si > 2)
           si = 0;
@@ -205,15 +209,11 @@ namespace esp32m {
         req.respond(name(), doc->as<JsonVariantConst>());
         delete doc;
         return true;
-      } else if (req.is(ha::CommandRequest::Name)) {
+      } */
+      else if (req.is(ha::CommandRequest::Name)) {
         auto state = req.data().as<const char *>();
-        if (state) {
-          // logD("received MQTT command: %s", state);
-          if (!strcmp(state, names[(int)State::On]))
-            turn(true);
-          else if (!strcmp(state, names[(int)State::Off]))
-            turn(false);
-        }
+        if (state)
+          turn(state);
         req.respond();
         return true;
       }

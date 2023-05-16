@@ -125,6 +125,28 @@ namespace esp32m {
         }
         friend class net::Mqtt;
       };
+
+      class StatePublisher : public AppObject {
+       public:
+        StatePublisher(const StatePublisher &) = delete;
+        const char *name() const override {
+          return "mqtt-sp";
+        }
+
+        static StatePublisher &instance() {
+          static StatePublisher i;
+          return i;
+        }
+
+       protected:
+        void handleEvent(Event &ev) override;
+
+       private:
+        json::DynamicObject _buffer;
+        StatePublisher() {}
+        esp_err_t publish(const char *name, JsonVariantConst state,
+                          bool fromBuffer);
+      };
     }  // namespace mqtt
 
     using namespace mqtt;

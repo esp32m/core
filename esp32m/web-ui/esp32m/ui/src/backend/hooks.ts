@@ -146,18 +146,20 @@ export const useModuleState = <T>(
 };
 
 export function useModuleConfig<T = unknown>(
-  name: string
-): [T | undefined, () => void] {
-  const [gen, setGen] = useState(0);
+  target: string,
+  options?: TRequestOptions
+) {
+  return useRequest<T>(target, 'config-get', options);
+  /* const [gen, setGen] = useState(0);
   const [config, setConfig] = useState<T>();
   const api = useBackendApi();
   useEffect(() => {
-    api.getConfig(name).then(
+    api.getConfig(target).then(
       (response) => setConfig(response.data),
       (e) => console.error(e)
     );
-  }, [api, name, gen]);
-  return [config, () => setGen(gen + 1)];
+  }, [api, target, gen]);
+  return [config, () => setGen(gen + 1)];*/
 }
 
 export const moduleStateSelector =

@@ -18,11 +18,13 @@ interface TProps extends Partial<FormikConfig<any>> {
   name: string;
   title: string;
   initial: any;
+  onChange?: () => Promise<unknown>;
 }
 
 interface TFormProps extends Partial<FormikConfig<any>> {
   name: string;
   initial: any;
+  onChange?: () => Promise<unknown>;
 }
 
 export function ConfigForm(props: TFormProps) {
@@ -30,6 +32,7 @@ export function ConfigForm(props: TFormProps) {
   const handleSubmit = async (values: FormikValues) => {
     const v = diff(props.initial, values);
     await api.setConfig(name, v);
+    await props.onChange?.();
   };
   const { name, children, ...other } = props;
   const fp = {
@@ -54,7 +57,9 @@ const InnerBox = ({
           <Tooltip title={t('save changes')}>
             <StyledIconButton
               aria-label="save settings"
-              onClick={controller.submitForm}
+              onClick={() =>
+                controller.submitForm().then(() => controller.resetForm())
+              }
             >
               <Save />
             </StyledIconButton>

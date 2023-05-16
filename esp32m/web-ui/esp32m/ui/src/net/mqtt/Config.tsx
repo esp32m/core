@@ -18,7 +18,7 @@ const ValidationSchema = Yup.object().shape({
 const ButtonBar = styled(Grid)({ marginTop: 0 });
 
 export const Config = () => {
-  const [config] = useModuleConfig<TMqttConfig>(Name);
+  const [config, refresh] = useModuleConfig<TMqttConfig>(Name);
   const api = useBackendApi();
   const { t } = useTranslation();
   const [requestInProgress, setRequestInProgress] = useState(false);
@@ -43,6 +43,7 @@ export const Config = () => {
     <ConfigBox
       name={Name}
       initial={config}
+      onChange={refresh}
       title="MQTT client settings"
       validationSchema={ValidationSchema}
     >
