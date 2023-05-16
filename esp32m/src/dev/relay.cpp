@@ -8,7 +8,6 @@
 namespace esp32m {
   namespace dev {
     void Relay::init() {
-      Device::init(Flags::AcceptsCommands);
       ESP_ERROR_CHECK_WITHOUT_ABORT(_pinOn->setDirection(true, true));
       setOnLevel(Pin::On, true);
       if (_pinOff != _pinOn) {

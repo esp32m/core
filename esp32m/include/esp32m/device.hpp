@@ -7,9 +7,12 @@
 #include "esp32m/events.hpp"
 #include "esp32m/json.hpp"
 
+#include <type_traits>
+
 namespace esp32m {
 
   class Device;
+  class Sensor;
 
   class EventSensor : public Event, public json::PropsContainer {
    public:
@@ -54,7 +57,6 @@ namespace esp32m {
     enum Flags {
       None = 0,
       HasSensors = 1,
-      AcceptsCommands = 2,
     };
     Device(const Device &) = delete;
     void setReinitDelay(unsigned int delay) {
@@ -62,9 +64,6 @@ namespace esp32m {
     }
     bool hasSensors() const {
       return (_flags & Flags::HasSensors) != 0;
-    }
-    bool acceptsCommands() const {
-      return (_flags & Flags::AcceptsCommands) != 0;
     }
     /* these must be called only from within pollSensors() */
     void sensor(const char *sensor, const float value);
@@ -97,5 +96,165 @@ namespace esp32m {
   };
 
   ENUM_FLAG_OPERATORS(Device::Flags)
+
+  namespace sensor {
+
+    Sensor *find(std::string uid);
+    Sensor *find(Device *device, const char *id);
+    int nextGroup();
+
+    class Changed : public Event {
+     public:
+      Changed(const Changed &) = delete;
+      const Sensor *sensor() const {
+        return _sensor;
+      }
+      static void publish(const Sensor *sensor) {
+        Changed ev(sensor);
+        ev.Event::publish();
+      }
+      static bool is(Event &ev, Changed **changed) {
+        if (ev.is(Type)) {
+          if (changed)
+            *changed = (Changed *)&ev;
+          return true;
+        }
+        return false;
+      }
+
+     private:
+      Changed(const Sensor *sensor) : Event(Type), _sensor(sensor) {}
+      const Sensor *_sensor;
+      constexpr static const char *Type = "sensor-changed";
+    };
+
+    class Group {
+     public:
+      Group(int id) : _id(id) {}
+      struct Iterator {
+       public:
+        typedef std::map<std::string, Sensor *>::iterator Inner;
+        Iterator(int id);
+        bool operator==(const Iterator &other) const {
+          return _inner == other._inner;
+        }
+        bool operator!=(const Iterator &other) const {
+          return _inner != other._inner;
+        }
+        Sensor *operator*() const {
+          return _inner->second;
+        }
+        Iterator &operator++() {
+          next();
+          return *this;
+        }
+
+       private:
+        int _id;
+        Inner _inner;
+        void next();
+      };
+      Iterator begin() const {
+        return Iterator(_id);
+      }
+      Iterator end() const {
+        return Iterator(-1);
+      }
+
+     private:
+      int _id;
+    };
+
+    class GroupChanged : public Event {
+     public:
+      GroupChanged(const GroupChanged &) = delete;
+      const Group &group() const {
+        return _group;
+      }
+      static void publish(int group) {
+        GroupChanged ev(group);
+        ev.Event::publish();
+      }
+      static bool is(Event &ev, GroupChanged **changed) {
+        if (ev.is(Type)) {
+          if (changed)
+            *changed = (GroupChanged *)&ev;
+          return true;
+        }
+        return false;
+      }
+
+     private:
+      GroupChanged(int group) : Event(Type), _group(group) {}
+      Group _group;
+      constexpr static const char *Type = "sensor-group-changed";
+    };
+
+  }  // namespace sensor
+
+  class Sensor {
+   public:
+    int precision = -1;
+    int group = 0;
+    const char *unit = nullptr;
+    Sensor(Device *device, const char *type, const char *id = nullptr,
+           size_t size = 0);
+    Sensor(const Sensor &) = delete;
+    const char *type() const {
+      return _type;
+    }
+    /**
+     * @return sensor identifier that is unique in its device scope
+     */
+    const char *id() const {
+      if (!_id.empty())
+        return _id.c_str();
+      return _type;
+    }
+    /**
+     * @return sensor identifier that is unique in the project scope
+     */
+    std::string uid() const {
+      std::string uid(_device->name());
+      uid += "_";
+      uid += id();
+      return uid;
+    }
+    Device *device() const {
+      return _device;
+    }
+    bool is(const char *t) const {
+      return t && !strcmp(type(), t);
+    }
+    template <typename T>
+    void set(T value, bool *changed = nullptr) {
+      if constexpr (std::is_same_v<T, float>)
+        if (precision >= 0)
+          value = roundTo(value, precision);
+      auto c = _value != value;
+      _value.set(value);
+      if (c) {
+        if (changed)
+          *changed = true;
+        if (group <= 0)
+          sensor::Changed::publish(this);
+      }
+    }
+    void to(JsonObject target) const {
+      if (precision >= 0 && _value.is<float>())
+        target[id()] = serialized(roundToString(_value.as<float>(), precision));
+      else
+        target[id()] = _value;
+    }
+    JsonVariantConst get() const {
+      return _value;
+    }
+
+   private:
+    Device *_device;
+    const char *_type;
+    std::string _id;
+    DynamicJsonDocument _value;
+  };
 
 }  // namespace esp32m

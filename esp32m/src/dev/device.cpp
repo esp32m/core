@@ -18,7 +18,7 @@ namespace esp32m {
     }
 
    private:
-    constexpr static const char *Type="poll-sensors";
+    constexpr static const char *Type = "poll-sensors";
   };
 
   // const char *EventPollSensors::NAME = "poll-sensors";
@@ -85,6 +85,55 @@ namespace esp32m {
     if (_sensorsReady)
       logI("device initialized");
     return _sensorsReady;
+  }
+
+  namespace sensor {
+
+    std::mutex _sensorsMutex;
+    std::map<std::string, Sensor *> _sensors;
+    int _groupCounter = 0;
+
+    Sensor *find(std::string uid) {
+      std::lock_guard lock(_sensorsMutex);
+      auto it = _sensors.find(uid);
+      return it == _sensors.end() ? nullptr : it->second;
+    }
+
+    Sensor *find(Device *device, const char *id) {
+      auto uid = string_printf("%s_%s", device->name(), id);
+      return find(uid);
+    }
+
+    int nextGroup() {
+      std::lock_guard lock(_sensorsMutex);
+      return ++_groupCounter;
+    }
+
+    Group::Iterator::Iterator(int id) : _id(id) {
+      if (id < 0)
+        _inner = _sensors.end();
+      else {
+        _inner = _sensors.begin();
+        if (_inner->second->group != _id)
+          next();
+      }
+    }
+    void Group::Iterator::next() {
+      for (;;) {
+        _inner++;
+        if (_inner == _sensors.end() || _inner->second->group == _id)
+          break;
+      }
+    }
+
+  }  // namespace sensor
+
+  Sensor::Sensor(Device *device, const char *type, const char *id, size_t size)
+      : _device(device), _type(type), _value(size) {
+    std::lock_guard lock(sensor::_sensorsMutex);
+    if (id)
+      _id = id;
+    sensor::_sensors[uid()] = this;
   }
 
 }  // namespace esp32m

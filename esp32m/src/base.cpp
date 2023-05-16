@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <map>
+#include <math.h>
 
 #define NOP() asm volatile("nop")
 
@@ -76,6 +77,42 @@ namespace esp32m {
     std::string result = string_printf(format, args);
     va_end(args);
     return result;
+  }
+
+  float roundTo(float value, int precision) {
+    float f = 1;
+    switch (precision) {
+      case 0:
+        break;
+      case 1:
+        f = 10;
+        break;
+      case 2:
+        f = 100;
+        break;
+      case 3:
+        f = 1000;
+        break;
+      case 4:
+        f = 10000;
+        break;
+
+      default:
+        f = pow(10, precision);
+        break;
+    }
+    return (int)(value * f + 0.5) / f;
+  }
+
+  std::map<int, std::string> precisionFormats;
+  std::string roundToString(float value, int precision) {
+    auto it = precisionFormats.find(precision);
+    std::string fmt;
+    if (it == precisionFormats.end())
+      fmt = precisionFormats[precision] = string_printf("%%.%df", precision);
+    else
+      fmt = it->second;
+    return string_printf(fmt.c_str(), value);
   }
 
   namespace locks {

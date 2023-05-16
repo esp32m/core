@@ -115,6 +115,18 @@ namespace esp32m {
         inferDeviceProp(device, "hw_version");
         inferDeviceProp(device, "sw_version");
       }
+      std::string makeTopic(const char* suffix) {
+        auto deviceId = _descriptor["name"].as<const char*>();
+        auto componentId = _descriptor["componentId"].as<const char*>();
+        auto group = _descriptor["group"].as<int>();
+        auto host = App::instance().hostname();
+        if (deviceId && group > 0)
+          return string_printf("esp32m/%s/%s/%s", host, deviceId, suffix);
+        if (componentId && deviceId)
+          return string_printf("esp32m/%s/%s/%s/%s", host, deviceId,
+                               componentId, suffix);
+        return string_printf("esp32m/%s/%s/%s", host, _id, suffix);
+      }
       void inferCommandTopic() {
         JsonArrayConst commandTopicNames = _descriptor["commandTopicNames"];
         if (commandTopicNames.size())
@@ -125,8 +137,7 @@ namespace esp32m {
             _commandTopicNames.push_back("command_topic");
 
         if (_commandTopicNames.size()) {
-          commandTopic = _descriptor["commandTopic"] |
-                         string_printf("esp32m/%s/command", _uniqueId.c_str());
+          commandTopic = _descriptor["commandTopic"] | makeTopic("command");
           _configPayloadSize +=
               JSON_OBJECT_SIZE(_commandTopicNames.size()) +
               JSON_STRING_SIZE(commandTopic.size()) * _commandTopicNames.size();
@@ -141,8 +152,7 @@ namespace esp32m {
           if (_component == "sensor" || _component == "switch")
             _stateTopicNames.push_back("state_topic");
         if (_stateTopicNames.size()) {
-          stateTopic = _descriptor["stateTopic"] |
-                       string_printf("esp32m/%s/state", _uniqueId.c_str());
+          stateTopic = _descriptor["stateTopic"] | makeTopic("state");
           _configPayloadSize +=
               JSON_OBJECT_SIZE(_stateTopicNames.size()) +
               JSON_STRING_SIZE(stateTopic.size()) * _stateTopicNames.size();
@@ -198,7 +208,8 @@ namespace esp32m {
         mc.add(App::instance().hostname());
 
         if (_deviceProps.size())
-          for (auto const& [key, value] : _deviceProps) device[key.c_str()] = value;
+          for (auto const& [key, value] : _deviceProps)
+            device[key.c_str()] = value;
 
         if (_stateTopicNames.size())
           for (const char* name : _stateTopicNames) root[name] = stateTopic;

@@ -25,6 +25,9 @@ namespace esp32m {
   std::string string_printf(const char *format, va_list args);
   std::string string_printf(const char *format, ...);
 
+  float roundTo(float value, int precision);
+  std::string roundToString(float value, int precision);
+
   class INamed {
    public:
     virtual const char *name() const = 0;
@@ -120,8 +123,7 @@ namespace esp32m {
     struct swap_bytes<double, 8> {
       inline double operator()(double val) {
         uint64_t *p64 = (uint64_t *)&val;
-        uint64_t mem =
-            swap_bytes<uint64_t, sizeof(uint64_t)>()(*p64);
+        uint64_t mem = swap_bytes<uint64_t, sizeof(uint64_t)>()(*p64);
         double *pd = (double *)&mem;
         return *pd;
       }

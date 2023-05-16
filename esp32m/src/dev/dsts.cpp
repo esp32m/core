@@ -298,18 +298,34 @@ namespace esp32m {
         sync();
       return _probes;
     }
+
   }  // namespace dsts
 
   namespace dev {
-    Dsts::Dsts(gpio_num_t pin) : dsts::Core(new Owb(pin)) {
-      Device::init(Flags::HasSensors);
-    };
+
     Dsts::Dsts(Owb *owb) : dsts::Core(owb) {
       Device::init(Flags::HasSensors);
+      _sensorGroup = sensor::nextGroup();
     };
+
+    Sensor &Dsts::getSensor(const dsts::Probe &probe) {
+      std::string id("_");
+      id += probe.codestr();
+      auto sensor = sensor::find(this, id.c_str());
+      if (!sensor) {
+        std::string id(
+            "_");  // prefix because HA doesn't like ids starting with numbers
+        id += probe.codestr();
+        sensor = new Sensor(this, "temperature", id.c_str());
+        sensor->precision = 2;
+        sensor->group = _sensorGroup;
+      }
+      return *sensor;
+    }
 
     bool Dsts::pollSensors() {
       StaticJsonDocument<JSON_OBJECT_SIZE(1)> props;
+      bool changed = false;
       for (dsts::Probe &p : probes())
         if (!p.disabled()) {
           props["code"] = p.codestr();
@@ -317,15 +333,18 @@ namespace esp32m {
           if (fc)
             sensor("failures", fc, props.as<JsonObjectConst>());
           sensor("success-rate", p.successRate(), props.as<JsonObjectConst>());
-          float tprev = p.temperature();
           if (getTemperature(p)) {
             float t = p.temperature();
-            if (!isnan(t))
+            if (!isnan(t)) {
               sensor("temperature", t, props.as<JsonObjectConst>());
-            if (tprev != t)
-              EventStateChanged::publish(this, p.codestr());
+
+              auto &s = getSensor(p);
+              s.set(t, &changed);
+            }
           }
         }
+      if (changed)
+        sensor::GroupChanged::publish(_sensorGroup);
       return true;
     }
 
@@ -351,36 +370,10 @@ namespace esp32m {
       if (req.is(ha::DescribeRequest::Name)) {
         auto &pv = probes();
         for (auto &p : pv) {
-          DynamicJsonDocument *doc = new DynamicJsonDocument(
-              JSON_OBJECT_SIZE(1 + 6) + JSON_STRING_SIZE(strlen(p.codestr())));
-          auto root = doc->to<JsonObject>();
-          root["id"] =
-              (char *)p.codestr();  // make copy in case this probe gets removed
-          root["component"] = "sensor";
-          root["state_class"] = "measurement";
-          auto config = root.createNestedObject("config");
-          config["device_class"] = "temperature";
-          config["unit_of_measurement"] = "°C";
-          req.respond(name(), doc->as<JsonVariantConst>());
-          delete doc;
+          auto &s = getSensor(p);
+          ha::DescribeRequest::autoRespond(req, s);
         }
         return true;
-      } else if (req.is(ha::StateRequest::Name)) {
-        auto id = req.data()["id"].as<const char *>();
-        // logI("state request %s", id);
-        if (id) {
-          auto &pv = probes();
-          for (auto &p : pv)
-            if (!strcmp(p.codestr(), id)) {
-              DynamicJsonDocument *doc =
-                  new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
-              auto root = doc->to<JsonObject>();
-              root["state"] = p.temperature();
-              req.respond(name(), doc->as<JsonVariantConst>());
-              delete doc;
-              return true;
-            }
-        }
       }
       return false;
     }
@@ -390,7 +383,7 @@ namespace esp32m {
     }
 
     void useDsts(gpio_num_t pin) {
-      new Dsts(pin);
+      new Dsts(new Owb(pin));
     }
   }  // namespace dev
 }  // namespace esp32m

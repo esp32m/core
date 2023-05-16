@@ -1,6 +1,7 @@
 #include "esp32m/defs.hpp"
 
 #include "esp32m/dev/bme280.hpp"
+#include "esp32m/ha/ha.hpp"
 
 namespace esp32m {
 
@@ -51,9 +52,25 @@ namespace esp32m {
       _ovsHumidity = humidity;
     }
 
-    Core::Core(I2C *i2c) : _i2c(i2c) {
+    Core::Core(I2C *i2c, const char *name) : _i2c(i2c) {
+      _name = name;
       _i2c->setEndianness(Endian::Little);
       _i2c->setErrSnooze(30000);
+      uint8_t id = 0;
+      if (_i2c->readSafe(Register::Id, id) == ESP_OK)
+        _id = (ChipId)id;
+      if (!_name)
+        switch (_id) {
+          case ChipId::Bmp280:
+            _name = "BMP280";
+            break;
+          case ChipId::Bme280:
+            _name = "BME280";
+            break;
+          default:
+            _name = "BMx280";
+            break;
+        }
     }
 
     esp_err_t Core::readCalibration() {
@@ -119,7 +136,9 @@ namespace esp32m {
           logW("chip id 0x%02x is not supported by the BMx280 driver", id);
         return ESP_ERR_NOT_SUPPORTED;
       }
-      if (idChanged) {
+      if (idChanged)
+        _inited = false;
+      if (!_inited) {
         ESP_CHECK_LOGW_RETURN(_i2c->write(Register::Reset, ResetValue),
                               "failed to reset");
         auto t = micros();
@@ -134,6 +153,7 @@ namespace esp32m {
         }
         ESP_CHECK_LOGW_RETURN(readCalibration(),
                               "failed to read calabration data");
+        _inited = true;
       }
       ESP_CHECK_RETURN(writeConfig());
       _settings._modified = false;
@@ -271,11 +291,20 @@ namespace esp32m {
   }  // namespace bme280
 
   namespace dev {
-    Bme280::Bme280(uint8_t address) : bme280::Core(new I2C(address)) {
-      Device::init(Flags::HasSensors);
-    }
 
-    Bme280::Bme280(I2C *i2c) : bme280::Core(i2c) {
+    Bme280::Bme280(I2C *i2c, const char *name)
+        : bme280::Core(i2c, name),
+          _temperature(this, "temperature"),
+          _pressure(this, "pressure"),
+          _humidity(this, "humidity") {
+      auto group = sensor::nextGroup();
+      _temperature.group = group;
+      _temperature.precision = 2;
+      _pressure.group = group;
+      _pressure.precision = 0;
+      _pressure.unit = "mmHg";
+      _humidity.group = group;
+      _humidity.precision = 0;
       Device::init(Flags::HasSensors);
     }
 
@@ -290,6 +319,14 @@ namespace esp32m {
       sensor("pressure", p / 133.322F);
       if (chipId() == bme280::ChipId::Bme280)
         sensor("humidity", h);
+
+      bool changed = false;
+      _temperature.set(t, &changed);
+      _pressure.set(p / 133.322F, &changed);
+      if (chipId() == bme280::ChipId::Bme280)
+        _humidity.set(h, &changed);
+      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);
       return true;
     }
 
@@ -310,33 +347,18 @@ namespace esp32m {
     bool Bme280::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
-      /*if (req.is(ha::DescribeRequest::Name)) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(
-            JSON_OBJECT_SIZE(1 + 6) + JSON_STRING_SIZE(strlen(p.codestr())));
-        auto root = doc->to<JsonObject>();
-        root["id"] =
-            (char *)p.codestr();  // make copy in case this probe gets removed
-        root["component"] = "sensor";
-        root["state_class"] = "measurement";
-        auto config = root.createNestedObject("config");
-        config["device_class"] = "temperature";
-        config["unit_of_measurement"] = "°C";
-        req.respond(name(), doc->as<JsonVariantConst>());
-        delete doc;
+      if (req.is(ha::DescribeRequest::Name)) {
+        ha::DescribeRequest::autoRespond(req, _temperature);
+        ha::DescribeRequest::autoRespond(req, _pressure);
+        if (chipId() == bme280::ChipId::Bme280)
+          ha::DescribeRequest::autoRespond(req, _humidity);
         return true;
-      } else if (req.is(ha::StateRequest::Name)) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
-        auto root = doc->to<JsonObject>();
-        root["state"] = p.temperature();
-        req.respond(name(), doc->as<JsonVariantConst>());
-        delete doc;
-        return true;
-      }*/
+      }
       return false;
     }
 
-    void useBme280(uint8_t addr) {
-      new Bme280(addr);
+    void useBme280(const char *name, uint8_t addr) {
+      new Bme280(new I2C(addr), name);
     }
 
   }  // namespace dev

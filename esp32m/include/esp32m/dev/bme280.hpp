@@ -107,17 +107,10 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C *i2c);
+      Core(I2C *i2c, const char *name);
       Core(const Core &) = delete;
       const char *name() const override {
-        switch (_id) {
-          case ChipId::Bmp280:
-            return "BMP280";
-          case ChipId::Bme280:
-            return "BME280";
-          default:
-            return "BMx280";
-        }
+        return _name;
       }
       ChipId chipId() const {
         return _id;
@@ -136,8 +129,10 @@ namespace esp32m {
       std::unique_ptr<I2C> _i2c;
 
      private:
+      const char *_name;
       Calibration _cal = {};
       ChipId _id = ChipId::Unknown;
+      bool _inited = false;
       Settings _settings;
       esp_err_t syncUnsafe(bool force = false);
       esp_err_t readCalibration();
@@ -152,8 +147,7 @@ namespace esp32m {
   namespace dev {
     class Bme280 : public virtual Device, public virtual bme280::Core {
      public:
-      Bme280(uint8_t addr = bme280::DefaultAddress);
-      Bme280(I2C *i2c);
+      Bme280(I2C *i2c, const char *name);
       Bme280(const Bme280 &) = delete;
 
      protected:
@@ -161,8 +155,12 @@ namespace esp32m {
       bool handleRequest(Request &req) override;
       bool initSensors() override;
       bool pollSensors() override;
+
+     private:
+      Sensor _temperature, _pressure, _humidity;
     };
 
-    void useBme280(uint8_t addr = bme280::DefaultAddress);
+    void useBme280(const char *name = nullptr,
+                   uint8_t addr = bme280::DefaultAddress);
   }  // namespace dev
 }  // namespace esp32m

@@ -48,7 +48,8 @@ namespace esp32m {
 
     class Core;
 
-    struct Probe {
+    class Probe {
+     public:
       Probe(const owb::ROMCode code, bool persist) {
         memcpy(_code.bytes, code.bytes, sizeof(owb::ROMCode));
         owb::toString(_code, _codestr, sizeof(_codestr));
@@ -57,7 +58,7 @@ namespace esp32m {
       owb::ROMCode code() {
         return _code;
       }
-      const char *codestr() {
+      const char *codestr() const {
         return _codestr;
       }
       Model model() const;
@@ -142,17 +143,18 @@ namespace esp32m {
   namespace dev {
     class Dsts : public virtual Device, public virtual dsts::Core {
      public:
-      Dsts(gpio_num_t pin);
       Dsts(Owb *owb);
       Dsts(const Dsts &) = delete;
 
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool handleRequest(Request &req) override;
-
-     protected:
       bool pollSensors() override;
       bool initSensors() override;
+
+     private:
+      int _sensorGroup;
+      Sensor &getSensor(const dsts::Probe &probe);
     };
 
     void useDsts(gpio_num_t pin);

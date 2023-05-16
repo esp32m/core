@@ -101,7 +101,11 @@ namespace esp32m {
       JsonObject cr;
       JsonObjectConst ca;
       DoneReason reason;
-      sleep::Event *slev;
+      union {
+        sleep::Event *slev;
+        sensor::GroupChanged *gc;
+        sensor::Changed *sc;
+      };
       if (EventInit::is(ev, 0)) {
         xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
@@ -132,10 +136,53 @@ namespace esp32m {
       else if (sleep::Event::is(ev, &slev)) {
         if (_status != Status::Ready)
           slev->block();
+      } else if (sensor::GroupChanged::is(ev, &gc)) {
+        size_t docsize = 0;
+        Device *d = nullptr;
+        bool multipleGroupsPerDevice = false;
+        for (auto sensor : gc->group()) {
+          docsize += JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
+          if (sensor->precision >= 0)
+            docsize += JSON_STRING_SIZE(16);
+          auto device = sensor->device();
+          if (!d)
+            d = device;
+          else if (d != device)
+            multipleGroupsPerDevice = true;
+        }
+        if (d && !multipleGroupsPerDevice) {
+          auto doc = new DynamicJsonDocument(docsize);
+          auto root = doc->to<JsonObject>();
+          for (auto sensor : gc->group()) sensor->to(root);
+          json::check(this, doc, "sensor group state");
+          auto payload = json::serialize(root);
+          delete doc;
+          auto topic = string_printf("esp32m/%s/%s/state",
+                                     App::instance().hostname(), d->name());
+
+          publish(topic.c_str(), payload.c_str());
+        }
+      } else if (sensor::Changed::is(ev, &sc)) {
+        auto sensor = sc->sensor();
+        size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
+        if (sensor->precision >= 0)
+          docsize += JSON_STRING_SIZE(16);
+        auto doc = new DynamicJsonDocument(docsize);
+        auto root = doc->to<JsonObject>();
+        sensor->to(root);
+        json::check(this, doc, "sensor state");
+        auto payload = json::serialize(root);
+        delete doc;
+        auto topic =
+            string_printf("esp32m/%s/%s/state", App::instance().hostname(),
+                          sensor->device()->name());
+
+        publish(topic.c_str(), payload.c_str());
+
       } else if (isConnected()) {
         Broadcast *b = nullptr;
         if (EventSensor::is(ev)) {
-          auto e = ((EventSensor &)ev);
+          auto &e = ((EventSensor &)ev);
           char *devProps, *props;
           auto unitName = App::instance().hostname();
           auto devName = e.device().name();

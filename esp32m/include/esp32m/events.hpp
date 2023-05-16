@@ -13,6 +13,7 @@ namespace esp32m {
    */
   class Event {
    public:
+    Event(const Event &) = delete;
     /**
      * @brief Constructs new event with the given type
      */

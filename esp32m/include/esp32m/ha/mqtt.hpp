@@ -89,7 +89,7 @@ namespace esp32m {
           auto it = _devices.find(name);
           if (it != _devices.end())
             it->second->setStateChanged();
-        }
+        } 
       }
 
      private:
@@ -111,8 +111,8 @@ namespace esp32m {
           if (_describeRequested == 0 ||
               (curtime - _describeRequested > 24 * 60 * 60 * 1000))
             describe();
-          if (_stateRequested == 0 || (curtime - _stateRequested > 60 * 1000))
-            requestState(false);
+          /*if (_stateRequested == 0 || (curtime - _stateRequested > 60 * 1000))
+            requestState(false);*/
         }
       }
       void describe() {

@@ -1,7 +1,10 @@
 #include "esp32m/events/request.hpp"
+#include "esp32m/device.hpp"
 
 namespace esp32m {
   namespace ha {
+
+    DynamicJsonDocument *describeSensor(Sensor *sensor);
 
     class DescribeRequest : public Request {
      public:
@@ -18,6 +21,12 @@ namespace esp32m {
         doc->set(data);
         doc->as<JsonObject>()["name"] = source;
         responses[id] = std::unique_ptr<DynamicJsonDocument>(doc);
+      }
+
+      static void autoRespond(Request &req, Sensor &sensor) {
+        auto doc = ha::describeSensor(&sensor);
+        req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
+        delete doc;
       }
 
       constexpr static const char *Name = "ha-describe";
@@ -38,7 +47,19 @@ namespace esp32m {
         doc->set(data);
         response = std::unique_ptr<DynamicJsonDocument>(doc);
       }
-
+      static void autoRespond(Request &req, Sensor &sensor) {
+        auto id = req.data()["id"].as<const char *>();
+        if (!id || sensor.uid() != id)
+          return;
+        auto value = sensor.get();
+        DynamicJsonDocument *doc =
+            new DynamicJsonDocument(JSON_OBJECT_SIZE(2) + value.memoryUsage());
+        auto root = doc->to<JsonObject>();
+        auto state = root.createNestedObject("state");
+        state[sensor.id()] = value;
+        req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
+        delete doc;
+      }
       constexpr static const char *Name = "ha-state";
 
       std::unique_ptr<DynamicJsonDocument> response;
@@ -50,8 +71,7 @@ namespace esp32m {
           : Request(Name, 0, target, data, nullptr) {}
 
       void respondImpl(const char *source, const JsonVariantConst data,
-                       bool isError) override {
-      }
+                       bool isError) override {}
 
       constexpr static const char *Name = "ha-command";
     };
