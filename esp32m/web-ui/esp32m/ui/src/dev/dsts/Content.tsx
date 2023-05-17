@@ -24,7 +24,7 @@ export default ({ probes, title }: IProps) => {
     else t = '?';
     const f = Math.round((entry[4] as number) * 100);
     if (f < 100) t += `(${100 - f}% failures)`;
-    list.push([label || entry[0], t]);
+    list.push([label || entry[5] || entry[0], t]);
   }
   if (!list.length) return null;
 

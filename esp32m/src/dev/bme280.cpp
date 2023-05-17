@@ -305,6 +305,7 @@ namespace esp32m {
       _pressure.unit = "mmHg";
       _humidity.group = group;
       _humidity.precision = 0;
+      _humidity.disabled = chipId() != bme280::ChipId::Bme280;
       Device::init(Flags::HasSensors);
     }
 
@@ -342,19 +343,6 @@ namespace esp32m {
       if (chipId() == bme280::ChipId::Bme280)
         root["humidity"] = h;
       return doc;
-    }
-
-    bool Bme280::handleRequest(Request &req) {
-      if (AppObject::handleRequest(req))
-        return true;
-      if (req.is(ha::DescribeRequest::Name)) {
-        ha::DescribeRequest::autoRespond(req, _temperature);
-        ha::DescribeRequest::autoRespond(req, _pressure);
-        if (chipId() == bme280::ChipId::Bme280)
-          ha::DescribeRequest::autoRespond(req, _humidity);
-        return true;
-      }
-      return false;
     }
 
     void useBme280(const char *name, uint8_t addr) {

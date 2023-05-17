@@ -5,8 +5,36 @@
 
 namespace esp32m {
   namespace dev {
-    Dds238::Dds238(uint8_t addr): _addr(addr) {
-      Device::init(Flags::HasSensors); 
+    Dds238::Dds238(uint8_t addr)
+        : _addr(addr),
+          _energyImp(this, "energy", "energy_imp"),
+          _energyExp(this, "energy", "energy_exp"),
+          _voltage(this, "voltage"),
+          _current(this, "current"),
+          _powerApparent(this, "apparent_power"),
+          _powerReactive(this, "reactive_power"),
+          _powerFactor(this, "power_factor"),
+          _frequency(this, "frequency") {
+      Device::init(Flags::HasSensors);
+      auto group = sensor::nextGroup();
+      _energyImp.group = group;
+      _energyImp.precision = 2;
+      _energyImp.name = "consumed energy";
+      _energyExp.group = group;
+      _energyExp.precision = 2;
+      _energyExp.name = "supplied energy";
+      _voltage.group = group;
+      _voltage.precision = 2;
+      _current.group = group;
+      _current.precision = 2;
+      _powerApparent.group = group;
+      _powerApparent.precision = 2;
+      _powerReactive.group = group;
+      _powerReactive.precision = 2;
+      _powerFactor.group = group;
+      _powerFactor.precision = 2;
+      _frequency.group = group;
+      _frequency.precision = 2;
     }
 
     float readFloat(uint16_t *ptr) {
@@ -62,8 +90,22 @@ namespace esp32m {
       sensor("power-active", _ap);
       sensor("power-reactive", _rap);
       _stamp = millis();
+
+      bool changed = false;
+      _energyExp.set(_ee, &changed);
+      _energyImp.set(_ie, &changed);
+      _voltage.set(_v, &changed);
+      _current.set(_i, &changed);
+      _powerApparent.set(_ap, &changed);
+      _powerReactive.set(_rap, &changed);
+      _powerFactor.set(_pf, &changed);
+      _frequency.set(_f, &changed);
+      if (changed)
+        sensor::GroupChanged::publish(_energyExp.group);
+
       return true;
     }
+
 
     void useDds238(uint8_t addr) {
       new Dds238(addr);

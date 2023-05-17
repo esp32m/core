@@ -69,7 +69,17 @@ namespace esp32m {
     Core::Core(Owb *owb) : _owb(owb) {}
 
     Probe &Core::add(const owb::ROMCode &addr, bool persistent) {
+      auto probe = find(addr);
+      if (probe)
+        return *probe;
       return _probes.emplace_back(addr, persistent);
+    }
+
+    Probe *Core::add(const char *addr, bool persistent) {
+      owb::ROMCode code;
+      if (!owb::fromString(addr, code))
+        return nullptr;
+      return &add(code, persistent);
     }
 
     Probe *Core::find(const owb::ROMCode &addr) {
@@ -319,6 +329,8 @@ namespace esp32m {
         sensor = new Sensor(this, "temperature", id.c_str());
         sensor->precision = 2;
         sensor->group = _sensorGroup;
+        if (probe.name)
+          sensor->name = probe.name;
       }
       return *sensor;
     }
@@ -351,7 +363,7 @@ namespace esp32m {
     DynamicJsonDocument *Dsts::getState(const JsonVariantConst args) {
       auto &pv = probes();
       DynamicJsonDocument *doc = new DynamicJsonDocument(
-          JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(5) * pv.size());
+          JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(6) * pv.size());
       JsonArray root = doc->to<JsonArray>();
       for (auto &p : pv) {
         auto entry = root.createNestedArray();
@@ -360,30 +372,18 @@ namespace esp32m {
         entry.add(p.disabled());
         entry.add(p.temperature());
         entry.add(p.successRate());
+        if (p.name)
+          entry.add(p.name);
       }
       return doc;
-    }
-
-    bool Dsts::handleRequest(Request &req) {
-      if (AppObject::handleRequest(req))
-        return true;
-      if (req.is(ha::DescribeRequest::Name)) {
-        auto &pv = probes();
-        for (auto &p : pv) {
-          auto &s = getSensor(p);
-          ha::DescribeRequest::autoRespond(req, s);
-        }
-        return true;
-      }
-      return false;
     }
 
     bool Dsts::initSensors() {
       return sync() == ESP_OK;
     }
 
-    void useDsts(gpio_num_t pin) {
-      new Dsts(new Owb(pin));
+    Dsts *useDsts(gpio_num_t pin) {
+      return new Dsts(new Owb(pin));
     }
   }  // namespace dev
 }  // namespace esp32m

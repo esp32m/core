@@ -40,16 +40,17 @@ namespace esp32m {
           size_t docsize = 0;
           Device *d = nullptr;
           bool multipleGroupsPerDevice = false;
-          for (auto sensor : gc->group()) {
-            docsize += JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
-            if (sensor->precision >= 0)
-              docsize += JSON_STRING_SIZE(16);
-            auto device = sensor->device();
-            if (!d)
-              d = device;
-            else if (d != device)
-              multipleGroupsPerDevice = true;
-          }
+          for (auto sensor : gc->group())
+            if (!sensor->disabled) {
+              docsize += JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
+              if (sensor->precision >= 0)
+                docsize += JSON_STRING_SIZE(16);
+              auto device = sensor->device();
+              if (!d)
+                d = device;
+              else if (d != device)
+                multipleGroupsPerDevice = true;
+            }
           if (d && !multipleGroupsPerDevice) {
             auto doc = new DynamicJsonDocument(docsize);
             auto root = doc->to<JsonObject>();
@@ -60,16 +61,18 @@ namespace esp32m {
           }
         } else if (sensor::Changed::is(ev, &sc)) {
           auto sensor = sc->sensor();
-          size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
-          if (sensor->precision >= 0)
-            docsize += JSON_STRING_SIZE(16);
-          auto doc = new DynamicJsonDocument(docsize);
-          auto root = doc->to<JsonObject>();
-          sensor->to(root);
-          json::check(this, doc, "sensor state");
-          auto payload = json::serialize(root);
-          publish(sensor->device()->name(), root, false);
-          delete doc;
+          if (!sensor->disabled) {
+            size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
+            if (sensor->precision >= 0)
+              docsize += JSON_STRING_SIZE(16);
+            auto doc = new DynamicJsonDocument(docsize);
+            auto root = doc->to<JsonObject>();
+            sensor->to(root);
+            json::check(this, doc, "sensor state");
+            auto payload = json::serialize(root);
+            publish(sensor->device()->name(), root, false);
+            delete doc;
+          }
         } else if (EventStateChanged::is(ev, &stc)) {
           auto state = stc->state();
           auto obj = stc->object();

@@ -50,6 +50,7 @@ namespace esp32m {
 
     class Probe {
      public:
+      const char *name = nullptr;
       Probe(const owb::ROMCode code, bool persist) {
         memcpy(_code.bytes, code.bytes, sizeof(owb::ROMCode));
         owb::toString(_code, _codestr, sizeof(_codestr));
@@ -113,6 +114,13 @@ namespace esp32m {
       }
       esp_err_t sync();
       Probe &add(const owb::ROMCode &addr, bool persistent = true);
+      Probe *add(const char *addr, bool persistent = true);
+      Probe *setName(const char *addr, const char *name) {
+        auto probe = add(addr);
+        if (probe)
+          probe->name = name;
+        return probe;
+      }
       Probe *find(const owb::ROMCode &addr);
       std::vector<Probe> &probes();
       bool getTemperature(Probe &probe);
@@ -148,7 +156,6 @@ namespace esp32m {
 
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool handleRequest(Request &req) override;
       bool pollSensors() override;
       bool initSensors() override;
 
@@ -157,6 +164,6 @@ namespace esp32m {
       Sensor &getSensor(const dsts::Probe &probe);
     };
 
-    void useDsts(gpio_num_t pin);
+    Dsts *useDsts(gpio_num_t pin);
   }  // namespace dev
 }  // namespace esp32m

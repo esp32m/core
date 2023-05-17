@@ -1,6 +1,7 @@
 #include "esp32m/bus/owb.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/logging.hpp"
 
 #include <string.h>
 #include <map>
@@ -42,7 +43,7 @@ namespace esp32m {
       return c;
     }
 
-    std::map<gpio_num_t, IDriver*> _drivers;
+    std::map<gpio_num_t, IDriver *> _drivers;
     std::mutex _driversMutex;
 
     typedef IDriver *(*rmtDriverCreator)(gpio_num_t pin);
@@ -103,6 +104,15 @@ namespace esp32m {
         len -= 2;
       }
       return buffer;
+    }
+    bool fromString(const char *str, ROMCode &rom_code) {
+      if (!str || strlen(str) != 2 * 8)
+        return false;
+      auto target = rom_code.bytes;
+      auto n = sscanf(str, "%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
+                      &target[0], &target[1], &target[2], &target[3],
+                      &target[4], &target[5], &target[6], &target[7]);
+      return n == 8;
     }
 
     Search::Search(Owb *owb) : _owb(owb) {}

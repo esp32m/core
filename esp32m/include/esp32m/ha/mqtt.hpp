@@ -77,17 +77,11 @@ namespace esp32m {
 
      protected:
       void handleEvent(Event &ev) override {
-        //EventStateChanged *evch;
+        // EventStateChanged *evch;
         if (EventInited::is(ev)) {
           xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/ha-mqtt",
                       4096, this, tskIDLE_PRIORITY, &_task);
-        } /*else if (EventStateChanged::is(ev, &evch)) {
-          auto name = evch->object()->name();
-          // logI("state changed %s", name);
-          auto it = _devices.find(name);
-          if (it != _devices.end())
-            it->second->setStateChanged();
-        }*/
+        }
       }
 
      private:
@@ -117,25 +111,42 @@ namespace esp32m {
         _describeRequested = millis();
         DescribeRequest req(nullptr);
         req.publish();
-        auto &mqtt = net::Mqtt::instance();
         for (auto const &[key, doc] : req.responses) {
           auto data = doc->as<JsonVariantConst>();
           const char *id = data["id"] | key.c_str();
-          ConfigBuilder builder(id, data);
-          if (builder.build()) {
-            /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
-                 configTopic.c_str(), configPayload, acceptsCommands);*/
-            mqtt.publish(builder.configTopic.c_str(),
-                         builder.configPayload.c_str());
-
-            auto it = _devices.find(id);
-            if (it == _devices.end()) {
-              _devices[id] = std::unique_ptr<mqtt::Dev>(new mqtt::Dev(
-                  data["name"], builder.stateTopic, builder.commandTopic));
+          publishConfig(id, data);
+        }
+        sensor::All sensors;
+        for (auto sensor : sensors)
+          if (!sensor->disabled) {
+            auto id = sensor->uid();
+            auto it = req.responses.find(id);
+            if (it == req.responses.end()) {
+              auto doc = describeSensor(sensor);
+              auto data = doc->as<JsonVariantConst>();
+              publishConfig(id.c_str(), data);
+              delete doc;
             }
+          }
+      }
+
+      void publishConfig(const char *id, JsonVariantConst data) {
+        ConfigBuilder builder(id, data);
+        if (builder.build()) {
+          auto &mqtt = net::Mqtt::instance();
+          /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
+               configTopic.c_str(), configPayload, acceptsCommands);*/
+          mqtt.publish(builder.configTopic.c_str(),
+                       builder.configPayload.c_str());
+
+          auto it = _devices.find(id);
+          if (it == _devices.end()) {
+            _devices[id] = std::unique_ptr<mqtt::Dev>(new mqtt::Dev(
+                data["name"], builder.stateTopic, builder.commandTopic));
           }
         }
       }
+
       void requestState(bool changedOnly) {
         const size_t MaxStaticIdLength = 32;
         _stateRequested = millis();

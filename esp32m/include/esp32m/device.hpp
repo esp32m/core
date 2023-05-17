@@ -165,6 +165,34 @@ namespace esp32m {
       int _id;
     };
 
+    class All {
+     public:
+      struct Iterator {
+       public:
+        typedef std::map<std::string, Sensor *>::iterator Inner;
+        Iterator(Inner inner) : _inner(inner) {}
+        bool operator==(const Iterator &other) const {
+          return _inner == other._inner;
+        }
+        bool operator!=(const Iterator &other) const {
+          return _inner != other._inner;
+        }
+        Sensor *operator*() const {
+          return _inner->second;
+        }
+        Iterator &operator++() {
+          _inner++;
+          return *this;
+        }
+
+       private:
+        Inner _inner;
+        void next();
+      };
+      Iterator begin() const;
+      Iterator end() const;
+    };
+
     class GroupChanged : public Event {
      public:
       GroupChanged(const GroupChanged &) = delete;
@@ -196,7 +224,9 @@ namespace esp32m {
    public:
     int precision = -1;
     int group = 0;
+    bool disabled = false;
     const char *unit = nullptr;
+    const char *name = nullptr;
     Sensor(Device *device, const char *type, const char *id = nullptr,
            size_t size = 0);
     Sensor(const Sensor &) = delete;

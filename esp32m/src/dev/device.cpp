@@ -126,6 +126,13 @@ namespace esp32m {
       }
     }
 
+    All::Iterator All::begin() const {
+      return All::Iterator(_sensors.begin());
+    }
+    All::Iterator All::end() const {
+      return All::Iterator(_sensors.end());
+    }
+
   }  // namespace sensor
 
   Sensor::Sensor(Device *device, const char *type, const char *id, size_t size)

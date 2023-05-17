@@ -32,6 +32,7 @@ namespace esp32m {
     } ROMCode;
 
     char *toString(ROMCode &rom_code, char *buffer, size_t len);
+    bool fromString(const char *str, ROMCode &rom_code);
     uint8_t crc(uint8_t c, uint8_t data);
     uint8_t crc(uint8_t c, const uint8_t *buffer, size_t len);
 
