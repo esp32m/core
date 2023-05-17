@@ -74,24 +74,32 @@ namespace esp32m {
 
     LogMessage *LogMessage::alloc(Level level, int64_t stamp, const char *name,
                                   const char *message) {
-      size_t ml = strlen(message);
+      size_t nl = (name ? strlen(name) : 0) + 1;
+      if (nl > 255)
+        nl = 255;
+      size_t ml = message ? strlen(message) : 0;
       while (ml) {
         auto c = message[ml - 1];
-        if (c == '\n' || c == '\r')
+        if (c == '\n' || c == '\r' || c == '\t' || c == ' ')
           ml--;
         else
           break;
       }
-      size_t size = sizeof(LogMessage) + ml + 1;
+      ml++;
+      auto maxml = 65535 - (sizeof(LogMessage) + nl);
+      if (ml > maxml)
+        ml = maxml;
+      auto size = sizeof(LogMessage) + nl + ml;
       void *pool = malloc(size);
-      return new (pool) LogMessage(size, level, stamp, name, message, ml);
+      return new (pool) LogMessage(size, level, stamp, name, nl, message, ml);
     }
 
-    LogMessage::LogMessage(size_t size, Level level, int64_t stamp,
-                           const char *name, const char *message,
-                           size_t messageLen)
-        : _size(size), _stamp(stamp), _name(name), _level(level) {
-      strncpy((char *)this->message(), message, messageLen)[messageLen] = '\0';
+    LogMessage::LogMessage(uint16_t size, Level level, int64_t stamp,
+                           const char *name, uint8_t namelen,
+                           const char *message, uint16_t messagelen)
+        : _size(size), _level(level), _namelen(namelen), _stamp(stamp) {
+      strlcpy((char *)this->name(), name, namelen);
+      strlcpy((char *)this->message(), message, messagelen);
     }
 
     Logger &Loggable::logger() {

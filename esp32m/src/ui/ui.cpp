@@ -140,8 +140,10 @@ namespace esp32m {
   void Ui::sessionClosed(uint32_t cid) {
     std::lock_guard<std::mutex> guard(_mutex);
     auto i = _clients.find(cid);
-    if (i != _clients.end())
+    if (i != _clients.end()) {
       i->second->disconnected();
+      LOGD(i->second, "session closed");
+    }
   }
 
   void Ui::incoming(uint32_t cid, DynamicJsonDocument *json) {
@@ -193,9 +195,6 @@ namespace esp32m {
         for (auto it = _clients.begin(); it != _clients.end();) {
           auto client = it->second.get();
           if (client->isDisconnected()) {
-            // TODO: LogMessage stores pointer to loggable name which will get
-            // destroyed before the message gets to the formatter LOGD(client,
-            // "session closed");
             it = _clients.erase(it);
           } else {
             req = client->dequeue();

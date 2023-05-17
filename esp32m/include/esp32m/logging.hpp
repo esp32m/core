@@ -27,16 +27,21 @@
 #define LOGV(loggable, format, ...) \
   loggable->logger().logf(log::Level::Verbose, format, ##__VA_ARGS__)
 
-#define loge(format, ...) \
-  ::esp32m::log::system().logf(::esp32m::log::Level::Error, format, ##__VA_ARGS__)
-#define logw(format, ...) \
-  ::esp32m::log::system().logf(::esp32m::log::Level::Warning, format, ##__VA_ARGS__)
-#define logi(format, ...) \
-  ::esp32m::log::system().logf(::esp32m::log::Level::Info, format, ##__VA_ARGS__)
-#define logd(format, ...) \
-  ::esp32m::log::system().logf(::esp32m::log::Level::Debug, format, ##__VA_ARGS__)
-#define logv(format, ...) \
-  ::esp32m::log::system().logf(::esp32m::log::Level::Verbose, format, ##__VA_ARGS__)
+#define loge(format, ...)                                           \
+  ::esp32m::log::system().logf(::esp32m::log::Level::Error, format, \
+                               ##__VA_ARGS__)
+#define logw(format, ...)                                             \
+  ::esp32m::log::system().logf(::esp32m::log::Level::Warning, format, \
+                               ##__VA_ARGS__)
+#define logi(format, ...)                                          \
+  ::esp32m::log::system().logf(::esp32m::log::Level::Info, format, \
+                               ##__VA_ARGS__)
+#define logd(format, ...)                                           \
+  ::esp32m::log::system().logf(::esp32m::log::Level::Debug, format, \
+                               ##__VA_ARGS__)
+#define logv(format, ...)                                             \
+  ::esp32m::log::system().logf(::esp32m::log::Level::Verbose, format, \
+                               ##__VA_ARGS__)
 
 namespace esp32m {
   namespace log {
@@ -103,19 +108,19 @@ namespace esp32m {
        * @return The message itself
        */
       const char *message() const {
-        return ((char *)this) + sizeof(LogMessage);
+        return ((char *)this) + sizeof(LogMessage) + _namelen;
       }
       /**
        * @return Size of the message including null terminator
        */
       size_t message_size() const {
-        return _size - sizeof(LogMessage);
+        return _size - sizeof(LogMessage) - _namelen;
       }
       /**
        * @return Name of the logger emitted the message
        */
       const char *name() const {
-        return _name;
+        return ((char *)this) + sizeof(LogMessage);
       }
       /**
        * @return Level of this message
@@ -134,12 +139,12 @@ namespace esp32m {
       }
 
      private:
-      size_t _size;
-      int64_t _stamp;
-      const char *_name;
+      uint16_t _size;
       uint8_t _level;
-      LogMessage(size_t size, Level level, int64_t stamp, const char *name,
-                 const char *message, size_t messageLen);
+      uint8_t _namelen;  // including null terminator
+      int64_t _stamp;
+      LogMessage(uint16_t size, Level level, int64_t stamp, const char *name,
+                 uint8_t namelen, const char *message, uint16_t messagelen);
       static LogMessage *alloc(Level level, int64_t stamp, const char *name,
                                const char *message);
       friend class Logger;
