@@ -16,6 +16,20 @@ namespace esp32m {
           unit = "%";
         else if (sensor->is("signal_strength"))
           unit = "dBm";
+        else if (sensor->is("energy"))
+          unit = "kWh";
+        else if (sensor->is("voltage"))
+          unit = "V";
+        else if (sensor->is("current"))
+          unit = "A";
+        else if (sensor->is("apparent_power"))
+          unit = "VA";
+        else if (sensor->is("reactive_power"))
+          unit = "var";
+        else if (sensor->is("power_factor"))
+          unit = "%";
+        else if (sensor->is("frequency"))
+          unit = "Hz";
       }
       auto group = sensor->group;
 
