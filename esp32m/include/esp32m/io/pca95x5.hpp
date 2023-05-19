@@ -5,6 +5,18 @@
 
 namespace esp32m {
   namespace io {
+
+    namespace pca95x5 {
+
+      enum class Register {
+        Input = 0,
+        Output = 2,
+        Inversion = 4,
+        Config = 6,
+      };
+
+    }
+
     class Pca95x5 : public pin::ITxFinalizer, public IPins {
      public:
       Pca95x5(I2C *i2c);
@@ -18,6 +30,8 @@ namespace esp32m {
 
       esp_err_t commit() override;
 
+      esp_err_t read(pca95x5::Register reg, uint16_t &value);
+      esp_err_t write(pca95x5::Register reg, uint16_t value);
      protected:
       IPin *newPin(int id) override;
 

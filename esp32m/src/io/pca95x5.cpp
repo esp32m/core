@@ -15,8 +15,8 @@ namespace esp32m {
           return _name;
         }
         io::pin::Flags flags() override {
-          return io::pin::Flags::Input |
-                 io::pin::Flags::Output | io::pin::Flags::PullUp;
+          return io::pin::Flags::Input | io::pin::Flags::Output |
+                 io::pin::Flags::PullUp;
         }
         esp_err_t createFeature(pin::Type type,
                                 pin::Feature **feature) override;
@@ -30,31 +30,10 @@ namespace esp32m {
       class Digital : public io::pin::IDigital {
        public:
         Digital(Pin *pin) : _pin(pin) {}
-/*        esp_err_t setDirection(gpio_mode_t mode) override {
-          switch (mode) {
-            case GPIO_MODE_INPUT:
-              _pin->_owner->setPinMode(_pin->id(), true);
-              return ESP_OK;
-            case GPIO_MODE_OUTPUT:
-            case GPIO_MODE_OUTPUT_OD:
-            case GPIO_MODE_INPUT_OUTPUT:
-            case GPIO_MODE_INPUT_OUTPUT_OD:
-              _pin->_owner->setPinMode(_pin->id(), false);
-              return ESP_OK;
-            default:
-              return ESP_FAIL;
-          }
-        }
-        esp_err_t setPull(gpio_pull_mode_t pull) override {
-          if (pull == GPIO_PULLUP_ONLY)
-            return ESP_OK;
-          return ESP_FAIL;
-        }*/
         esp_err_t setMode(pin::Mode mode) override {
           mode = deduce(mode, _pin->flags());
           bool input = ((mode & pin::Mode::Output) == 0);
-          ESP_CHECK_RETURN(
-              _pin->_owner->setPinMode(_pin->id(), input));
+          ESP_CHECK_RETURN(_pin->_owner->setPinMode(_pin->id(), input));
           _mode = mode;
           return ESP_OK;
         }
@@ -81,21 +60,23 @@ namespace esp32m {
       }
     }  // namespace pca95x5
 
-    const uint8_t RegInput = 0;
-    const uint8_t RegOutput = 2;
-    const uint8_t RegInversion = 4;
-    const uint8_t RegConfig = 6;
-
     Pca95x5::Pca95x5(I2C *i2c) : _i2c(i2c) {
       init();
+    }
+
+    esp_err_t Pca95x5::read(pca95x5::Register reg, uint16_t &value) {
+      return _i2c->readSafe((uint8_t)reg, value);
+    }
+    esp_err_t Pca95x5::write(pca95x5::Register reg, uint16_t value) {
+      return _i2c->writeSafe((uint8_t)reg, value);
     }
 
     esp_err_t Pca95x5::init() {
       IPins::init(16);
       _i2c->setErrSnooze(10000);
       _i2c->setEndianness(Endian::Little);
-      ESP_CHECK_RETURN(_i2c->readSafe(RegInput, _port));
-      ESP_CHECK_RETURN(_i2c->readSafe(RegConfig, _inputMap));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Config, _inputMap));
       return ESP_OK;
     }
 
@@ -107,8 +88,8 @@ namespace esp32m {
       auto tx = pin::Tx::current();
       if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
                   !tx->getReadPerformed())) {
-        ESP_CHECK_RETURN(_i2c->readSafe(RegInput, _port));
-        //logD("readPin %d reg_input=0x%04x", pin, _port);
+        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
+        // logD("readPin %d reg_input=0x%04x", pin, _port);
         if (tx)
           tx->setReadPerformed();
       }
@@ -119,8 +100,8 @@ namespace esp32m {
       auto tx = pin::Tx::current();
       if (tx && (tx->type() & pin::Tx::Type::Read) != 0 &&
           !tx->getReadPerformed()) {
-        ESP_CHECK_RETURN(_i2c->readSafe(RegInput, _port));
-        //logD("writePin (%d=%d) reg_input=0x%04x", pin, value, _port);
+        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
+        // logD("writePin (%d=%d) reg_input=0x%04x", pin, value, _port);
         tx->setReadPerformed();
       }
       if (value)
@@ -138,14 +119,14 @@ namespace esp32m {
         _inputMap |= (1 << pin);
       else
         _inputMap &= ~(1 << pin);
-      ESP_CHECK_RETURN(_i2c->writeSafe(RegConfig, _inputMap));
-      //logD("setPinMode (%d=%d) reg_config=0x%04x", pin, input, _inputMap);
+      ESP_CHECK_RETURN(write(pca95x5::Register::Config, _inputMap));
+      // logD("setPinMode (%d=%d) reg_config=0x%04x", pin, input, _inputMap);
       return ESP_OK;
     }
 
     esp_err_t Pca95x5::commit() {
-      ESP_CHECK_RETURN(_i2c->writeSafe(RegConfig, _inputMap));
-      ESP_CHECK_RETURN(_i2c->writeSafe(RegOutput, _port));
+      ESP_CHECK_RETURN(write(pca95x5::Register::Config, _inputMap));
+      ESP_CHECK_RETURN(write(pca95x5::Register::Output, _port));
 
       /*uint16_t o, i, c, inv;
       ESP_CHECK_RETURN(_i2c->readSafe(RegOutput, o));

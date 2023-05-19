@@ -10,10 +10,10 @@
         "cover": "jest --coverage"
     },
     "devDependencies": {
-        "@types/node": "^20.1.2",
+        "@types/node": "^20.2.1",
         "@types/react": "^18.2.6",
         "@types/react-router-dom": "^5.3.3",
-        "rimraf": "^5.0.0",
+        "rimraf": "^5.0.1",
         "typescript": "^5.0.4"
     },
     "dependencies": {
