@@ -7,7 +7,7 @@ import { Hoc } from './hoc';
 import { ConnectionStatus } from './types';
 import { client, isBroadcast, isResponse } from './client';
 
-export const uiBackendPlugin = (): TReduxPlugin &
+export const pluginUiBackend = (): TReduxPlugin &
   TAppLoadingPlugin &
   TUiRootPlugin => {
   const middleware: Middleware = (api) => {

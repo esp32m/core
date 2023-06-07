@@ -2,12 +2,12 @@ import React from 'react';
 import { Grid } from '@mui/material';
 import { TPlugin, getPlugins } from '@ts-libs/plugins';
 
-type IBtPlugin = TPlugin & {
+type TBtPlugin = TPlugin & {
   bt: { content: React.ComponentType; props: unknown };
-}
+};
 
 export default function Content(): JSX.Element {
-  const plugins = getPlugins<IBtPlugin>();
+  const plugins = getPlugins<TBtPlugin>();
   const widgets: Array<React.ReactElement> = React.useMemo(() => {
     return plugins
       .filter((p) => !!p.bt?.content)

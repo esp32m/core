@@ -12,7 +12,7 @@ namespace esp32m {
 
     class Sm538x : public Device {
      public:
-      Sm538x(uint8_t addr = 1);
+      Sm538x(uint8_t addr, uint16_t model);
       Sm538x(const Sm538x &) = delete;
       const char *name() const override {
         return _name;
@@ -30,11 +30,12 @@ namespace esp32m {
       char _name[8] = "SM538x";
       StaticJsonDocument<JSON_OBJECT_SIZE(1)> _props;
       uint8_t _addr;
-      uint16_t _model = 0;
+      uint16_t _model;
       float _value = NAN;
       unsigned long _stamp = 0;
+      Sensor *_sensor = nullptr;
     };
 
-    void useSm538x(uint8_t addr = 1);
+    Sm538x *useSm538x(uint8_t addr = 1);
   }  // namespace dev
 }  // namespace esp32m

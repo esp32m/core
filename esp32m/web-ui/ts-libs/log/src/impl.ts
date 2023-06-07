@@ -97,11 +97,22 @@ class Logger implements ILogger {
   log(level: LogLevel, ...args: Array<any>) {
     if (level <= this.level)
       this.impl()
-        .then((i) => i.log(level, ...args))
+        .then((i) => {
+          try {
+            i.log(level, ...args);
+          } catch (e) {
+            try {
+              if (console) {
+                console.error(`${e} when logging a message:`);
+                console.error(...args);
+              }
+            } catch {}
+          }
+        })
         .catch((e) => {
           try {
             if (console) {
-              console.error(`${e} when logging a message:`);
+              console.error(`${e} when creating a logger:`);
               console.error(...args);
             }
           } catch {}

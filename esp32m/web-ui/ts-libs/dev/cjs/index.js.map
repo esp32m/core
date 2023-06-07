@@ -1,1 +1,1 @@
-{"version":3,"file":"index.js","sourceRoot":"","sources":["../src/index.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;AAAA,4CAA0B","sourcesContent":["export * from './webpack';\r\n"]}
+{"version":3,"file":"index.js","sourceRoot":"","sources":["../src/index.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;AAAA,4CAA0B;AAC1B,2CAAyB","sourcesContent":["export * from './webpack';\r\nexport * from './deploy';\r\n"]}

@@ -3,13 +3,13 @@ import { Root } from '@ts-libs/ui-app';
 import { Grid, Link, Typography } from '@mui/material';
 import { Home } from '@mui/icons-material';
 import { renderRoot } from '@ts-libs/ui-app';
-import { VerticalMenuHeader, uiNavbarPlugin } from '@ts-libs/ui-navbar';
-import { uiSnackPlugin } from '@ts-libs/ui-snack';
-import { uiBackendPlugin } from './backend';
+import { VerticalMenuHeader, pluginUiNavbar } from '@ts-libs/ui-navbar';
+import { pluginUiSnack } from '@ts-libs/ui-snack';
+import { pluginUiBackend } from './backend';
 import { SystemSummary } from './system';
 import { ApInfoBox, MqttStateBox, StaInfoBox } from './net';
 import { TContentPlugin, TUiThemePlugin } from '@ts-libs/ui-base';
-import { ui18nPlugin, Ti18nPlugin, useTranslation } from '@ts-libs/ui-i18n';
+import { pluginUi18n, Ti18nPlugin, useTranslation } from '@ts-libs/ui-i18n';
 import { OtaPlugin } from './net/ota/plugin';
 
 const header = (
@@ -86,10 +86,10 @@ export function startUi(config?: TEsp32mUiConfig) {
     ...[
       ...(config?.plugins || []),
       plugin,
-      uiBackendPlugin(),
-      uiSnackPlugin(),
-      ui18nPlugin(),
-      uiNavbarPlugin(),
+      pluginUiBackend(),
+      pluginUiSnack(),
+      pluginUi18n(),
+      pluginUiNavbar(),
       OtaPlugin,
     ]
   );

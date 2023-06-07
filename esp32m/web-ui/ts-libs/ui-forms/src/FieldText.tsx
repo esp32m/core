@@ -4,32 +4,22 @@ import { TextField, TextFieldProps } from '@mui/material';
 import { FieldProps, FormValues } from './types';
 import Hoc from './Hoc';
 import { useTranslation } from '@ts-libs/ui-i18n';
-import { ChangeEvent } from 'react';
 
-const useField = (props: FieldProps<Partial<TextFieldProps>>) => {
-  const { name, submitOnEnter, type, select } = props;
+const useField = (name: string, submitOnEnter?: boolean) => {
   const controller = useFormikContext<FormValues>();
   const {
     values,
     errors,
     touched,
-    handleChange,
+    handleChange: onChange,
     handleBlur: onBlur,
     submitForm,
-    setFieldValue,
   } = controller;
   const wasTouched = name && getIn(touched, name);
   const errorText = name && getIn(errors, name);
   const error = !!(wasTouched && errorText);
   let value = name && getIn(values, name);
   if (value == null) value = ''; // covers null and undefined
-  const onChange =
-    select && type == 'number'
-      ? (e: ChangeEvent<HTMLInputElement>) => {
-          setFieldValue(name, Number(e.target.value));
-        }
-      : handleChange;
-
   const p: TextFieldProps = {
     value,
     error,
@@ -45,8 +35,8 @@ const useField = (props: FieldProps<Partial<TextFieldProps>>) => {
 };
 
 export const FieldText = (props: FieldProps<Partial<TextFieldProps>>) => {
-  const { name, submitOnEnter: _, grid, label, ...rest } = props;
-  const field = useField(props);
+  const { name, submitOnEnter, grid, label, ...rest } = props;
+  const field = useField(name, submitOnEnter);
   const { t } = useTranslation();
   const p: TextFieldProps = {
     name,

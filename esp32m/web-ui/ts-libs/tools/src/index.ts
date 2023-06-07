@@ -25,3 +25,4 @@ export * from './periodic';
 export * from './errors';
 export * from './env';
 export * from './capitalize';
+export * from './matcher';

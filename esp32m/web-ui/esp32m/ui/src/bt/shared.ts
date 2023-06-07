@@ -4,9 +4,9 @@ import { ComponentType } from 'react';
 import { TContentPlugin } from '@ts-libs/ui-base';
 import { TPlugin } from '@ts-libs/plugins';
 
-export type IBluetoothPlugin = TPlugin & {
+export type TBluetoothPlugin = TPlugin & {
   bt: { content: ComponentType };
-}
+};
 
 export const Bluetooth: TContentPlugin = {
   name: 'bt',

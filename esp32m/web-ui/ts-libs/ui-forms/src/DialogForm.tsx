@@ -79,7 +79,7 @@ interface IDialogFormProps extends Omit<Omit<DialogProps, 'open'>, 'children'> {
 
 const defaultButtons = [
   { name: 'OK', submits: true },
-  { name: 'cancel', cancels: true },
+  { name: 'Cancel', cancels: true },
 ];
 
 export const DialogForm = (props: IDialogFormProps) => {

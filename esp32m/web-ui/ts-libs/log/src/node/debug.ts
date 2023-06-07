@@ -25,7 +25,7 @@ class DebugLogger implements ILoggerImpl {
   }
 }
 
-export const DebugLogPlugin = (): TLoggerPlugin => ({
+export const pluginLogDebug = (): TLoggerPlugin => ({
   name: 'logger-debug',
   logger: {
     impl: (logger) => {

@@ -1,4 +1,4 @@
-export const Name = "ble";
+export const Name = 'ble';
 
 export const enum AdvType {
   Normal = 0,

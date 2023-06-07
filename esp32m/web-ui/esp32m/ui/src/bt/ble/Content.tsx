@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 
-import * as Backend from "../../backend";
+import * as Backend from '../../backend';
 
 import {
   Name,
@@ -10,19 +10,19 @@ import {
   IAdv,
   AdvType,
   TPeripherals,
-} from "./types";
-import { Bluetooth } from "@mui/icons-material";
+} from './types';
+import { Bluetooth } from '@mui/icons-material';
 import {
   Avatar,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-} from "@mui/material";
-import RssiIcon from "../RssiIcon";
-import { CardBox } from "@ts-libs/ui-app";
-import { useBackendApi } from "../../backend";
-import { fromBase64 } from "../../base64";
+} from '@mui/material';
+import RssiIcon from '../RssiIcon';
+import { CardBox } from '@ts-libs/ui-app';
+import { useBackendApi } from '../../backend';
+import { fromBase64 } from '../../base64';
 
 function parseData(buf: ArrayBuffer): IAdvData | undefined {
   const bytes = new Uint8Array(buf);
@@ -40,7 +40,7 @@ function parseData(buf: ArrayBuffer): IAdvData | undefined {
       case AdvField.CompName:
       case AdvField.IncompName:
         {
-          let n = "";
+          let n = '';
           for (let i = 0; i < len; i++)
             n += String.fromCharCode(bytes[ofs + i]);
           r.name = n;
@@ -73,10 +73,10 @@ function toPeripherals(payload: any) {
   return peripherals;
 }
 
-export default () => {
+export const Content = () => {
   const api = useBackendApi();
   const [peripherals, setPeripherals] = useState<TPeripherals>({});
-  const cancel = useCallback(() => api?.request(Name, "cancel"), [api]);
+  const cancel = useCallback(() => api?.request(Name, 'cancel'), [api]);
   const request = useCallback(
     async (name: string, data?: any) => {
       let response: Backend.TResponse | undefined;
@@ -93,7 +93,7 @@ export default () => {
     [api, cancel]
   );
   useEffect(() => {
-    request("scan", { active: true });
+    request('scan', { active: true });
     return () => {
       cancel();
     };
@@ -113,7 +113,7 @@ export default () => {
             const { data, addr, rssi } = p;
             const { name } = data || {};
             return (
-              <ListItem key={"row" + i}>
+              <ListItem key={'row' + i}>
                 <ListItemText
                   primary={name || addr}
                   secondary={!name && addr}

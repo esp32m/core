@@ -85,7 +85,7 @@ export class Retry {
         if (result === true) this.success();
         if (result === false) this.failure();
         return result;
-      } catch (e) {
+      } catch (e: any) {
         this.log(e.toString());
         this.failure();
       } finally {

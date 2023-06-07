@@ -137,7 +137,7 @@ namespace esp32m {
           /*logD("config topic: %s, payload: %s, acceptsCommands=%d",
                configTopic.c_str(), configPayload, acceptsCommands);*/
           mqtt.publish(builder.configTopic.c_str(),
-                       builder.configPayload.c_str());
+                       builder.configPayload.c_str(), 1, true);
 
           auto it = _devices.find(id);
           if (it == _devices.end()) {

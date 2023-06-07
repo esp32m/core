@@ -44,7 +44,7 @@ export class Struct {
     function walk(fields: TStructFields, data: any) {
       return fields.reduce((m, [name, children, options], i) => {
         const key = Array.isArray(data) ? i : name;
-        if (Object.hasOwn(data, key)) {
+        if (data.hasOwnProperty(key)) {
           const value = data[key];
           if (options?.array)
             if (Array.isArray(value))
@@ -131,7 +131,7 @@ export class Struct {
     function walk(fields: TStructFields, data: any, diff: any): any {
       return fields.reduce((map, [name, children, options], i) => {
         const prev = data?.[name];
-        if (Object.hasOwn(diff, i)) {
+        if (diff.hasOwnProperty(i)) {
           const next = diff[i];
           if (options?.array) {
             if (!Array.isArray(prev))
@@ -145,12 +145,12 @@ export class Struct {
             );
             const a = Array(c);
             for (let j = 0; j < c; j++)
-              if (Object.hasOwn(next, j))
+              if (next.hasOwnProperty(j))
                 a[j] = children ? walk(children, prev[j], next[j]) : next[j];
-              else if (Object.hasOwn(prev, j)) a[j] = prev[j];
+              else if (prev.hasOwnProperty(j)) a[j] = prev[j];
             map[name] = a;
           } else map[name] = children ? walk(children, prev, next) : next;
-        } else if (data && Object.hasOwn(data, name)) map[name] = prev;
+        } else if (data && data.hasOwnProperty(name)) map[name] = prev;
         return map;
       }, {} as Record<string, any>);
     }

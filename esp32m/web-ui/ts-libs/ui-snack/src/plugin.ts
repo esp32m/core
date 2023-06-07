@@ -1,9 +1,9 @@
 import { TReduxPlugin } from '@ts-libs/redux';
-import { Name, reducer } from './state';
 import { TUiRootPlugin } from '@ts-libs/ui-base';
 import { Snacks } from './snacks';
+import { Name, reducer } from './state';
 
-export const uiSnackPlugin = (): TReduxPlugin & TUiRootPlugin => ({
+export const pluginUiSnack = (): TReduxPlugin & TUiRootPlugin => ({
   name: Name,
   redux: { reducer },
   ui: {

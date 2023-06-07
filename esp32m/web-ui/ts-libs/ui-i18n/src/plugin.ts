@@ -3,7 +3,7 @@ import { I18nButton } from './button';
 import { Hoc } from './hoc';
 import { Ti18nPlugin } from './types';
 
-export const ui18nPlugin = (): TUiElementsPlugin &
+export const pluginUi18n = (): TUiElementsPlugin &
   TUiRootPlugin &
   Ti18nPlugin => {
   return {

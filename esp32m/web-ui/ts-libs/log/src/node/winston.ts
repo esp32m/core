@@ -40,7 +40,7 @@ class WinstonLogger implements ILoggerImpl {
   }
 }
 
-export const WinstonPlugin = (
+export const pluginLogWinston = (
   ...transports: winston.transport[]
 ): TLoggerPlugin => ({
   name: 'logger-winston',

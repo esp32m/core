@@ -1,10 +1,10 @@
-import { Bluetooth, IBluetoothPlugin } from "../shared";
+import { Bluetooth, TBluetoothPlugin } from '../shared';
 
-import Content from "./Content";
-import { Name } from "./types";
-import { TPlugin } from "@ts-libs/plugins";
+import { Content } from './Content';
+import { Name } from './types';
+import { TPlugin } from '@ts-libs/plugins';
 
-export const Ble: IBluetoothPlugin & TPlugin = {
+export const Ble: TBluetoothPlugin & TPlugin = {
   name: Name,
   use: Bluetooth,
   bt: { content: Content },

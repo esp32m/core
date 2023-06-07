@@ -295,7 +295,7 @@ namespace esp32m {
     Bme280::Bme280(I2C *i2c, const char *name)
         : bme280::Core(i2c, name),
           _temperature(this, "temperature"),
-          _pressure(this, "pressure"),
+          _pressure(this, "atmospheric_pressure"),
           _humidity(this, "humidity") {
       auto group = sensor::nextGroup();
       _temperature.group = group;
