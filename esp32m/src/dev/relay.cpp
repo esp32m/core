@@ -199,17 +199,7 @@ namespace esp32m {
         req.respond(name(), doc->as<JsonVariantConst>());
         delete doc;
         return true;
-      } /*else if (req.is(ha::StateRequest::Name)) {
-        int si = (int)refreshState();
-        if (si < 0 || si > 2)
-          si = 0;
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
-        auto root = doc->to<JsonObject>();
-        root["state"] = names[si];
-        req.respond(name(), doc->as<JsonVariantConst>());
-        delete doc;
-        return true;
-      } */
+      } 
       else if (req.is(ha::CommandRequest::Name)) {
         auto state = req.data().as<const char *>();
         if (state)

@@ -128,9 +128,12 @@ namespace esp32m {
             ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
             logI("redirecting to captive portal %s", location);
             return ESP_OK;
-          } else logW("got %s request while AP is not running", req->uri);
-        }
-        found = def;
+          } else
+            logW("got %s request while AP is not running", req->uri);
+        } else if (!strEndsWith(req->uri, ".ico"))
+          found = def;
+        /*logI("strEndsWith %s %s %d %d", req->uri, ".js.map",
+             strEndsWith(req->uri, ".js.map"), found == nullptr);*/
       }
       if (!found) {
         logI("404: %s", req->uri);

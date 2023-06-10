@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@mui/icons-material": "^5.11.16",
-    "@mui/material": "^5.13.3",
+    "@mui/material": "^5.13.4",
     "@reduxjs/toolkit": "^1.9.5",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",

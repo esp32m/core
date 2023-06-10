@@ -17,7 +17,7 @@ import {
   REHYDRATE,
   Storage,
 } from 'redux-persist';
-import { AsyncNodeStorage } from 'redux-persist-node-storage';
+import { AsyncNodeStorage } from './node/storage';
 import { Observable, timeout } from 'rxjs';
 import {
   IRedux,
@@ -178,35 +178,12 @@ export function getRedux<S = TStateRoot>(store?: Store<S>): IRedux<S> {
     : instance || (instance = new Redux<S>());
 }
 
-/*export function usePersistor() {
-  return getRedux().persistor;
-}
-
-export function getPersistorBootstrappedPromise() {
-  usePersistor();
-  return persistorBootstrappedPromise || Promise.resolve();
-}*/
-
 export function observableSelector<T, S = TStateRoot>(
   selector: Selector<S, T>,
   options?: TObservableSelectorOptions<S>
 ): Observable<[T, T | undefined]> {
   const redux = getRedux(options?.store);
   return redux.observableSelector(selector, options);
-  /*
-  const { subscribe, getState } = options?.store || getRedux().store;
-  const equal = options?.shallow
-    ? (a: T, b: T) => a === b
-    : (a: T, b: T) => a === b || deepEqual(a, b);
-  return new Observable((subscriber) => {
-    let prev = selector(getState());
-    if (options?.emitInitial) subscriber.next([prev, undefined]);
-    return subscribe(() => {
-      const next = selector(getState());
-      if (!equal(prev, next)) subscriber.next([next, prev]);
-      prev = next;
-    });
-  });*/
 }
 
 interface WhenSelectorOptions<S = TStateRoot>

@@ -7,7 +7,10 @@
 
 namespace esp32m {
   namespace dev {
-    Qdy30a::Qdy30a(uint8_t addr): _addr(addr) {
+    Qdy30a::Qdy30a(uint8_t addr)
+        : _addr(addr), _sensor(this, "distance", "level") {
+      _sensor.unit = "cm";
+      _sensor.precision = 1;
       Device::init(Flags::HasSensors);
     }
 
@@ -55,6 +58,7 @@ namespace esp32m {
       sensor("value", _value);
       sensor("raw", (int16_t)_regs[10]);
       _stamp = millis();
+      _sensor.set(_value);
       delay(500);
       return true;
     }

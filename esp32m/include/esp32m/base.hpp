@@ -22,6 +22,8 @@ namespace esp32m {
   long map(long x, long in_min, long in_max, long out_min, long out_max);
 
   const char *makeTaskName(const char *name);
+  bool strEndsWith(const char *str, const char *suffix);
+  
   std::string string_printf(const char *format, va_list args);
   std::string string_printf(const char *format, ...);
 

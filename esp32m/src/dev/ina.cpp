@@ -418,7 +418,21 @@ namespace esp32m {
 
   namespace dev {
 
-    Ina::Ina(I2C *i2c) : ina::Core(i2c) { Device::init(Flags::HasSensors); }
+    Ina::Ina(I2C *i2c)
+        : ina::Core(i2c),
+          _voltage(this, "voltage"),
+          _current(this, "current"),
+          _power(this, "power") {
+      Device::init(Flags::HasSensors);
+      auto group = sensor::nextGroup();
+      _voltage.group = group;
+      _voltage.precision = 2;
+      _current.group = group;
+      _current.precision = 4;
+      _power.group = group;
+      _power.precision = 4;
+      _power.unit = "W";
+    }
 
     DynamicJsonDocument *Ina::getState(const JsonVariantConst args) {
       DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(7));
@@ -440,16 +454,23 @@ namespace esp32m {
 
     bool Ina::pollSensors() {
       ESP_CHECK_RETURN_BOOL(sync());
+      bool changed = false;
       float value;
       ESP_CHECK_RETURN_BOOL(getBusVolts(value));
       sensor("voltage", value);
+      _voltage.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getShuntVolts(value));
       sensor("shuntVoltage", value);
       ESP_CHECK_RETURN_BOOL(getAmps(value));
       sensor("current", value);
+      _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getWatts(value));
       sensor("power", value);
+      _power.set(value, &changed);
       _stamp = millis();
+      if (changed)
+        sensor::GroupChanged::publish(_voltage.group);
+
       return true;
     }
     bool Ina::initSensors() {

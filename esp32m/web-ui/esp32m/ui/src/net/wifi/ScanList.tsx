@@ -55,7 +55,8 @@ export const ScanList = ({ scan }: { scan: ScanEntries }) => {
               onClick={() => handleClick(ssid, bssid, auth)}
             >
               <ListItemText
-                style={c}
+                primaryTypographyProps={{ style: c }}
+                secondaryTypographyProps={{ style: c }}
                 primary={ssid || '[hidden]'}
                 secondary={bssid}
               />

@@ -4,8 +4,8 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <map>
 #include <math.h>
+#include <map>
 
 #define NOP() asm volatile("nop")
 
@@ -56,6 +56,16 @@ namespace esp32m {
     char *buf = (char *)calloc(l, 1);
     snprintf(buf, l, "m/%s", name);
     return buf;
+  }
+
+  bool strEndsWith(const char *str, const char *suffix) {
+    if (!str || !suffix)
+      return false;
+    size_t lenstr = strlen(str);
+    size_t lensuffix = strlen(suffix);
+    if (lensuffix > lenstr)
+      return false;
+    return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
   }
 
   std::string string_printf(const char *format, va_list args) {

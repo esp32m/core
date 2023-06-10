@@ -4,10 +4,14 @@ import fs from 'fs';
 import path from 'path';
 import rl from 'readline';
 import { exec } from 'child_process';
+type TProjectConfig = {
+  dir: string;
+  dest?: string;
+  script?: string;
+};
 
 type TDeployConfig = {
-  projdir: string;
-  uidir?: string;
+  projects: TProjectConfig[];
   host: string;
   port?: number;
   username: string;
@@ -18,58 +22,59 @@ type TDeployConfig = {
 class Project {
   readonly packageJson: any;
   readonly safeName: string;
-  constructor(readonly dir: string) {
+  constructor(readonly config: TProjectConfig) {
     this.packageJson = JSON.parse(
-      fs.readFileSync(path.join(dir, 'package.json')).toString()
+      fs.readFileSync(path.join(config.dir, 'package.json')).toString()
     );
     this.safeName = this.packageJson.name.replace('@', '').replace('/', '-');
   }
   yarn(script: string) {
     return new Promise((resolve, reject) => {
-      console.log(`running yarn ${script} in ${this.dir}`);
-      exec('yarn ' + script, { cwd: this.dir }, (error, stdout, stderr) => {
-        if (error) reject(error);
-        else {
-          if (stdout) console.log(stdout);
-          if (stderr) console.warn(stderr);
-          resolve(stdout);
+      console.log(`running yarn ${script} in ${this.config.dir}`);
+      exec(
+        'yarn ' + script,
+        { cwd: this.config.dir },
+        (error, stdout, stderr) => {
+          if (error) reject(error);
+          else {
+            if (stdout) console.log(stdout);
+            if (stderr) console.warn(stderr);
+            resolve(stdout);
+          }
         }
-      });
+      );
     });
   }
 }
 
 export class Deploy {
-  readonly project: Project;
-  readonly ui?: Project;
+  readonly projects: Array<Project>;
   constructor(readonly config: TDeployConfig) {
-    const { projdir, uidir } = config;
-    this.project = new Project(projdir);
-    if (uidir) this.ui = new Project(uidir);
+    const { projects } = config;
+    this.projects = projects.map((c) => new Project(c));
   }
   async deploy() {
     try {
-      await this.project.yarn('build');
-      await this.copyFiles(this.project);
-      if (this.ui) {
-        await this.ui.yarn('build');
-        await this.copyFiles(this.ui, 'ui');
+      for (const p of this.projects) {
+        await p.yarn(p.config.script || 'build');
+        await this.copyFiles(p);
       }
     } finally {
       await this.cleanup();
     }
   }
-  async copyFiles(project: Project, subdir?: string) {
+  async copyFiles(project: Project) {
     const sftp = await this.getSftp();
     let remotedir = path.posix.join(
       '/home',
       this.config.username,
-      this.project.safeName
+      this.projects[0].safeName
     );
-    if (subdir) remotedir = path.posix.join(remotedir, subdir);
+    if (project.config.dest)
+      remotedir = path.posix.join(remotedir, project.config.dest);
     await sftp.mkdir(remotedir, true);
-    for (const filename of ['main.js', 'main.js.map', 'index.html']) {
-      const filepath = path.join(project.dir, 'dist', filename);
+    for (const filename of ['main.js', 'index.html']) {
+      const filepath = path.join(project.config.dir, 'dist', filename);
       if (fs.existsSync(filepath)) {
         const dest = path.posix.join(remotedir, filename);
         console.log(`copying ${filepath} -> ${dest}`);
@@ -79,14 +84,7 @@ export class Deploy {
   }
   async getSshConfig() {
     if (!this._sshConfig) {
-      const {
-        projdir: _,
-        uidir: __,
-        host,
-        port = 22,
-        username,
-        ...rest
-      } = this.config;
+      const { projects: _, host, port = 22, username, ...rest } = this.config;
       let { privateKey, passphrase } = this.config;
       if (privateKey && fs.existsSync(privateKey))
         privateKey = fs.readFileSync(privateKey);

@@ -11,18 +11,18 @@ const path_1 = __importDefault(require("path"));
 const readline_1 = __importDefault(require("readline"));
 const child_process_1 = require("child_process");
 class Project {
-    dir;
+    config;
     packageJson;
     safeName;
-    constructor(dir) {
-        this.dir = dir;
-        this.packageJson = JSON.parse(fs_1.default.readFileSync(path_1.default.join(dir, 'package.json')).toString());
+    constructor(config) {
+        this.config = config;
+        this.packageJson = JSON.parse(fs_1.default.readFileSync(path_1.default.join(config.dir, 'package.json')).toString());
         this.safeName = this.packageJson.name.replace('@', '').replace('/', '-');
     }
     yarn(script) {
         return new Promise((resolve, reject) => {
-            console.log(`running yarn ${script} in ${this.dir}`);
-            (0, child_process_1.exec)('yarn ' + script, { cwd: this.dir }, (error, stdout, stderr) => {
+            console.log(`running yarn ${script} in ${this.config.dir}`);
+            (0, child_process_1.exec)('yarn ' + script, { cwd: this.config.dir }, (error, stdout, stderr) => {
                 if (error)
                     reject(error);
                 else {
@@ -38,36 +38,31 @@ class Project {
 }
 class Deploy {
     config;
-    project;
-    ui;
+    projects;
     constructor(config) {
         this.config = config;
-        const { projdir, uidir } = config;
-        this.project = new Project(projdir);
-        if (uidir)
-            this.ui = new Project(uidir);
+        const { projects } = config;
+        this.projects = projects.map((c) => new Project(c));
     }
     async deploy() {
         try {
-            await this.project.yarn('build');
-            await this.copyFiles(this.project);
-            if (this.ui) {
-                await this.ui.yarn('build');
-                await this.copyFiles(this.ui, 'ui');
+            for (const p of this.projects) {
+                await p.yarn(p.config.script || 'build');
+                await this.copyFiles(p);
             }
         }
         finally {
             await this.cleanup();
         }
     }
-    async copyFiles(project, subdir) {
+    async copyFiles(project) {
         const sftp = await this.getSftp();
-        let remotedir = path_1.default.posix.join('/home', this.config.username, this.project.safeName);
-        if (subdir)
-            remotedir = path_1.default.posix.join(remotedir, subdir);
+        let remotedir = path_1.default.posix.join('/home', this.config.username, this.projects[0].safeName);
+        if (project.config.dest)
+            remotedir = path_1.default.posix.join(remotedir, project.config.dest);
         await sftp.mkdir(remotedir, true);
-        for (const filename of ['main.js', 'main.js.map', 'index.html']) {
-            const filepath = path_1.default.join(project.dir, 'dist', filename);
+        for (const filename of ['main.js', 'index.html']) {
+            const filepath = path_1.default.join(project.config.dir, 'dist', filename);
             if (fs_1.default.existsSync(filepath)) {
                 const dest = path_1.default.posix.join(remotedir, filename);
                 console.log(`copying ${filepath} -> ${dest}`);
@@ -77,7 +72,7 @@ class Deploy {
     }
     async getSshConfig() {
         if (!this._sshConfig) {
-            const { projdir: _, uidir: __, host, port = 22, username, ...rest } = this.config;
+            const { projects: _, host, port = 22, username, ...rest } = this.config;
             let { privateKey, passphrase } = this.config;
             if (privateKey && fs_1.default.existsSync(privateKey))
                 privateKey = fs_1.default.readFileSync(privateKey);

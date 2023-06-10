@@ -2,9 +2,13 @@
 /// <reference types="node" />
 import Sftp from 'ssh2-sftp-client';
 import rl from 'readline';
+type TProjectConfig = {
+    dir: string;
+    dest?: string;
+    script?: string;
+};
 type TDeployConfig = {
-    projdir: string;
-    uidir?: string;
+    projects: TProjectConfig[];
     host: string;
     port?: number;
     username: string;
@@ -12,19 +16,18 @@ type TDeployConfig = {
     passphrase?: string;
 };
 declare class Project {
-    readonly dir: string;
+    readonly config: TProjectConfig;
     readonly packageJson: any;
     readonly safeName: string;
-    constructor(dir: string);
+    constructor(config: TProjectConfig);
     yarn(script: string): Promise<unknown>;
 }
 export declare class Deploy {
     readonly config: TDeployConfig;
-    readonly project: Project;
-    readonly ui?: Project;
+    readonly projects: Array<Project>;
     constructor(config: TDeployConfig);
     deploy(): Promise<void>;
-    copyFiles(project: Project, subdir?: string): Promise<void>;
+    copyFiles(project: Project): Promise<void>;
     getSshConfig(): Promise<Sftp.ConnectOptions>;
     getSftp(): Promise<Sftp>;
     getSsh(): Promise<Sftp | undefined>;

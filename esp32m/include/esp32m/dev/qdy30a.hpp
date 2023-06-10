@@ -52,6 +52,7 @@ namespace esp32m {
       uint8_t _units = 0, _decimals = 0;
       float _min = 0, _max = 0, _value = 0;
       unsigned long _stamp = 0;
+      Sensor _sensor;
     };
 
     Qdy30a *useQdy30a(uint8_t addr = 1);

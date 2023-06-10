@@ -226,6 +226,7 @@ class WebpackConfigBuilder {
                 winston: false,
                 debug: false,
                 'express-ws': false,
+                'node-localstorage': false,
                 'redux-persist-node-storage': false,
             };
         //    const fallback=this.hasNodeTarget()?{}:{crypto: require.resolve('crypto-browserify')};
@@ -309,9 +310,9 @@ class WebpackConfigBuilder {
                 entry,
             });
             const { devtool = this.isDevelopment()
-                ? 'eval-source-map'
+                ? 'inline-source-map'
                 : this.isProduction()
-                    ? 'source-map'
+                    ? undefined
                     : undefined, devServer = this.hasWebTargets()
                 ? {
                     historyApiFallback: true,

@@ -4,10 +4,10 @@
 #include "esp32m/defs.hpp"
 #include "esp32m/events/diag.hpp"
 #include "esp32m/events/response.hpp"
+#include "esp32m/ha/ha.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
-#include "esp32m/ha/ha.hpp"
 
 // #include <dhcpserver/dhcpserver.h>
 // #include <dhcpserver/dhcpserver_options.h>
@@ -664,12 +664,6 @@ namespace esp32m {
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
       ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
 #endif
-      if (ifsta || ifap)
-        _managedExternally = true;
-      if (!_managedExternally) {
-        ESP_CHECK_RETURN(useNetif());
-        ESP_CHECK_RETURN(useEventLoop());
-      }
       if (!ifsta)
         ifsta = esp_netif_create_default_wifi_sta();
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
@@ -741,6 +735,20 @@ namespace esp32m {
       DoneReason reason;
       bool wakeup = false;
       if (EventInit::is(ev, 0)) {
+        // useNetif() must be called on the main thread, because other services may use tcpip during init
+        esp_netif_t *ifsta = nullptr, *ifap = nullptr;
+
+        ifsta = esp_netif_get_handle_from_ifkey(getDefaultStaKey());
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
+        ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
+#endif
+        if (ifsta || ifap)
+          _managedExternally = true;
+        if (!_managedExternally) {
+          ESP_ERROR_CHECK_WITHOUT_ABORT(useNetif());
+          ESP_ERROR_CHECK_WITHOUT_ABORT(useEventLoop());
+        }
+
         xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 5120,
                     this, tskIDLE_PRIORITY + 1, &_task);
       } else if (EventDone::is(ev, &reason)) {
