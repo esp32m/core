@@ -51,7 +51,8 @@ export class Struct {
               m[name] = value.map((item) =>
                 children ? walk(children, item) : item
               );
-            else throw new Error('array expected');
+            else
+              throw new Error('array expected, got ' + JSON.stringify(value));
           else m[name] = children ? walk(children, value) : value;
         }
         return m;
@@ -76,7 +77,7 @@ export class Struct {
             return value.map((item) =>
               children ? walk(children, item) : item
             );
-          else throw new Error('array expected');
+          else throw new Error('array expected, got ' + JSON.stringify(value));
         return children ? walk(children, value) : value;
       });
     }
@@ -98,11 +99,13 @@ export class Struct {
     ): Record<number, any> {
       if (isUndefined(prev)) return next;
       return fields.reduce((md, [name, children, options], i) => {
-        const p = prev?.[name];
-        const n = next?.[name];
+        const p = prev?.[name] || [];
+        const n = next?.[name] || [];
         if (options?.array) {
           if (!Array.isArray(p) || !Array.isArray(n))
-            throw new Error('array expected');
+            throw new Error(
+              `array expected, got ${JSON.stringify(p)} ${JSON.stringify(n)}`
+            );
           const c = Math.max(p.length, n.length);
           const mda: Record<number, any> = {};
           for (let j = 0; j < c; j++) {
@@ -136,7 +139,7 @@ export class Struct {
           if (options?.array) {
             if (!Array.isArray(prev))
               //  next will be an object even if data is array
-              throw new Error('array expected');
+              throw new Error('array expected, got ' + JSON.stringify(prev));
             const c = Math.max(
               prev.length,
               Object.keys(next)

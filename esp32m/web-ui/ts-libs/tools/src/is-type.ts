@@ -1,9 +1,14 @@
 export const isUndefined = (v: unknown): v is undefined =>
   typeof v == 'undefined';
 
+export const isNullOrUndefined = (v: unknown): v is null | undefined =>
+  v == null;
+
 export const isString = (v: unknown): v is string => typeof v == 'string';
 
 export const isNumber = (v: unknown): v is number => typeof v == 'number';
+
+export const isBigint = (v: unknown): v is bigint => typeof v == 'bigint';
 
 export const isBoolean = (v: unknown): v is boolean => typeof v == 'boolean';
 
@@ -12,6 +17,8 @@ export const isFunction = <T extends CallableFunction>(v: unknown): v is T =>
 
 export const isObject = (v: unknown): v is Record<any, any> =>
   typeof v == 'object';
+
+export const isSymbol = (v: unknown): v is symbol => typeof v == 'symbol';
 
 export const isPlainObject = (v: unknown): v is Record<any, any> => {
   if (!isObject(v)) return false;
@@ -24,4 +31,8 @@ export const isPlainObject = (v: unknown): v is Record<any, any> => {
 export function isPrimitive(arg: any) {
   const type = typeof arg;
   return arg == null || (type != 'object' && type != 'function');
+}
+
+export function isThenable(arg: any): arg is Promise<any> {
+  return typeof arg === 'object' && typeof arg.then === 'function';
 }

@@ -25,6 +25,7 @@ export interface ILogger extends ILoggerBase {
   readonly name: string;
   readonly parent?: ILogger;
   level: LogLevel;
+  readonly group?: string;
   readonly error: LevelLogMethod;
   readonly warn: LevelLogMethod;
   readonly info: LevelLogMethod;
@@ -58,4 +59,5 @@ export type TLoggerPlugin = TPlugin & {
 export type TLoggerOptions = {
   parent?: ILogger | string;
   level?: LogLevel;
+  group?: string;
 };

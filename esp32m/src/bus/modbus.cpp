@@ -58,6 +58,8 @@ namespace esp32m {
           break;
         case UART_NUM_2:
           break;
+        default:
+          return ESP_FAIL;
       }
       ESP_CHECK_RETURN(uart_set_pin(_config.port, txp, rxp, UART_PIN_NO_CHANGE,
                                     UART_PIN_NO_CHANGE));

@@ -33,7 +33,8 @@ class Logger implements ILogger {
   constructor(
     readonly name: string,
     readonly parent: ILogger | undefined,
-    private _level: LogLevel | undefined
+    private _level: LogLevel | undefined,
+    readonly group?: string
   ) {}
   try<T extends (...args: any) => any>(
     func: T
@@ -135,5 +136,8 @@ export function getLogger(name: string, options?: TLoggerOptions): ILogger {
     else if (parent instanceof Logger) p = parent;
   }
   if (p) n = `${p.name}.${name}`;
-  return loggers[n] || (loggers[n] = new Logger(n, p, options?.level));
+  return (
+    loggers[n] ||
+    (loggers[n] = new Logger(n, p, options?.level, options?.group))
+  );
 }

@@ -3,11 +3,19 @@
 namespace esp32m {
 
   namespace ha {
+
+    const char *stateClasses[] = {"measurement", "total", "total_increasing"};
+
     DynamicJsonDocument *describeSensor(Sensor *sensor) {
       auto uid = sensor->uid();
       auto id = sensor->id();
       auto name = sensor->name;
       auto precision = sensor->precision;
+      auto stateClass = (int)sensor->stateClass;
+      if (stateClass > 0 && stateClass <= 3)
+        stateClass--;
+      else
+        stateClass = -1;
       auto unit = sensor->unit;
       if (!unit) {
         if (sensor->is("temperature"))
@@ -36,7 +44,7 @@ namespace esp32m {
       DynamicJsonDocument *doc = new DynamicJsonDocument(
           JSON_OBJECT_SIZE(8 + (group > 0 ? 1 : 0) + (unit ? 1 : 0) +
                            (precision >= 0 ? 1 : 0) + (name ? 1 : 0)) +
-          JSON_STRING_SIZE(uid.size()) +
+          (stateClass >= 0 ? 1 : 0) + JSON_STRING_SIZE(uid.size()) +
           JSON_STRING_SIZE(strlen(id) + 15)  // {{value_json.%id%}}
       );
       auto root = doc->to<JsonObject>();
@@ -55,6 +63,8 @@ namespace esp32m {
         config["unit_of_measurement"] = unit;
       if (precision >= 0)
         config["suggested_display_precision"] = precision;
+      if (stateClass >= 0)
+        config["state_class"] = stateClasses[stateClass];
       config["value_template"] = string_printf("{{value_json.%s}}", id);
       return doc;
     }

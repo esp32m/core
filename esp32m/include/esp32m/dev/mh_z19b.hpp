@@ -28,7 +28,7 @@ namespace esp32m {
       unsigned long _stamp = 0;
     };
 
-    MhZ19b *useMhZ19b(uart_port_t uart_num = 2);
+    MhZ19b *useMhZ19b(uart_port_t uart_num = UART_NUM_2);
 
   }  // namespace dev
 }  // namespace esp32m

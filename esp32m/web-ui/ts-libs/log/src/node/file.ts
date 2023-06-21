@@ -59,6 +59,12 @@ class FileLogger implements ILoggerImpl {
     readonly path: string,
     readonly options?: TOptions
   ) {
+    const { group } = logger;
+    if (group) {
+      const dir = dirname(path);
+      const name = basename(path);
+      path = join(dir, `${group}-${name}`);
+    }
     const p = resolve(normalize(path));
     this._file = files[p] || (files[p] = new File(p, options?.roll || 0));
   }

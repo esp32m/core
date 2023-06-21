@@ -9,7 +9,7 @@ namespace esp32m {
 
   namespace dev {
 
-    Uart::Uart(int num, uart_config_t &config) : _num(num) {
+    Uart::Uart(uart_port_t num, uart_config_t &config) : _num(num) {
       sprintf(_name, "uart%d", num);
       ESP_ERROR_CHECK_WITHOUT_ABORT(uart_wait_tx_idle_polling(num));
       ESP_ERROR_CHECK_WITHOUT_ABORT(uart_param_config(num, &config));
@@ -108,7 +108,7 @@ namespace esp32m {
       return false;
     }
 
-    void useUart(int num, uart_config_t &config) {
+    void useUart(uart_port_t num, uart_config_t &config) {
       new Uart(num, config);
     }
 

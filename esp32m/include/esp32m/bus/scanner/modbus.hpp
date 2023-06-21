@@ -2,6 +2,7 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/bus/modbus.hpp"
+#include "sdkconfig.h"
 
 namespace esp32m {
   namespace bus {
@@ -27,7 +28,11 @@ namespace esp32m {
         Response *_pendingResponse = nullptr;
         int _startAddr = 1, _endAddr = 247, _addr = 1;
         uint16_t _regs = 0, _regc = 0;
-        uart_port_t _uart = 2;
+#if SOC_UART_HP_NUM > 2
+        uart_port_t _uart = UART_NUM_2;
+#else
+        uart_port_t _uart = UART_NUM_1;
+#endif
         uint32_t _baud = 9600;
         modbus::Command _cmd = modbus::Command::None;
         uart_parity_t _parity = UART_PARITY_DISABLE;

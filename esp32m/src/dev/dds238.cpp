@@ -20,9 +20,11 @@ namespace esp32m {
       _energyImp.group = group;
       _energyImp.precision = 2;
       _energyImp.name = "consumed energy";
+      _energyImp.stateClass = sensor::StateClass::Total;
       _energyExp.group = group;
       _energyExp.precision = 2;
       _energyExp.name = "supplied energy";
+      _energyExp.stateClass = sensor::StateClass::Total;
       _voltage.group = group;
       _voltage.precision = 2;
       _current.group = group;

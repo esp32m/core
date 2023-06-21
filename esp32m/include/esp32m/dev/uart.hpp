@@ -15,7 +15,7 @@ namespace esp32m {
   namespace dev {
     class Uart : public Device {
      public:
-      Uart(int num, uart_config_t &config);
+      Uart(uart_port_t num, uart_config_t &config);
       Uart(const Uart &) = delete;
       ~Uart();
       const char *name() const override {
@@ -27,7 +27,7 @@ namespace esp32m {
       bool handleRequest(Request &req) override;
 
      private:
-      int _num;
+      uart_port_t _num;
       TaskHandle_t _task = nullptr;
       char _name[6];
       QueueHandle_t _queue = nullptr;

@@ -99,6 +99,8 @@ namespace esp32m {
 
   namespace sensor {
 
+    enum class StateClass { Undefined, Measurement, Total, TotalIncreasing };
+
     Sensor *find(std::string uid);
     Sensor *find(Device *device, const char *id);
     int nextGroup();
@@ -225,6 +227,7 @@ namespace esp32m {
     int precision = -1;
     int group = 0;
     bool disabled = false;
+    sensor::StateClass stateClass = sensor::StateClass::Undefined;
     const char *unit = nullptr;
     const char *name = nullptr;
     Sensor(Device *device, const char *type, const char *id = nullptr,
