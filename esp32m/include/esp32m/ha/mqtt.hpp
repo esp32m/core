@@ -123,6 +123,7 @@ namespace esp32m {
             auto it = req.responses.find(id);
             if (it == req.responses.end()) {
               auto doc = describeSensor(sensor);
+              json::check(this, doc, "describeSensor");
               auto data = doc->as<JsonVariantConst>();
               publishConfig(id.c_str(), data);
               delete doc;

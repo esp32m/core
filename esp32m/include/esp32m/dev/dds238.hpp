@@ -30,6 +30,6 @@ namespace esp32m {
       Sensor _energyImp, _energyExp, _voltage, _current, _powerApparent, _powerReactive, _powerFactor, _frequency;
     };
 
-    void useDds238(uint8_t addr = 1);
+    Dds238* useDds238(uint8_t addr = 1);
   }  // namespace dev
 }  // namespace esp32m

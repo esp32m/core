@@ -43,8 +43,9 @@ namespace esp32m {
 
       DynamicJsonDocument *doc = new DynamicJsonDocument(
           JSON_OBJECT_SIZE(8 + (group > 0 ? 1 : 0) + (unit ? 1 : 0) +
-                           (precision >= 0 ? 1 : 0) + (name ? 1 : 0)) +
-          (stateClass >= 0 ? 1 : 0) + JSON_STRING_SIZE(uid.size()) +
+                           (precision >= 0 ? 1 : 0) + (name ? 1 : 0) +
+                           (stateClass >= 0 ? 1 : 0)) +
+          JSON_STRING_SIZE(uid.size()) +
           JSON_STRING_SIZE(strlen(id) + 15)  // {{value_json.%id%}}
       );
       auto root = doc->to<JsonObject>();

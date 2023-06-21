@@ -109,8 +109,8 @@ namespace esp32m {
     }
 
 
-    void useDds238(uint8_t addr) {
-      new Dds238(addr);
+    Dds238* useDds238(uint8_t addr) {
+      return new Dds238(addr);
     }
 
   }  // namespace dev
