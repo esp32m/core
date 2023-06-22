@@ -735,7 +735,8 @@ namespace esp32m {
       DoneReason reason;
       bool wakeup = false;
       if (EventInit::is(ev, 0)) {
-        // useNetif() must be called on the main thread, because other services may use tcpip during init
+        // useNetif() must be called on the main thread, because other services
+        // may use tcpip during init
         esp_netif_t *ifsta = nullptr, *ifap = nullptr;
 
         ifsta = esp_netif_get_handle_from_ifkey(getDefaultStaKey());
@@ -1166,6 +1167,7 @@ namespace esp32m {
     }
 
     void Wifi::run() {
+      int arcf;
       esp_task_wdt_add(NULL);
       init();
       for (;;) {
@@ -1193,7 +1195,8 @@ namespace esp32m {
               }
               break;
             case StaStatus::ConnectionFailed:
-              if (_connectFailures > 10) {
+              arcf = _sta.options().autoRestartConnectFailures;
+              if (arcf > 0 && (_connectFailures > arcf)) {
                 logW("too many connection failures, restarting...");
                 App::restart();
               }

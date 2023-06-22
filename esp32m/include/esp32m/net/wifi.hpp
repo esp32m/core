@@ -34,6 +34,10 @@ namespace esp32m {
         ConnectionFailed,
       };
 
+      struct StaOptions {
+        uint32_t autoRestartConnectFailures;
+      };
+
       class Sta : public Iface {
        public:
         Sta(const Sta &) = delete;
@@ -41,11 +45,15 @@ namespace esp32m {
           return _status;
         }
         esp_err_t enable(bool enable);
+        StaOptions &options() {
+          return _options;
+        }
         bool isConnected();
         esp_err_t disconnect();
 
        private:
         Sta();
+        StaOptions _options = {};
         StaStatus _status = StaStatus::Initial;
         void setStatus(StaStatus state);
         void getInfo(JsonObject);
