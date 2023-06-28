@@ -8,9 +8,9 @@ import { TContentPlugin, TRoutesPlugin } from '@ts-libs/ui-base';
 
 const component = () => (
   <Grid container>
+    <ScannerBox />
     <StaInfoBox />
     <ApInfoBox />
-    <ScannerBox />
   </Grid>
 );
 
