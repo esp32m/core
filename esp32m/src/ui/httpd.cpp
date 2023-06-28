@@ -18,6 +18,34 @@ namespace esp32m {
     const char *UriRoot = "/";
     std::vector<Httpd *> _httpdServers;
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define HTTPD_SCRATCH_BUF MAX(HTTPD_MAX_REQ_HDR_LEN, HTTPD_MAX_URI_LEN)
+    struct httpd_req_aux {
+      struct sock_db *sd; /*!< Pointer to socket database */
+      char scratch[HTTPD_SCRATCH_BUF +
+                   1]; /*!< Temporary buffer for our operations (1 byte extra
+                          for null termination) */
+      size_t remaining_len;     /*!< Amount of data remaining to be fetched */
+      char *status;             /*!< HTTP response's status code */
+      char *content_type;       /*!< HTTP response's content type */
+      bool first_chunk_sent;    /*!< Used to indicate if first chunk sent */
+      unsigned req_hdrs_count;  /*!< Count of total headers in request packet */
+      unsigned resp_hdrs_count; /*!< Count of additional headers in response
+                                   packet */
+      struct resp_hdr {
+        const char *field;
+        const char *value;
+      } *resp_hdrs; /*!< Additional headers in response packet */
+      struct http_parser_url url_parse_res; /*!< URL parsing result, used for
+                                               retrieving URL elements */
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+      bool ws_handshake_detect; /*!< WebSocket handshake detection flag */
+      httpd_ws_type_t ws_type;  /*!< WebSocket frame type */
+      bool ws_final;            /*!< WebSocket FIN bit (final frame or not) */
+      uint8_t mask_key[4];      /*!< WebSocket mask key for this payload */
+#endif
+    };
+
     void freeNop(void *ctx){};
 
     void closeFn(httpd_handle_t hd, int sockfd) {
@@ -59,6 +87,54 @@ namespace esp32m {
         return ESP_FAIL;
       }
       return httpd->incomingReq(req);
+    }
+
+    esp_err_t getHeader(httpd_req_t *req, const char *name,
+                        std::string &value) {
+      auto len = httpd_req_get_hdr_value_len(req, name);
+      if (len) {
+        size_t bufsize = len + 1;
+        auto buf = (char *)malloc(bufsize);
+        auto res = httpd_req_get_hdr_value_str(req, name, buf, bufsize);
+        if (res == ESP_OK)
+          value = buf;
+        free(buf);
+        return res;
+      }
+      return ESP_ERR_NOT_FOUND;
+    }
+
+    esp_err_t dumpHeaders(httpd_req_t *r) {
+      if (r == NULL)
+        return ESP_ERR_INVALID_ARG;
+
+      auto ra = (struct httpd_req_aux *)r->aux;
+      const char *hdr_ptr =
+          ra->scratch; /*!< Request headers are kept in scratch buffer */
+      unsigned count = ra->req_hdrs_count; /*!< Count set during parsing  */
+
+      while (count--) {
+        /* Search for the ':' character. Else, it would mean
+         * that the field is invalid
+         */
+        const char *val_ptr = strchr(hdr_ptr, ':');
+        if (!val_ptr) {
+          break;
+        }
+        logi("header: %s", hdr_ptr);
+
+        if (count) {
+          /* Jump to end of header field-value string */
+          hdr_ptr = 1 + strchr(hdr_ptr, '\0');
+
+          /* Skip all null characters (with which the line
+           * terminators had been overwritten) */
+          while (*hdr_ptr == '\0') {
+            hdr_ptr++;
+          }
+        }
+      }
+      return ESP_OK;
     }
 
     Httpd::Httpd() {
@@ -103,6 +179,38 @@ namespace esp32m {
 
     esp_err_t Httpd::incomingReq(httpd_req_t *req) {
       // logI("uri: %s", req->uri);
+      // dumpHeaders(req);
+
+      auto cp = false;
+      if (!strcmp(req->uri, "/generate_204")) {
+        cp = true;
+      } else {
+        std::string hv;
+        if (getHeader(req, "Host", hv) == ESP_OK) {
+          logI("host %s", hv.c_str());
+          if (hv == "captive.apple.com")
+            cp = true;
+        }
+      }
+      if (cp) {
+        net::wifi::Ap *ap = net::Wifi::instance().ap();
+        if (ap) {
+          char location[32];
+          esp_netif_ip_info_t info;
+          ap->getIpInfo(info);
+          sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              httpd_resp_set_status(req, "302"));  // 307 ???
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              httpd_resp_set_hdr(req, "Location", location));
+          // httpd_resp_set_type(req, "text/plain");
+          ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
+          logI("redirecting to captive portal %s", location);
+          return ESP_OK;
+        } else
+          logW("got %s request while AP is not running", req->uri);
+      }
+
       Asset *def = nullptr, *found = nullptr;
       for (Asset &a : _ui->assets()) {
         if (!strcmp(req->uri, a._uri)) {
@@ -113,24 +221,7 @@ namespace esp32m {
           def = &a;
       }
       if (!found) {
-        if (!strcmp(req->uri, "/generate_204")) {
-          net::wifi::Ap *ap = net::Wifi::instance().ap();
-          if (ap) {
-            char location[32];
-            esp_netif_ip_info_t info;
-            ap->getIpInfo(info);
-            sprintf(location, "http://" IPSTR "/cp", IP2STR(&info.ip));
-            ESP_ERROR_CHECK_WITHOUT_ABORT(
-                httpd_resp_set_status(req, "302"));  // 307 ???
-            ESP_ERROR_CHECK_WITHOUT_ABORT(
-                httpd_resp_set_hdr(req, "Location", location));
-            // httpd_resp_set_type(req, "text/plain");
-            ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
-            logI("redirecting to captive portal %s", location);
-            return ESP_OK;
-          } else
-            logW("got %s request while AP is not running", req->uri);
-        } else if (!strEndsWith(req->uri, ".ico"))
+        if (!strEndsWith(req->uri, ".ico"))
           found = def;
         /*logI("strEndsWith %s %s %d %d", req->uri, ".js.map",
              strEndsWith(req->uri, ".js.map"), found == nullptr);*/
