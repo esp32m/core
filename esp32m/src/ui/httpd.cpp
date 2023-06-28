@@ -187,7 +187,7 @@ namespace esp32m {
       } else {
         std::string hv;
         if (getHeader(req, "Host", hv) == ESP_OK) {
-          logI("host %s", hv.c_str());
+          // logI("host %s", hv.c_str());
           if (hv == "captive.apple.com")
             cp = true;
         }
