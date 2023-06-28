@@ -46,6 +46,28 @@ namespace esp32m {
 #endif
     };
 
+    esp_err_t dumpHeaders(httpd_req_t *r) {
+      if (r == NULL)
+        return ESP_ERR_INVALID_ARG;
+
+      auto ra = (struct httpd_req_aux *)r->aux;
+      const char *hdr_ptr = ra->scratch;
+      unsigned count = ra->req_hdrs_count;
+
+      while (count--) {
+        const char *val_ptr = strchr(hdr_ptr, ':');
+        if (!val_ptr)
+          break;
+        logi("header: %s", hdr_ptr);
+
+        if (count) {
+          hdr_ptr = 1 + strchr(hdr_ptr, '\0');
+          while (*hdr_ptr == '\0') hdr_ptr++;
+        }
+      }
+      return ESP_OK;
+    }
+
     void freeNop(void *ctx){};
 
     void closeFn(httpd_handle_t hd, int sockfd) {
@@ -104,39 +126,6 @@ namespace esp32m {
       return ESP_ERR_NOT_FOUND;
     }
 
-    esp_err_t dumpHeaders(httpd_req_t *r) {
-      if (r == NULL)
-        return ESP_ERR_INVALID_ARG;
-
-      auto ra = (struct httpd_req_aux *)r->aux;
-      const char *hdr_ptr =
-          ra->scratch; /*!< Request headers are kept in scratch buffer */
-      unsigned count = ra->req_hdrs_count; /*!< Count set during parsing  */
-
-      while (count--) {
-        /* Search for the ':' character. Else, it would mean
-         * that the field is invalid
-         */
-        const char *val_ptr = strchr(hdr_ptr, ':');
-        if (!val_ptr) {
-          break;
-        }
-        logi("header: %s", hdr_ptr);
-
-        if (count) {
-          /* Jump to end of header field-value string */
-          hdr_ptr = 1 + strchr(hdr_ptr, '\0');
-
-          /* Skip all null characters (with which the line
-           * terminators had been overwritten) */
-          while (*hdr_ptr == '\0') {
-            hdr_ptr++;
-          }
-        }
-      }
-      return ESP_OK;
-    }
-
     Httpd::Httpd() {
       _config = HTTPD_DEFAULT_CONFIG();
       _config.global_user_ctx = this;
@@ -182,13 +171,15 @@ namespace esp32m {
       // dumpHeaders(req);
 
       auto cp = false;
-      if (!strcmp(req->uri, "/generate_204")) {
+      if (!strcmp(req->uri, "/generate_204") ||
+          !strcmp(req->uri, "/hotspot-detect.html")) {
         cp = true;
       } else {
         std::string hv;
         if (getHeader(req, "Host", hv) == ESP_OK) {
           // logI("host %s", hv.c_str());
-          if (hv == "captive.apple.com")
+          if (hv == "captive.apple.com" || hv == "detectportal.firefox.com" ||
+              hv == "www.msftconnecttest.com")
             cp = true;
         }
       }
