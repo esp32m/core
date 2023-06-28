@@ -25,7 +25,7 @@ export const NetworkInterfaces: TContentPlugin & Ti18nPlugin = {
         Netmask: 'Netzmaske',
         Gateway: 'Gateway',
         'Primary DNS': 'Primärer DNS',
-        'Secondary DNS': 'Sekundäre DNS',
+        'Secondary DNS': 'Sekundärer DNS',
         'Fallback DNS': 'Fallback-DNS',
         'MAC address': 'MAC-Adresse',
         'IP gateway': 'IP-Gateway',

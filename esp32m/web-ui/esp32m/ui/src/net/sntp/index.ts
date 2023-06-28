@@ -18,13 +18,13 @@ export const Sntp: TContentPlugin & Ti18nPlugin = {
     resources: {
       de: {
         'Time zone': 'Zeitzone',
-        'Enable time synchronization': 'Zeitsynchronisierung Aktivieren',
+        'Enable time synchronization': 'Zeitsynchronisierung aktivieren',
         'Time zone setting': 'Zeitzoneneinstellung',
         'NTP hostname': 'NTP-Hostname',
         'Interval, s': 'Intervall, s',
         'Last synchronization': 'Letzte Synchronisation',
         'Current on-chip local time': 'Aktuelle Ortszeit auf dem Chip',
-        'never happened': 'nie passiert',
+        'never happened': 'noch nie',
         'SNTP Time Synchronization': 'SNTP-Zeitsynchronisierung',
         Autodetect: 'Autoerkennung',
         'Synchronize now': 'Jetzt synchronisieren',

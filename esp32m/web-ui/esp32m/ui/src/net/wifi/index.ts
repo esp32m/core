@@ -32,7 +32,7 @@ export const Wifi: TContentPlugin & Ti18nPlugin = {
         Channel: 'Kanal',
         'IP address': 'IP Adresse',
         'IP gateway': 'IP Gateway',
-        Clients: 'Kunden',
+        Clients: 'Teilnehmer',
         'WiFi Access Point': 'WLAN-Zugangspunkt',
         Connect: 'Verbinden',
         'Connect to WiFi Access Point': 'Verbinden mit dem WLAN-Zugangspunkt',
