@@ -7,6 +7,7 @@ import {
   useHeaderActions,
 } from './utils';
 import Iconify from './Iconify';
+import { MenuIcon } from './icons';
 
 type RootStyleProps = {
   isCollapse: boolean;
@@ -84,7 +85,8 @@ export function Header({
             onClick={onOpenSidebar}
             sx={{ mr: 1, color: 'text.primary' }}
           >
-            <Iconify icon="eva:menu-2-fill" />
+            {/*<Iconify icon="eva:menu-2-fill" /> */}
+            <MenuIcon />
           </IconButton>
         )}
         {content && (
