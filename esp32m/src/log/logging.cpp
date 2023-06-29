@@ -255,7 +255,7 @@ namespace esp32m {
       char *buf = nullptr;
       auto level = msg->level();
       auto name = msg->name();
-      char l = level >= 0 && level < 6 ? levels[level] : '?';
+      char l = level >= 0 && level <= 6 ? levels[level] : '?';
       if (stamp < 0) {
         stamp = -stamp;
         char strftime_buf[32];
