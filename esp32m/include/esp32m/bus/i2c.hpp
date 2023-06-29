@@ -50,6 +50,9 @@ namespace esp32m {
       return _addr;
     }
     void setAddr(uint8_t addr);
+    i2c_port_t port() const {
+      return _port;
+    }
     uint32_t clkSpeed() const {
       return _cfg.master.clk_speed;
     }
@@ -120,6 +123,7 @@ namespace esp32m {
       T v = toEndian(_endianness, value);
       return write(&reg, 1, &v, sizeof(T));
     }
+    esp_err_t sync();
 
    private:
     std::string _name;
@@ -132,7 +136,6 @@ namespace esp32m {
 
     Endian _endianness = Endian::Big;
     std::unique_ptr<i2c::MutexRef> _mutex;
-    esp_err_t sync();
     void logIO(bool write, esp_err_t res, const void *out_data,
                size_t out_size, const void *in_data, size_t in_size);
   };
