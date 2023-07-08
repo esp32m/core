@@ -240,12 +240,7 @@ namespace esp32m {
       int _connectFailures = 0;
       int _maxAps = 5;
       bool _hostnameChanged = true;
-      wifi_scan_config_t _scanConfig = {.ssid = nullptr,
-                                        .bssid = nullptr,
-                                        .channel = 0,
-                                        .show_hidden = true,
-                                        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-                                        .scan_time = {}};
+      wifi_scan_config_t _scanConfig = {};
 
       Response *_pendingResponse = nullptr;
       std::unique_ptr<ApInfo> _connect;
