@@ -664,6 +664,7 @@ namespace esp32m {
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
       ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
 #endif
+      // no need to fire net::IfEventType::Created because we subclass net::IFace and call init()
       if (!ifsta)
         ifsta = esp_netif_create_default_wifi_sta();
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT

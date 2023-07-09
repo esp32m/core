@@ -74,6 +74,7 @@ namespace esp32m {
         ESP_CHECK_RETURN(useEventLoop());
         esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
         _if = esp_netif_new(&cfg);
+        net::IfEvent::publish(_if, net::IfEventType::Created);
         ESP_CHECK_RETURN(esp_eth_driver_install(&_config, &_handle));
         ESP_CHECK_RETURN(
             esp_netif_attach(_if, esp_eth_new_netif_glue(_handle)));
@@ -173,7 +174,8 @@ namespace esp32m {
     Ethernet *useOlimexEthernet(const char *name) {
       // power up LAN8710 chip
       auto pin = gpio::pin(GPIO_NUM_12)->digital();
-      pin->setDirection(false, true);
+      pin->setDirection(true, true);
+      pin->setPull(true, false);
       pin->write(true);
       delay(10);
 

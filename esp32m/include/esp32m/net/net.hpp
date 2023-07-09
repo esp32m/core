@@ -9,6 +9,8 @@
 #include <map>
 #include <vector>
 
+#include "esp32m/events.hpp"
+
 namespace esp32m {
 
   namespace json {
@@ -74,6 +76,57 @@ namespace esp32m {
         JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) + (Ipv4MaxChars * 2);
     const int Ipv6MaxChars = 40;
     const int MacMaxChars = 18;
+
+    enum class IfEventType {
+      Created,  // new interface created
+    };
+
+    class IfEvent : public Event {
+     public:
+      IfEventType event() const {
+        return _event;
+      }
+      const char *key() const {
+        return _key;
+      }
+
+      bool is(IfEventType event) const {
+        return _event == event;
+      }
+
+      static bool is(Event &ev, IfEvent **r) {
+        auto result = ev.is(Type);
+        if (result && r)
+          *r = (IfEvent *)&ev;
+        return result;
+      }
+      static bool is(Event &ev, IfEventType event, IfEvent **r = nullptr) {
+        auto result = ev.is(Type);
+        if (result) {
+          auto ifev = (IfEvent *)&ev;
+          result = ifev->is(event);
+          if (result && r)
+            *r = ifev;
+        }
+        return result;
+      }
+
+      static void publish(const char *key, IfEventType event) {
+        IfEvent evt(key, event);
+        evt.Event::publish();
+      }
+      static void publish(esp_netif_t *netif, IfEventType event) {
+        IfEvent evt(esp_netif_get_ifkey(netif), event);
+        evt.Event::publish();
+      }
+
+     private:
+      const char *_key;
+      IfEventType _event;
+      IfEvent(const char *key, IfEventType event)
+          : Event(Type), _key(key), _event(event) {}
+      constexpr static const char *Type = "net-if";
+    };
 
     bool isEmptyMac(uint8_t *mac);
     bool isEmpty(esp_netif_dns_info_t *dns);

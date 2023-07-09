@@ -26,8 +26,9 @@ extern "C" void app_main()
   log::hookUartLogger();
   net::useOta();
   net::useSntp();
-  net::useOlimexEthernet();
   dev::useEsp32();
+  net::useWifi();
+  net::useOlimexEthernet();
   net::useInterfaces();
   initUi(new Ui(new ui::Httpd()));
 }

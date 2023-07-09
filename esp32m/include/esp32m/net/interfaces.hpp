@@ -83,6 +83,7 @@ namespace esp32m {
       static Interfaces &instance();
 
      protected:
+      void handleEvent(Event &ev) override;
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
       bool setConfig(const JsonVariantConst cfg,
                      DynamicJsonDocument **result) override;

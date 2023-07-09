@@ -10,6 +10,8 @@ namespace esp32m {
     Interface::~Interface() {}
 
     void Interface::init(const char *key) {
+      if (_handle)
+        return;
       _key = key;
       _handle = esp_netif_get_handle_from_ifkey(_key.c_str());
       Interfaces::instance().reg(this);
@@ -18,11 +20,13 @@ namespace esp32m {
     }
 
     esp_err_t Interface::getIpInfo(esp_netif_ip_info_t &info) {
+      if (!_handle)
+        return ESP_FAIL;
       return esp_netif_get_ip_info(_handle, &info);
     }
 
     bool Interface::isUp() {
-      return esp_netif_is_netif_up(_handle);
+      return _handle && esp_netif_is_netif_up(_handle);
     }
 
     void Interface::syncHandle(ErrorList &errl) {
@@ -58,8 +62,10 @@ namespace esp32m {
     }
 
     void Interface::stopDhcp() {
-      esp_netif_dhcpc_stop(_handle);
-      esp_netif_dhcps_stop(_handle);
+      if (_handle) {
+        esp_netif_dhcpc_stop(_handle);
+        esp_netif_dhcps_stop(_handle);
+      }
     }
 
     void Interface::apply(ConfigItem item, ErrorList &errl) {
@@ -213,7 +219,7 @@ namespace esp32m {
                               DynamicJsonDocument **result) {
       ErrorList el;
       bool changed = false;
-//      json::dump(this, cfg, "setConfig");
+      //      json::dump(this, cfg, "setConfig");
       JsonObjectConst root = cfg.as<JsonObjectConst>();
       if (json::fromIntCastable(root["role"], _role, &changed))
         apply(ConfigItem::Role, el);
@@ -272,6 +278,13 @@ namespace esp32m {
     Interfaces::~Interfaces() {
       std::lock_guard guard(_mapMutex);
       for (const auto &i : _map) delete i.second;
+    }
+
+    void Interfaces::handleEvent(Event &ev) {
+      net::IfEvent *ifev;
+      if (net::IfEvent::is(ev, net::IfEventType::Created, &ifev)) {
+        getOrAddInterface(ifev->key());
+      }
     }
     DynamicJsonDocument *Interfaces::getState(const JsonVariantConst args) {
       syncMap();
@@ -338,27 +351,29 @@ namespace esp32m {
       }
     }
     Interface *Interfaces::getOrAddInterface(const char *key) {
+      Interface *result = nullptr;
       {
         std::lock_guard guard(_mapMutex);
         auto i = _map.find(key);
         if (i != _map.end())
-          return i->second;
+          result = i->second;
       }
-      auto newIface = new Interface();
-      newIface->init(key);
-      return newIface;
+      if (!result)
+        result = new Interface();
+      result->init(key);
+      return result;
     }
 
     void Interfaces::reg(Interface *i) {
       auto key = i->key();
+      logD("register interface %s, handle=%i", key.c_str(), i->_handle);
       std::lock_guard guard(_mapMutex);
       auto old = _map.find(key);
       if (old != _map.end() && old->second) {
-        // this happens if config was loaded before the interface was created
-        // in this case we have Interface object without a _handle in the _map,
-        // but with the loaded config and we move it over to the real interfce
+        // This happens if config was loaded before the interface was created.
+        // In this case we have Interface object without a _handle in the _map,
+        // but with the loaded config, and we move it over to the real interfce
         // that is being added now
-        logd("configuring interface %s", key.c_str());
         if (old->second->_configLoaded && i->_handle) {
           auto doc = old->second->getConfig();
           i->setConfig(*doc, nullptr);
@@ -366,7 +381,7 @@ namespace esp32m {
         }
         if (!old->second->_handle)
           delete old->second;
-        else
+        else if (old->second != i) // it's OK if we are registering the same interface
           logw("BUG: trying to register interface %s more than once",
                key.c_str());
         old->second = i;
