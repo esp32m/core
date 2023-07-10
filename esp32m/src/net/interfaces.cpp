@@ -366,7 +366,7 @@ namespace esp32m {
 
     void Interfaces::reg(Interface *i) {
       auto key = i->key();
-      logD("register interface %s, handle=%i", key.c_str(), i->_handle);
+      // logD("register interface %s, handle=%i", key.c_str(), i->_handle);
       std::lock_guard guard(_mapMutex);
       auto old = _map.find(key);
       if (old != _map.end() && old->second) {

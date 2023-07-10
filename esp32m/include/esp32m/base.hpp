@@ -8,6 +8,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -23,7 +24,7 @@ namespace esp32m {
 
   const char *makeTaskName(const char *name);
   bool strEndsWith(const char *str, const char *suffix);
-  
+
   std::string string_printf(const char *format, va_list args);
   std::string string_printf(const char *format, ...);
 
@@ -43,6 +44,27 @@ namespace esp32m {
       else
         delay(1);
     return false;
+  }
+  
+  // credits to
+  // https://codereview.stackexchange.com/questions/173929/modern-c-singleton-template
+  template <typename T>
+  class Singleton {
+   public:
+    static T &instance();
+
+    Singleton(const Singleton &) = delete;
+    Singleton &operator=(const Singleton) = delete;
+
+   protected:
+    struct token {};
+    Singleton() {}
+  };
+
+  template <typename T>
+  T &Singleton<T>::instance() {
+    static T instance{token{}};
+    return instance;
   }
 
   namespace locks {
