@@ -161,6 +161,12 @@ namespace esp32m {
       }
       bool isReady();
       bool isConnected();
+      bool isEnabled() const {
+        return _enabled;
+      }
+      void enable(bool value) {
+        _enabled = value;
+      }
       bool publish(const char *topic, const char *message, int qos = 0,
                    bool retain = false);
       bool enqueue(const char *topic, const char *message, int qos = 0,
