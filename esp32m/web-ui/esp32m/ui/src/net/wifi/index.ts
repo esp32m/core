@@ -23,6 +23,12 @@ export const Wifi: TContentPlugin & Ti18nPlugin = {
   },
   i18n: {
     resources: {
+      en: {
+        CaptivePortalConnected:
+          'The device is connected to the WiFi access point {{ssidText}}',
+        CaptivePortalDeviceURL:
+          'You can now switch to your local WiFi and access this device via http://{{addr}}/',
+      },
       de: {
         WiFi: 'W-LAN',
         'WiFi settings': 'WLAN Einstellungen',
@@ -37,6 +43,11 @@ export const Wifi: TContentPlugin & Ti18nPlugin = {
         Connect: 'Verbinden',
         'Connect to WiFi Access Point': 'Verbinden mit dem WLAN-Zugangspunkt',
         'TX power': 'Sendeleistung',
+        'Connection succeeded!': 'Verbindung erfolgreich hergestellt!',
+        CaptivePortalConnected:
+          'Das Gerät ist mit dem WLAN-Zugangspunkt {{ssidText}} verbunden',
+        CaptivePortalDeviceURL:
+          'Sie können nun zu Ihrem lokalen WLAN wechseln und über http://{{addr}}/ auf dieses Gerät zugreifen',
       },
       uk: {
         'WiFi settings': 'Налаштування WiFi',
@@ -51,6 +62,11 @@ export const Wifi: TContentPlugin & Ti18nPlugin = {
         Connect: "З'єднати",
         'Connect to WiFi Access Point': "З'єднати з точкою доступу",
         'TX power': 'Потужність передавача',
+        'Connection succeeded!': "З'єднання успішно встановлено!",
+        CaptivePortalConnected:
+          'Пристрій підсключено до точки доступу WiFi {{ssidText}}',
+        CaptivePortalDeviceURL:
+          'Тепер ви можете переключитись на ваш звичайний WiFi і керувати пристроєм, відкривши в браузері http://{{addr}}/',
       },
     },
   },

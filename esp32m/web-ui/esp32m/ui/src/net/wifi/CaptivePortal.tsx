@@ -9,26 +9,27 @@ import { TContentPlugin, TRoutesPlugin } from '@ts-libs/ui-base';
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../../backend';
 import { Name, WifiMode, TWifiState } from './types';
+import { useTranslation } from '@ts-libs/ui-i18n';
 
 const SuccessBox = () => {
+  const { t } = useTranslation();
   const state = useModuleState<TWifiState>(Name);
   const { sta, mode = 0 } = state || {};
   if (!sta || ![WifiMode.Sta, WifiMode.ApSta].includes(mode)) return null;
   const { ssid, ip = [], bssid } = sta;
   const [addr] = ip;
   if (!ssid || !addr) return null;
+  const ssidText = `${ssid + (bssid ? ` (${bssid})` : '')}`;
   return (
     <CardBox>
       <Typography align="center" variant="h6">
-        Connection succeeded!
+        {t('Connection succeeded!')}
       </Typography>
       <Typography align="center" variant="subtitle1">
-        {`The device is connected to the WiFi access point ${
-          ssid + (bssid ? ` (${bssid})` : '')
-        }`}
+        {t('CaptivePortalConnected', { ssidText })}
       </Typography>
       <Typography align="center" variant="subtitle2">
-        {`You can now switch to your local WiFi and access this device via http://${addr}/`}
+        {t('CaptivePortalDeviceURL', { addr })}
       </Typography>
     </CardBox>
   );
