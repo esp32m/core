@@ -31,7 +31,7 @@ function ConnectDialog(props: IProps) {
   const dp: DialogProps = { open, onClose };
   return (
     <Dialog {...dp}>
-      <DialogTitle>Connect to WiFi Access Point</DialogTitle>
+      <DialogTitle>{t('Connect to WiFi Access Point')}</DialogTitle>
       <DialogContent>
         <MuiForm
           initial={initial}
@@ -56,7 +56,7 @@ function ConnectDialog(props: IProps) {
                 />
                 <DialogActions>
                   <Button onClick={() => onClose()} color="secondary">
-                    {t('сancel')}
+                    {t('cancel')}
                   </Button>
                   <Button
                     onClick={() => controller.submitForm()}

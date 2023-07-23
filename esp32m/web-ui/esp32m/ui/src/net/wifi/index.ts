@@ -41,7 +41,7 @@ export const Wifi: TContentPlugin & Ti18nPlugin = {
         Clients: 'Teilnehmer',
         'WiFi Access Point': 'WLAN-Zugangspunkt',
         Connect: 'Verbinden',
-        'Connect to WiFi Access Point': 'Verbinden mit dem WLAN-Zugangspunkt',
+        'Connect to WiFi Access Point': 'Verbinde zum WLAN-Zugangspunkt',
         'TX power': 'Sendeleistung',
         'Connection succeeded!': 'Verbindung erfolgreich hergestellt!',
         CaptivePortalConnected:

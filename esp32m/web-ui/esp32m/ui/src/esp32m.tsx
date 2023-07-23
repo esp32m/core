@@ -64,6 +64,7 @@ const plugin: TUiThemePlugin & Ti18nPlugin = {
     resources: {
       en: {},
       de: {
+        cancel: 'Abbrechen',
         'save changes': 'Änderungen speichern',
         Overview: 'Überblick',
         'Created with': 'Hergestellt mit',
@@ -72,6 +73,7 @@ const plugin: TUiThemePlugin & Ti18nPlugin = {
         'save changes': 'зберегти зміни',
         Overview: 'Огляд',
         'Created with': 'Створено за допомогою',
+        cancel: 'Відміна',
       },
     },
   },
