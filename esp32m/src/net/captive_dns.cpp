@@ -149,6 +149,11 @@ namespace esp32m {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Waddress-of-packed-member"
 
+  const char *ExcludeNames[] = {"clients3.google.com", "clients.l.google.com",
+                                "connectivitycheck.android.com",
+                                "connectivitycheck.gstatic.com",
+                                "play.googleapis.com"};
+
   // Receive a DNS packet and maybe send a response back
   void CaptiveDns::recv(struct sockaddr_in *premote_addr, char *pusrdata,
                         unsigned short length) {
@@ -188,6 +193,13 @@ namespace esp32m {
       logD("DNS: Q (type 0x%X class 0x%X) for %s", my_ntohs(&qf->type),
            my_ntohs(&qf->clazz), buff);
 
+      bool exclude = false;
+      for (int i = 0; i < sizeof(ExcludeNames) / sizeof(const char *); i++)
+        if (!strcmp(ExcludeNames[i], buff)) {
+          exclude = true;
+          break;
+        }
+
       if (my_ntohs(&qf->type) == QTYPE_A) {
         // They want to know the IPv4 address of something.
         // Build the response.
@@ -211,10 +223,18 @@ namespace esp32m {
         // struct ip_info info;
         // wifi_get_ip_info(SOFTAP_IF, &info);
         // logi("resp: " IPSTR, IP2STR(&_ip));
-        *rend++ = ip4_addr1(&_ip);
-        *rend++ = ip4_addr2(&_ip);
-        *rend++ = ip4_addr3(&_ip);
-        *rend++ = ip4_addr4(&_ip);
+        if (exclude) {
+          logD("resolving %s to a random IP", buff);
+          *rend++ = 10;
+          *rend++ = 45;
+          *rend++ = 12;
+          *rend++ = 1;
+        } else {
+          *rend++ = ip4_addr1(&_ip);
+          *rend++ = ip4_addr2(&_ip);
+          *rend++ = ip4_addr3(&_ip);
+          *rend++ = ip4_addr4(&_ip);
+        }
         setn16(&rhdr->ancount, my_ntohs(&rhdr->ancount) + 1);
         // printf("IP Address:  %s\n", ip4addr_ntoa(&info.ip));
         // printf("Added A rec to resp. Resp len is %d\n", (rend-reply));
