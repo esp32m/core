@@ -151,7 +151,7 @@ namespace esp32m {
 
   const char *ExcludeNames[] = {"clients3.google.com", "clients.l.google.com",
                                 "connectivitycheck.android.com",
-                                "connectivitycheck.gstatic.com",
+                                // "connectivitycheck.gstatic.com",
                                 "play.googleapis.com"};
 
   // Receive a DNS packet and maybe send a response back
