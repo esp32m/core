@@ -185,8 +185,8 @@ namespace esp32m {
       DnsQuestionFooter *qf = (DnsQuestionFooter *)p;
       p += sizeof(DnsQuestionFooter);
 
-      // logI("DNS: Q (type 0x%X class 0x%X) for %s", my_ntohs(&qf->type),
-      // my_ntohs(&qf->clazz), buff);
+      logD("DNS: Q (type 0x%X class 0x%X) for %s", my_ntohs(&qf->type),
+           my_ntohs(&qf->clazz), buff);
 
       if (my_ntohs(&qf->type) == QTYPE_A) {
         // They want to know the IPv4 address of something.
