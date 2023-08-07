@@ -5,6 +5,7 @@ import {
   ListItem,
   ListItemText,
   IconButton,
+  Grid,
 } from '@mui/material';
 import { Delete } from '@mui/icons-material';
 
@@ -27,6 +28,23 @@ const PowerOptions = [
   [WifiPower.dBm_7, '7 dBm'],
   [WifiPower.dBm_5, '5 dBm'],
   [WifiPower.dBm_2, '2 dBm'],
+];
+
+const ChannelOptions = [
+  [0, 'Auto'],
+  [1, '1'],
+  [2, '2'],
+  [3, '3'],
+  [4, '4'],
+  [5, '5'],
+  [6, '6'],
+  [7, '7'],
+  [8, '8'],
+  [9, '9'],
+  [10, '10'],
+  [11, '11'],
+  [12, '12'],
+  [13, '13'],
 ];
 
 function SavedAps({
@@ -83,13 +101,26 @@ export const SettingsBox = () => {
       title="WiFi settings"
       validationSchema={ValidationSchema}
     >
-      <FieldSelect fullWidth name="txp" label="TX power">
-        {PowerOptions.map((o) => (
-          <MenuItem key={o[0] || '_'} value={o[0]}>
-            {o[1]}
-          </MenuItem>
-        ))}
-      </FieldSelect>
+      <Grid container spacing={3}>
+        <Grid item xs>
+          <FieldSelect fullWidth name="txp" label="TX power">
+            {PowerOptions.map((o) => (
+              <MenuItem key={o[0] || '_'} value={o[0]}>
+                {o[1]}
+              </MenuItem>
+            ))}
+          </FieldSelect>
+        </Grid>
+        <Grid item xs>
+          <FieldSelect fullWidth name="channel" label="Channel">
+            {ChannelOptions.map((o) => (
+              <MenuItem key={o[0] || '_'} value={o[0]}>
+                {o[1]}
+              </MenuItem>
+            ))}
+          </FieldSelect>
+        </Grid>
+      </Grid>
       {config.aps?.length && (
         <SavedAps aps={config.aps} refreshConfig={refreshConfig} />
       )}

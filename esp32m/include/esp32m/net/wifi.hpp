@@ -235,6 +235,7 @@ namespace esp32m {
       std::vector<ApInfo *> _aps;
       wifi_err_reason_t _errReason = (wifi_err_reason_t)0;
       int8_t _txp = 0;
+      uint8_t _channel = 0;
 
       unsigned long _staTimer = 0, _scanStarted = 0;
       int _connectFailures = 0;

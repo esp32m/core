@@ -289,6 +289,9 @@ namespace esp32m {
               prepareCfg(false);
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_set_config(_handle, &_cfg));
+              /*if (_cfg.session.last_will.topic && _cfg.session.last_will.msg)
+                logI("LWT is %s %s", _cfg.session.last_will.topic,
+                     _cfg.session.last_will.msg);*/
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_start(_handle));
               _timer = millis();
             }

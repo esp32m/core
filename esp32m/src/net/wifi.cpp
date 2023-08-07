@@ -664,7 +664,8 @@ namespace esp32m {
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
       ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
 #endif
-      // no need to fire net::IfEventType::Created because we subclass net::IFace and call init()
+      // no need to fire net::IfEventType::Created because we subclass
+      // net::IFace and call init()
       if (!ifsta)
         ifsta = esp_netif_create_default_wifi_sta();
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
@@ -909,7 +910,7 @@ namespace esp32m {
     void setIfcfg(wifi_interface_t ifx, JsonObjectConst source) {}
 
     DynamicJsonDocument *Wifi::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(1) +      // txp
+      size_t size = JSON_OBJECT_SIZE(2) +      // txp, channel
                     JSON_OBJECT_SIZE(1 + 3) +  // sta: proto, bw, inact
                     JSON_OBJECT_SIZE(1 + 3);   // ap:  proto, bw, inact,
 
@@ -924,6 +925,7 @@ namespace esp32m {
       auto doc = new DynamicJsonDocument(size);
       auto cr = doc->to<JsonObject>();
       cr["txp"] = _txp;
+      cr["channel"] = _channel;
       auto sta = cr.createNestedObject("sta");
       getIfcfg(WIFI_IF_STA, sta);
       auto ap = cr.createNestedObject("ap");
@@ -951,6 +953,7 @@ namespace esp32m {
           _txp = txp;
           changed = true;
         }
+      json::from(ca["channel"], _channel, &changed);
       JsonObjectConst obj = ca["sta"];
       if (obj)
         setIfcfg(WIFI_IF_STA, obj);
@@ -979,6 +982,8 @@ namespace esp32m {
                 sizeof(conf.sta.ssid));
         const uint8_t *bssid = ap->bssid();
         char bssidStr[net::MacMaxChars] = "any";
+        if (_channel)
+          conf.sta.channel = _channel;
         if (bssid && !noBssid) {
           conf.sta.bssid_set = 1;
           memcpy((void *)&conf.sta.bssid[0], bssid, 6);
@@ -1013,7 +1018,8 @@ namespace esp32m {
         _sta.apply(Interface::ConfigItem::Role, errl);*/
         if (!errl.empty())
           return false;
-        logI("connecting to %s [%s]...", ssid, bssidStr);
+        logI("connecting to %s [%s], channel %d", ssid, bssidStr,
+             (int)_channel);
       }
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_connect()) != ESP_OK)
         return false;
