@@ -23,7 +23,7 @@ const ValidationSchema = Yup.object().shape({
   hostname: Yup.string()
     .min(4)
     .max(31)
-    .matches(/^([a-z0-9](?:[a-z0-9-]*[a-z0-9]))/),
+    .matches(/^([a-z0-9](?:[a-z0-9-]*[a-z0-9]))$/),
 });
 
 const ResetButton = styled(Button)({
