@@ -74,3 +74,17 @@ export function millisToStr(milliseconds: number): string {
 
   return 'less than a second';
 }
+
+const defines: Record<string, any> = {};
+
+export function setDefine(name: string, value: any) {
+  defines[name] = value;
+}
+
+export function getDefine(name: string) {
+  return defines[name];
+}
+
+export function getDefines(names: Array<string>) {
+  return names.map((n) => defines[n]);
+}

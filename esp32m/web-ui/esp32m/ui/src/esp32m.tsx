@@ -11,6 +11,7 @@ import { ApInfoBox, MqttStateBox, StaInfoBox } from './net';
 import { TContentPlugin, TUiThemePlugin } from '@ts-libs/ui-base';
 import { pluginUi18n, Ti18nPlugin, useTranslation } from '@ts-libs/ui-i18n';
 import { OtaPlugin } from './net/ota/plugin';
+import { setDefine } from './utils';
 
 const header = (
   <VerticalMenuHeader
@@ -81,6 +82,7 @@ const plugin: TUiThemePlugin & Ti18nPlugin = {
 
 export type TEsp32mUiConfig = {
   readonly plugins?: Array<TPlugin>;
+  readonly defines?: Record<string, any>;
 };
 
 export function startUi(config?: TEsp32mUiConfig) {
@@ -95,6 +97,8 @@ export function startUi(config?: TEsp32mUiConfig) {
       OtaPlugin,
     ]
   );
+  if (config?.defines)
+    for (const kv of Object.entries(config?.defines)) setDefine(kv[0], kv[1]);
   if (!findPlugin('home'))
     register({
       name: 'home',
