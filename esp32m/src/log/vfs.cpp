@@ -7,10 +7,11 @@
 
 #include "esp32m/log/vfs.hpp"
 #include "esp32m/net/ota.hpp"
+
 namespace esp32m {
   namespace log {
     bool Vfs::append(const char *message) {
-      if (!xPortCanYield()) // called from ISR
+      if (!xPortCanYield())  // called from ISR
         return false;
       if (net::ota::isRunning())
         return false;
@@ -39,8 +40,11 @@ namespace esp32m {
         free(b);
         _file = fopen(_name, "a");
       }
-      if (_file)
+      if (_file) {
         result = !message || fprintf(_file, "%s\n", message) > 0;
+        if (result)
+          fflush(_file);
+      }
       return result;
     }
 
