@@ -14,6 +14,7 @@ import { Alert, Expander, useAlert } from '@ts-libs/ui-base';
 import { useBackendApi, useModuleConfig } from '../../backend';
 import { ConfigBox } from '../../app';
 import { FieldSelect } from '@ts-libs/ui-forms';
+import { getDefines } from '../../utils';
 
 const PowerOptions = [
   [undefined, 'Default'],
@@ -92,7 +93,10 @@ const ValidationSchema = Yup.object().shape({});
 export const SettingsBox = () => {
   const [config, refreshConfig] = useModuleConfig<TWifiConfig>(Name);
   if (!config) return null;
-
+  const [txpHidden, channelHidden] = getDefines([
+    'wifi.txp.hidden',
+    'wifi.channel.hidden',
+  ]);
   return (
     <ConfigBox
       name={Name}
@@ -101,26 +105,32 @@ export const SettingsBox = () => {
       title="WiFi settings"
       validationSchema={ValidationSchema}
     >
-      <Grid container spacing={3}>
-        <Grid item xs>
-          <FieldSelect fullWidth name="txp" label="TX power">
-            {PowerOptions.map((o) => (
-              <MenuItem key={o[0] || '_'} value={o[0]}>
-                {o[1]}
-              </MenuItem>
-            ))}
-          </FieldSelect>
+      {(!txpHidden || !channelHidden) && (
+        <Grid container spacing={3}>
+          {!txpHidden && (
+            <Grid item xs>
+              <FieldSelect fullWidth name="txp" label="TX power">
+                {PowerOptions.map((o) => (
+                  <MenuItem key={o[0] || '_'} value={o[0]}>
+                    {o[1]}
+                  </MenuItem>
+                ))}
+              </FieldSelect>
+            </Grid>
+          )}
+          {!channelHidden && (
+            <Grid item xs>
+              <FieldSelect fullWidth name="channel" label="Channel">
+                {ChannelOptions.map((o) => (
+                  <MenuItem key={o[0] || '_'} value={o[0]}>
+                    {o[1]}
+                  </MenuItem>
+                ))}
+              </FieldSelect>
+            </Grid>
+          )}
         </Grid>
-        <Grid item xs>
-          <FieldSelect fullWidth name="channel" label="Channel">
-            {ChannelOptions.map((o) => (
-              <MenuItem key={o[0] || '_'} value={o[0]}>
-                {o[1]}
-              </MenuItem>
-            ))}
-          </FieldSelect>
-        </Grid>
-      </Grid>
+      )}
       {config.aps?.length && (
         <SavedAps aps={config.aps} refreshConfig={refreshConfig} />
       )}
