@@ -210,6 +210,13 @@ namespace esp32m {
       }
       void stop();
 
+      int8_t getTxp(int8_t txp) const {
+        return _txp;
+      }
+      void setTxp(int8_t txp) {
+        _txp = txp;
+      }
+
       static const uint8_t DiagId = 10;
       static const uint8_t DiagConnected = 1;
       static const uint8_t DiagConnecting = 2;
