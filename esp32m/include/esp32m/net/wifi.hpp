@@ -213,9 +213,10 @@ namespace esp32m {
       int8_t getTxp(int8_t txp) const {
         return _txp;
       }
-      void setTxp(int8_t txp) {
-        if (esp_wifi_set_max_tx_power(txp) == ESP_OK)
-          _txp = txp;
+      esp_err_t setTxp(int8_t txp) {
+        ESP_CHECK_RETURN(esp_wifi_set_max_tx_power(txp));
+        _txp = txp;
+        return ESP_OK;
       }
 
       static const uint8_t DiagId = 10;
