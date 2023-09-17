@@ -76,6 +76,12 @@ const plugin: TUiThemePlugin & Ti18nPlugin = {
         'Created with': 'Створено за допомогою',
         cancel: 'Відміна',
       },
+      it: {
+        cancel: 'Annulla',
+        'save changes': 'Salva modifiche',
+        Overview: 'Panoramica',
+        'Created with': 'Creato con',
+      },
     },
   },
 };

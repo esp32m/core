@@ -54,6 +54,25 @@ export const Mqtt: TContentPlugin & Ti18nPlugin = {
         connected: 'з`єднаний',
         'not connected': "немає з'єднання",
       },
+      it: {
+        'Client name': 'Nome client',
+        'MQTT client': 'Client MQTT',
+        'MQTT client state': 'Stato client MQTT',
+        'Enable MQTT client': 'Abilita client MQTT',
+        'MQTT client settings': 'Impostazioni client MQTT',
+        'Keep alive period, s': 'Periodo di keep alive, s',
+        'Network timeout, s': 'Timeout di rete, s',
+        'SSL certificate URL': 'URL certificato SSL',
+        'Clear local certificate cache':
+          'Cancella la cache del certificato locale',
+        'Connection state': 'Stato della connessione',
+        'Published messages': 'Messaggi pubblicati',
+        'Received messages': 'Messaggi ricevuti',
+        'This will remove cached SSL certificate and reload it from the specified URL on the next connection, proceed?':
+          'Ciò rimuoverà il certificato SSL dalla cache e lo ricaricherà dall\'URL specificato alla prossima connessione, procedere?',
+        connected: 'connesso',
+        'not connected': 'non connesso',
+      },
     },
   },
 };
