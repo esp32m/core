@@ -7,6 +7,7 @@ export const LanguageNames: Record<string, string> = {
   en: 'english',
   de: 'german',
   uk: 'ukrainian',
+  it: 'italian',
 };
 
 export const getBundles = (() => {

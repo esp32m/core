@@ -14,6 +14,9 @@ export const Network: TContentPlugin & Ti18nPlugin = {
       uk: {
         Network: 'Мережа',
       },
+      it: {
+        Network: 'Rete',
+      },
     },
   },
 };
