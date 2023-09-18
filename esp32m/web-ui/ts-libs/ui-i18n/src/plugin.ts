@@ -31,7 +31,7 @@ export const pluginUi18n = (): TUiElementsPlugin &
           english: 'Englisch',
           german: 'Deutsch',
           ukrainian: 'Ukrainisch',
-          italian: 'italiano',
+          italian: 'Italienisch',
         },
         uk: {
           yes: 'так',
@@ -45,7 +45,7 @@ export const pluginUi18n = (): TUiElementsPlugin &
           english: 'англійська',
           german: 'німецька',
           ukrainian: 'українська',
-          italian: 'italiano',
+          italian: 'італійська',
         },
         it: {
           yes: 'sì',

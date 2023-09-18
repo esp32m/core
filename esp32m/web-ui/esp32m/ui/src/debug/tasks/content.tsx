@@ -18,7 +18,7 @@ const ColName = styled('span')({
   paddingRight: 5,
   paddingLeft: 5,
   display: 'inline-block',
-  width: '18em',
+  width: '16em',
 });
 const ColTime = styled('span')({
   height: '100%',
