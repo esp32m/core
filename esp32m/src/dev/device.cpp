@@ -21,7 +21,27 @@ namespace esp32m {
     constexpr static const char *Type = "poll-sensors";
   };
 
-  // const char *EventPollSensors::NAME = "poll-sensors";
+  class EventPollSensorsTime : public Event {
+   public:
+    EventPollSensorsTime() : Event(Type) {}
+    static bool is(Event &ev, EventPollSensorsTime **pste) {
+      bool result = ev.is(Type);
+      if (result && pste)
+        *pste = (EventPollSensorsTime *)&ev;
+      return result;
+    }
+    void record(unsigned long next) {
+      if (next < _next)
+        _next = next;
+    }
+    unsigned long getNext() {
+      return _next;
+    }
+
+   private:
+    unsigned long _next = 0;
+    constexpr static const char *Type = "poll-sensors-time";
+  };
 
   void Device::init(Flags flags) {
     _flags = flags;
@@ -30,10 +50,16 @@ namespace esp32m {
   }
 
   void Device::handleEvent(Event &ev) {
-    if ((_flags & Flags::HasSensors) && EventPollSensors::is(ev) &&
-        sensorsReady())
-      if (!pollSensors())
+    if ((_flags & Flags::HasSensors) == 0)
+      return;
+    EventPollSensorsTime *pste;
+    if (EventPollSensorsTime::is(ev, &pste))
+      pste->record(nextSensorsPollTime());
+    else if (EventPollSensors::is(ev) && shouldPollSensors()) {
+      if (sensorsReady() && !pollSensors())
         resetSensors();
+      _sensorsPolledAt = millis();
+    }
   }
 
   void Device::sensor(const char *sensor, const float value) {
@@ -49,9 +75,11 @@ namespace esp32m {
 
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;
-    static Sleeper sleeper;
+    // static Sleeper sleeper;
     static EventPollSensors ev;
-    if (!task)
+    if (task)
+      xTaskNotifyGive(task);
+    else
       xTaskCreate(
           [](void *) {
             EventManager::instance().subscribe([](Event &ev) {
@@ -60,15 +88,22 @@ namespace esp32m {
             });
             esp_task_wdt_add(NULL);
             for (;;) {
+              int sleepTime = 0;
               esp_task_wdt_reset();
               if (App::initialized()) {
-                {
+                EventPollSensorsTime pste;
+                pste.publish();
+                auto next = pste.getNext();
+                auto current = millis();
+                if (next < current) {
                   locks::Guard guard(net::ota::Name);
                   ev.publish();
-                }
-                sleeper.sleep();
+                } else
+                  sleepTime = current - next;  // sleeper.sleep();
               } else
-                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+                sleepTime = 1000;
+              if (sleepTime > 0)
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleepTime));
             }
           },
           "m/sensors", 4096, nullptr, 1, &task);

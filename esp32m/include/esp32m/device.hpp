@@ -70,6 +70,13 @@ namespace esp32m {
     void sensor(const char *sensor, const float value,
                 const JsonObjectConst props);
 
+    void setSensorsPollInterval(int intervalMs) {
+      _sensorsPollInterval = intervalMs;
+    };
+    int getSensorsPollInterval() const {
+      return _sensorsPollInterval;
+    }
+
    protected:
     Flags _flags = Flags::None;
     Device(){};
@@ -86,11 +93,19 @@ namespace esp32m {
     virtual bool pollSensors() {
       return true;
     };
+    virtual bool shouldPollSensors() {
+      return millis() - _sensorsPolledAt > _sensorsPollInterval;
+    };
+    virtual unsigned long nextSensorsPollTime() {
+      return _sensorsPolledAt + _sensorsPollInterval;
+    };
 
    private:
     bool _sensorsReady = false;
     unsigned long _sensorsInitAt = 0;
+    unsigned long _sensorsPolledAt = 0;
     unsigned int _reinitDelay = 10000;
+    int _sensorsPollInterval = 1000;
     bool sensorsReady();
     static void setupSensorPollTask();
   };
