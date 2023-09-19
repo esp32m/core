@@ -13,7 +13,7 @@ namespace esp32m {
 
       namespace mqtt {
 
-        void wakeUp();
+        static inline void wakeUp();
 
         class Dev {
          public:
@@ -204,12 +204,12 @@ namespace esp32m {
         }
       };
 
-      Mqtt *useMqtt() {
+      static inline Mqtt *useMqtt() {
         return &Mqtt::instance();
       }
 
       namespace mqtt {
-        void wakeUp() {
+        static inline void wakeUp() {
           ha::Mqtt::instance().wakeUp();
         }
       }  // namespace mqtt
