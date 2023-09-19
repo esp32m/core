@@ -48,6 +48,9 @@ namespace esp32m {
 
       void Mqtt::emit(std::vector<const Sensor *> sensors) {
         for (auto sensor : sensors) {
+          auto value = sensor->get();
+          if (!value.is<float>())
+            continue;
           char *devProps, *props;
           auto unitName = App::instance().hostname();
           auto device = sensor->device();
@@ -78,7 +81,7 @@ namespace esp32m {
             dl -= l;
           }
           if (dl) {
-            l = snprintf(sp, dl, " %s=%.16g", name, sensor->get().as<float>());
+            l = snprintf(sp, dl, " %s=%.16g", name, value.as<float>());
             sp += l;
             dl -= l;
           }

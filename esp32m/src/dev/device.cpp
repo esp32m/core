@@ -171,10 +171,7 @@ namespace esp32m {
       return All::Iterator(_sensors.end());
     }
 
-    StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {
-      xTaskCreate([](void *self) { ((StateEmitter *)self)->run(); }, "m/stem",
-                  4096, this, 1, &_task);
-    }
+    StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {}
 
     void StateEmitter::handleEvent(Event &ev) {
       union {
@@ -182,7 +179,10 @@ namespace esp32m {
         sensor::Changed *sc;
       };
       bool changed = false;
-      if (sensor::GroupChanged::is(ev, &gc)) {
+      if (EventInited::is(ev))
+        xTaskCreate([](void *self) { ((StateEmitter *)self)->run(); }, "m/stem",
+                    4096, this, 1, &_task);
+      else if (sensor::GroupChanged::is(ev, &gc)) {
         for (auto sensor : gc->group())
           if (!sensor->disabled && filter(sensor)) {
             std::lock_guard guard(_queueMutex);
