@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/device.hpp"
 #include "esp32m/fs/cache.hpp"
 #include "esp32m/resources.hpp"
 #include "esp32m/sleep.hpp"
@@ -147,6 +148,28 @@ namespace esp32m {
         esp_err_t publish(const char *name, JsonVariantConst state,
                           bool fromBuffer);
       };*/
+
+      class StatePublisher : public sensor::StateEmitter {
+       public:
+        StatePublisher(const StatePublisher &) = delete;
+        const char *name() const override {
+          return "mqtt-sp";
+        };
+
+        static StatePublisher &instance() {
+          static StatePublisher i;
+          return i;
+        }
+
+       protected:
+        void handleEvent(Event &ev) override;
+        void emit(std::vector<const Sensor *> sensors) override;
+
+       private:
+        StatePublisher() {}
+        esp_err_t publish(const char *name, JsonVariantConst state);
+      };
+
     }  // namespace mqtt
 
     using namespace mqtt;

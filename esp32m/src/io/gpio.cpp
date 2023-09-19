@@ -469,11 +469,15 @@ namespace esp32m {
       };
 
       static esp_err_t create(Pin *pin, pin::Feature **feature) {
-        pcnt_unit_config_t unit_config = {.low_limit = SHRT_MIN,
-                                          .high_limit = SHRT_MAX,
-                                          .flags = {
-                                              .accum_count = true,
-                                          }};
+        pcnt_unit_config_t unit_config = {
+            .low_limit = SHRT_MIN,
+            .high_limit = SHRT_MAX,
+            .intr_priority = 0,
+            .flags =
+                {
+                    .accum_count = true,
+                },
+        };
         pcnt_unit_handle_t unit;
         pcnt_channel_handle_t channel;
         ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &unit));

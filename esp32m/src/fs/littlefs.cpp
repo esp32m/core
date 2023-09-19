@@ -1,7 +1,7 @@
 #include <esp_littlefs.h>
 
-#include "esp32m/fs/littlefs.hpp"
 #include "esp32m/config/vfs.hpp"
+#include "esp32m/fs/littlefs.hpp"
 
 namespace esp32m {
   namespace fs {
@@ -53,7 +53,9 @@ namespace esp32m {
         esp_vfs_littlefs_conf_t conf = {
             .base_path = "/root",
             .partition_label = _label,
+            .partition = nullptr,
             .format_if_mount_failed = true,
+            .read_only = false,
             .dont_mount = false,
         };
         if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_vfs_littlefs_register(&conf)) !=
@@ -69,5 +71,5 @@ namespace esp32m {
         return nullptr;
       return new ConfigVfs("/root/config.json");
     }
-  }  // namespace io
+  }  // namespace fs
 }  // namespace esp32m

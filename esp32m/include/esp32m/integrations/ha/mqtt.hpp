@@ -1,8 +1,8 @@
 #pragma once
 
 #include "esp32m/app.hpp"
-#include "esp32m/ha/config.hpp"
-#include "esp32m/ha/ha.hpp"
+#include "esp32m/integrations/ha/config.hpp"
+#include "esp32m/integrations/ha/ha.hpp"
 #include "esp32m/net/mqtt.hpp"
 
 #include <esp_task_wdt.h>

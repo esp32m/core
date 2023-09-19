@@ -90,6 +90,45 @@ namespace esp32m {
               return ESP_OK;
             }
       */
+
+      void StatePublisher::emit(std::vector<const Sensor *> sensors) {
+        auto &mqtt = Mqtt::instance();
+        if (mqtt.isReady()) {
+          for (auto sensor : sensors) {
+            size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
+            if (sensor->precision >= 0)
+              docsize += JSON_STRING_SIZE(16);
+            auto doc = new DynamicJsonDocument(docsize);
+            auto root = doc->to<JsonObject>();
+            sensor->to(root);
+            publish(sensor->device()->name(), root);
+            delete doc;
+          }
+        }
+      }
+
+      esp_err_t StatePublisher::publish(const char *name,
+                                        JsonVariantConst state) {
+        auto &mqtt = Mqtt::instance();
+        if (mqtt.isReady()) {
+          auto topic = string_printf("esp32m/%s/%s/state",
+                                     App::instance().hostname(), name);
+          auto payload = json::serialize(state);
+          return mqtt.publish(topic.c_str(), payload.c_str());
+        }
+        return ESP_OK;
+      }
+
+      void StatePublisher::handleEvent(Event &ev) {
+        EventStateChanged *stc;
+        if (EventStateChanged::is(ev, &stc)) {
+          auto state = stc->state();
+          auto obj = stc->object();
+          if (!state.isUnbound() && obj)
+            publish(obj->name(), state);
+        }
+        sensor::StateEmitter::handleEvent(ev);
+      }
     }  // namespace mqtt
 
     using namespace mqtt;
