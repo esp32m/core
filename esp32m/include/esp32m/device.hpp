@@ -1,6 +1,10 @@
 #pragma once
 
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <map>
+#include <mutex>
 
 #include "esp32m/app.hpp"
 #include "esp32m/defs.hpp"
@@ -93,11 +97,11 @@ namespace esp32m {
     virtual bool pollSensors() {
       return true;
     };
-    virtual bool shouldPollSensors() {
-      return millis() - _sensorsPolledAt > _sensorsPollInterval;
-    };
     virtual unsigned long nextSensorsPollTime() {
       return _sensorsPolledAt + _sensorsPollInterval;
+    };
+    virtual bool shouldPollSensors() {
+      return millis() >= nextSensorsPollTime();
     };
 
    private:
@@ -235,6 +239,50 @@ namespace esp32m {
       constexpr static const char *Type = "sensor-group-changed";
     };
 
+    enum EmitFlags { None = 0, Periodically = 1 << 0, OnChange = 1 << 1 };
+
+    ENUM_FLAG_OPERATORS(EmitFlags)
+    struct QueueItem {
+      const Sensor *sensor;
+    };
+
+    class StateEmitter : public AppObject {
+     public:
+      StateEmitter(const StateEmitter &) = delete;
+      StateEmitter(EmitFlags flags = EmitFlags::Periodically |
+                                     EmitFlags::OnChange);
+      void setInterval(int intervalMs) {
+        _interval = intervalMs;
+      };
+      int getInterval() const {
+        return _interval;
+      };
+      virtual unsigned long nextTime() {
+        auto current = millis();
+        auto next = _emittedAt + _interval;
+        return next > current ? next : current;
+      };
+      virtual bool shouldEmit() {
+        return millis() >= nextTime();
+      };
+
+     protected:
+      void handleEvent(Event &ev) override;
+      virtual void emit(std::vector<const Sensor *> sensors) = 0;
+      virtual bool filter(const Sensor *sensor) {
+        return true;
+      }
+
+     private:
+      EmitFlags _flags;
+      int _interval = 1000;
+      unsigned long _emittedAt = 0;
+      TaskHandle_t _task = nullptr;
+      std::mutex _queueMutex;
+      std::map<std::string, QueueItem> _queue;
+      void run();
+    };
+
   }  // namespace sensor
 
   class Sensor {
@@ -297,12 +345,17 @@ namespace esp32m {
     JsonVariantConst get() const {
       return _value;
     }
+    JsonObjectConst props() const {
+      return _props ? _props->as<JsonObjectConst>()
+                    : json::null<JsonObjectConst>();
+    }
 
    private:
     Device *_device;
     const char *_type;
     std::string _id;
     DynamicJsonDocument _value;
+    std::unique_ptr<DynamicJsonDocument> _props;
   };
 
 }  // namespace esp32m

@@ -4,7 +4,7 @@
 #include "esp32m/defs.hpp"
 #include "esp32m/events/diag.hpp"
 #include "esp32m/events/response.hpp"
-#include "esp32m/ha/ha.hpp"
+#include "esp32m/integrations/ha/ha.hpp"
 #include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
@@ -478,8 +478,8 @@ namespace esp32m {
         req.respond(error);
         return true;
       }
-      if (req.is(ha::DescribeRequest::Name)) {
-        ha::DescribeRequest::autoRespond(req, _rssi);
+      if (req.is(integrations::ha::DescribeRequest::Name)) {
+        integrations::ha::DescribeRequest::autoRespond(req, _rssi);
         return true;
       }
       return false;
@@ -1305,7 +1305,7 @@ namespace esp32m {
       if (isConnected()) {
         wifi_ap_record_t info;
         if (!esp_wifi_sta_get_ap_info(&info)) {
-          sensor("rssi", info.rssi);
+          // sensor("rssi", info.rssi);
           _rssi.set(info.rssi);
         }
       }

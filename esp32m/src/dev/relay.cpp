@@ -3,7 +3,7 @@
 #include "esp32m/app.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/dev/relay.hpp"
-#include "esp32m/ha/ha.hpp"
+#include "esp32m/integrations/ha/ha.hpp"
 
 namespace esp32m {
   namespace dev {
@@ -187,7 +187,7 @@ namespace esp32m {
     bool Relay::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
-      if (req.is(ha::DescribeRequest::Name)) {
+      if (req.is(integrations::ha::DescribeRequest::Name)) {
         DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
         auto root = doc->to<JsonObject>();
         root["component"] = "switch";
@@ -199,8 +199,7 @@ namespace esp32m {
         req.respond(name(), doc->as<JsonVariantConst>());
         delete doc;
         return true;
-      } 
-      else if (req.is(ha::CommandRequest::Name)) {
+      } else if (req.is(integrations::ha::CommandRequest::Name)) {
         auto state = req.data().as<const char *>();
         if (state)
           turn(state);

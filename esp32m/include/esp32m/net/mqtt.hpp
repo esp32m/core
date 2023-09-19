@@ -126,7 +126,7 @@ namespace esp32m {
         friend class net::Mqtt;
       };
 
-      class StatePublisher : public AppObject {
+      /*class StatePublisher : public AppObject {
        public:
         StatePublisher(const StatePublisher &) = delete;
         const char *name() const override {
@@ -146,7 +146,7 @@ namespace esp32m {
         StatePublisher() {}
         esp_err_t publish(const char *name, JsonVariantConst state,
                           bool fromBuffer);
-      };
+      };*/
     }  // namespace mqtt
 
     using namespace mqtt;
@@ -214,7 +214,6 @@ namespace esp32m {
       mqtt::Message _lwt;
       std::unique_ptr<Resource> _cert;
       fs::CachedResource _certCache;
-      char *_sensorsTopic = nullptr;
       char *_broadcastTopic = nullptr;
       uint32_t _pubcnt = 0, _recvcnt = 0;
       unsigned long _timer = 0;

@@ -22,114 +22,77 @@ namespace esp32m {
       Subscription::~Subscription() {
         _mqtt->unsubscribe(this);
       }
-
-      void StatePublisher::handleEvent(Event &ev) {
-        union {
-          sensor::GroupChanged *gc;
-          sensor::Changed *sc;
-          EventStateChanged *stc;
-        };
-        if (StatusChanged::is(ev, Status::Ready)) {
-          auto root = _buffer.root();
-          if (root.size()) {
-            _buffer.check(this);
-            for (auto kv : root) publish(kv.key().c_str(), kv.value(), true);
-            _buffer.clear();
-          }
-        } else if (sensor::GroupChanged::is(ev, &gc)) {
-          size_t docsize = 0;
-          Device *d = nullptr;
-          bool multipleGroupsPerDevice = false;
-          for (auto sensor : gc->group())
-            if (!sensor->disabled) {
-              docsize += JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
-              if (sensor->precision >= 0)
-                docsize += JSON_STRING_SIZE(16);
-              auto device = sensor->device();
-              if (!d)
-                d = device;
-              else if (d != device)
-                multipleGroupsPerDevice = true;
+      /*
+            void StatePublisher::handleEvent(Event &ev) {
+              union {
+                sensor::GroupChanged *gc;
+                sensor::Changed *sc;
+                EventStateChanged *stc;
+              };
+              if (StatusChanged::is(ev, Status::Ready)) {
+                auto root = _buffer.root();
+                if (root.size()) {
+                  _buffer.check(this);
+                  for (auto kv : root) publish(kv.key().c_str(), kv.value(),
+         true); _buffer.clear();
+                }
+              } else if (sensor::GroupChanged::is(ev, &gc)) {
+                size_t docsize = 0;
+                Device *d = nullptr;
+                bool multipleGroupsPerDevice = false;
+                for (auto sensor : gc->group())
+                  if (!sensor->disabled) {
+                    docsize += JSON_OBJECT_SIZE(1) +
+         sensor->get().memoryUsage(); if (sensor->precision >= 0) docsize +=
+         JSON_STRING_SIZE(16); auto device = sensor->device(); if (!d) d =
+         device; else if (d != device) multipleGroupsPerDevice = true;
+                  }
+                if (d && !multipleGroupsPerDevice) {
+                  auto doc = new DynamicJsonDocument(docsize);
+                  auto root = doc->to<JsonObject>();
+                  for (auto sensor : gc->group()) sensor->to(root);
+                  json::check(this, doc, "sensor group state");
+                  publish(d->name(), root, false);
+                  delete doc;
+                }
+              } else if (sensor::Changed::is(ev, &sc)) {
+                auto sensor = sc->sensor();
+                if (!sensor->disabled) {
+                  size_t docsize = JSON_OBJECT_SIZE(1) +
+         sensor->get().memoryUsage(); if (sensor->precision >= 0) docsize +=
+         JSON_STRING_SIZE(16); auto doc = new DynamicJsonDocument(docsize); auto
+         root = doc->to<JsonObject>(); sensor->to(root); json::check(this, doc,
+         "sensor state"); auto payload = json::serialize(root);
+                  publish(sensor->device()->name(), root, false);
+                  delete doc;
+                }
+              } else if (EventStateChanged::is(ev, &stc)) {
+                auto state = stc->state();
+                auto obj = stc->object();
+                if (!state.isUnbound() && obj)
+                  publish(obj->name(), state, false);
+              }
             }
-          if (d && !multipleGroupsPerDevice) {
-            auto doc = new DynamicJsonDocument(docsize);
-            auto root = doc->to<JsonObject>();
-            for (auto sensor : gc->group()) sensor->to(root);
-            json::check(this, doc, "sensor group state");
-            publish(d->name(), root, false);
-            delete doc;
-          }
-        } else if (sensor::Changed::is(ev, &sc)) {
-          auto sensor = sc->sensor();
-          if (!sensor->disabled) {
-            size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
-            if (sensor->precision >= 0)
-              docsize += JSON_STRING_SIZE(16);
-            auto doc = new DynamicJsonDocument(docsize);
-            auto root = doc->to<JsonObject>();
-            sensor->to(root);
-            json::check(this, doc, "sensor state");
-            auto payload = json::serialize(root);
-            publish(sensor->device()->name(), root, false);
-            delete doc;
-          }
-        } else if (EventStateChanged::is(ev, &stc)) {
-          auto state = stc->state();
-          auto obj = stc->object();
-          if (!state.isUnbound() && obj)
-            publish(obj->name(), state, false);
-        }
-      }
 
-      esp_err_t StatePublisher::publish(const char *name,
-                                        JsonVariantConst state,
-                                        bool fromBuffer) {
-        auto &mqtt = Mqtt::instance();
-        if (mqtt.isReady()) {
-          auto topic = string_printf("esp32m/%s/%s/state",
-                                     App::instance().hostname(), name);
-          auto payload = json::serialize(state);
-          return mqtt.publish(topic.c_str(), payload.c_str());
-        }
-        if (fromBuffer)
-          return ESP_FAIL;
-        _buffer.set(name, state);
-        return ESP_OK;
-      }
-
+            esp_err_t StatePublisher::publish(const char *name,
+                                              JsonVariantConst state,
+                                              bool fromBuffer) {
+              auto &mqtt = Mqtt::instance();
+              if (mqtt.isReady()) {
+                auto topic = string_printf("esp32m/%s/%s/state",
+                                           App::instance().hostname(), name);
+                auto payload = json::serialize(state);
+                return mqtt.publish(topic.c_str(), payload.c_str());
+              }
+              if (fromBuffer)
+                return ESP_FAIL;
+              _buffer.set(name, state);
+              return ESP_OK;
+            }
+      */
     }  // namespace mqtt
 
     using namespace mqtt;
-
-    size_t serializeProps(const JsonObjectConst props, char **buf) {
-      if (props) {
-        auto size = measureJson(props);
-        char *bptr = *buf = (char *)malloc(size);
-
-        for (JsonPairConst kv : props) {
-          if (!size)
-            break;
-          if (bptr != *buf) {
-            *(++bptr) = ',';
-            size--;
-          }
-          auto l = snprintf(bptr, size, "%s=", kv.key().c_str());
-          bptr += l;
-          size -= l;
-          if (!size)
-            break;
-          if (kv.value().is<const char *>())
-            l = strlcpy(bptr, kv.value().as<const char *>(), size);
-          else
-            l = serializeJson(kv.value(), bptr, size);
-          bptr += l;
-          size -= l;
-        }
-        return bptr - *buf;
-      }
-
-      return 0;
-    }
 
     Mqtt::Mqtt() : _certCache("/root/mqtt-cert", http::Client::instance()) {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
@@ -190,8 +153,6 @@ namespace esp32m {
             },
             (void *)this);
         auto name = App::instance().hostname();
-        if (asprintf(&_sensorsTopic, "esp32m/sensor/%s", name) < 0)
-          _sensorsTopic = nullptr;
         if (asprintf(&_broadcastTopic, "esp32m/broadcast/%s/", name) < 0)
           _broadcastTopic = nullptr;
       } else if (EventDone::is(ev, &reason)) {
@@ -209,48 +170,7 @@ namespace esp32m {
           slev->block();
       } else if (isConnected()) {
         Broadcast *b = nullptr;
-        if (EventSensor::is(ev)) {
-          auto &e = ((EventSensor &)ev);
-          char *devProps, *props;
-          auto unitName = App::instance().hostname();
-          auto devName = e.device().name();
-          auto dpl = serializeProps(e.device().props(), &devProps);
-          auto pl = serializeProps(e.props(), &props);
-          auto sensor = e.sensor();
-          auto unl = strlen(unitName);
-          auto dnl = strlen(devName);
-          auto dl = 12 /* "esp32m,unit=" */ + unl + 8 /* ",device=" */ + dnl +
-                    (dpl ? (1 /* comma */ + dpl) : 0) +
-                    (pl ? (1 /* comma */ + pl) : 0) + 1 /*space*/ +
-                    strlen(sensor) + 1 /*=*/ + (16 + 1 /*value*/) + 1 /*null*/;
-          char *s = (char *)malloc(dl);
-          char *sp = s;
-          auto l =
-              snprintf(sp, dl, "esp32m,unit=%s,device=%s", unitName, devName);
-          sp += l;
-          dl -= l;
-          if (dpl && dl) {
-            l = snprintf(sp, dl, ",%s", devProps);
-            sp += l;
-            dl -= l;
-          }
-          if (pl && dl) {
-            l = snprintf(sp, dl, ",%s", props);
-            sp += l;
-            dl -= l;
-          }
-          if (dl) {
-            l = snprintf(sp, dl, " %s=%.16g", sensor, e.value());
-            sp += l;
-            dl -= l;
-          }
-          if (dpl)
-            free(devProps);
-          if (pl)
-            free(props);
-          publish(_sensorsTopic, s);
-          free(s);
-        } else if (Broadcast::is(ev, &b)) {
+        if (Broadcast::is(ev, &b)) {
           char *ds = json::allocSerialize(b->data());
           size_t tl = strlen(_broadcastTopic) + strlen(b->source()) + 1 +
                       strlen(b->name()) + 1;

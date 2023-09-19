@@ -1,7 +1,7 @@
 #include "esp32m/defs.hpp"
 
 #include "esp32m/dev/bme280.hpp"
-#include "esp32m/ha/ha.hpp"
+// #include "esp32m/ha/ha.hpp"
 
 namespace esp32m {
 
@@ -316,10 +316,10 @@ namespace esp32m {
     bool Bme280::pollSensors() {
       float t, p, h;
       ESP_CHECK_RETURN_BOOL(read(&t, &p, &h));
-      sensor("temperature", t);
+/*      sensor("temperature", t);
       sensor("pressure", p / 133.322F);
       if (chipId() == bme280::ChipId::Bme280)
-        sensor("humidity", h);
+        sensor("humidity", h);*/
 
       bool changed = false;
       _temperature.set(t, &changed);

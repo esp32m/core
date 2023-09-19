@@ -39,7 +39,7 @@ namespace esp32m {
     }
 
    private:
-    unsigned long _next = 0;
+    unsigned long _next = ULONG_MAX;
     constexpr static const char *Type = "poll-sensors-time";
   };
 
@@ -99,9 +99,12 @@ namespace esp32m {
                   locks::Guard guard(net::ota::Name);
                   ev.publish();
                 } else
-                  sleepTime = current - next;  // sleeper.sleep();
+                  sleepTime = next - current;  // sleeper.sleep();
               } else
                 sleepTime = 1000;
+              auto wdt = App::instance().wdtTimeout() - 100;
+              if (sleepTime > wdt)
+                sleepTime = wdt;
               if (sleepTime > 0)
                 ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleepTime));
             }
@@ -166,6 +169,75 @@ namespace esp32m {
     }
     All::Iterator All::end() const {
       return All::Iterator(_sensors.end());
+    }
+
+    StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {
+      xTaskCreate([](void *self) { ((StateEmitter *)self)->run(); }, "m/stem",
+                  4096, this, 1, &_task);
+    }
+
+    void StateEmitter::handleEvent(Event &ev) {
+      union {
+        sensor::GroupChanged *gc;
+        sensor::Changed *sc;
+      };
+      bool changed = false;
+      if (sensor::GroupChanged::is(ev, &gc)) {
+        for (auto sensor : gc->group())
+          if (!sensor->disabled && filter(sensor)) {
+            std::lock_guard guard(_queueMutex);
+            _queue[sensor->uid()].sensor = sensor;
+            changed = true;
+          }
+      } else if (sensor::Changed::is(ev, &sc)) {
+        auto sensor = sc->sensor();
+        if (!sensor->disabled && filter(sensor)) {
+          std::lock_guard guard(_queueMutex);
+          _queue[sensor->uid()].sensor = sensor;
+          changed = true;
+        }
+      }
+      if (changed && _task && (_flags & EmitFlags::OnChange))
+        xTaskNotifyGive(_task);
+    }
+
+    void StateEmitter::run() {
+      std::vector<const Sensor *> sensors;
+      esp_task_wdt_add(NULL);
+      for (;;) {
+        esp_task_wdt_reset();
+        if ((_flags & EmitFlags::Periodically) && shouldEmit()) {
+          sensor::All all;
+          for (auto sensor : all)
+            if (!sensor->disabled && filter(sensor)) {
+              sensors.push_back(sensor);
+              std::lock_guard guard(_queueMutex);
+              auto queued = _queue.find(sensor->uid());
+              if (queued != _queue.end())
+                _queue.erase(queued);
+            }
+        } else {
+          std::lock_guard guard(_queueMutex);
+          if (_queue.size()) {
+            for (auto const &kv : _queue) sensors.push_back(kv.second.sensor);
+            _queue.clear();
+          }
+        }
+        if (sensors.size()) {
+          emit(sensors);
+          sensors.clear();
+        }
+        auto current = _emittedAt = millis();
+        auto sleepTime = nextTime() - current;
+        /*logD("current %d, next %d, sleepTime=%d ", current, nextTime(),
+             sleepTime);*/
+
+        auto wdt = App::instance().wdtTimeout() - 100;
+        if (sleepTime > wdt)
+          sleepTime = wdt;
+        if (sleepTime > 0)
+          ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleepTime));
+      }
     }
 
   }  // namespace sensor
