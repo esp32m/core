@@ -174,7 +174,7 @@ namespace esp32m {
       Init(const char *name = nullptr, const char *version = nullptr);
       ~Init();
       void requestInitLevels(uint8_t maxInitLevels);
-      void setConfigStore(ConfigStore *store);
+      void setConfigStore(config::Store *store);
       void inferHostname(int limit = 15, int macDigits = 2);
     };
     App(const App &) = delete;

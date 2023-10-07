@@ -97,7 +97,9 @@ namespace esp32m {
               .resolution_hz = RmtResolutonHz,  // in us
               .mem_block_symbols = 64,  // we can't go lower, even though we
                                         // need only FrameSizeBits
-              .flags = {}};
+              .flags = {},
+              .intr_priority = 0,
+              };
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
           // be a little more permissive, especially for the max pulse duration,
           // I've seen it over 1.2ms
@@ -112,7 +114,9 @@ namespace esp32m {
               .flags = {.invert_out = false,
                         .with_dma = false,
                         .io_loop_back = false,
-                        .io_od_mode = false}};
+                        .io_od_mode = false},
+              .intr_priority = 0,
+          };
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
           const static rmt_transmit_config_t txconfig = {
               .loop_count = 0,  // no transfer loop

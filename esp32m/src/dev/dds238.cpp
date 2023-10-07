@@ -86,11 +86,11 @@ namespace esp32m {
       _rap = (float)(int16_t)reg[0xF] / 1000;
       _pf = (float)reg[0x10] / 1000;
       _f = (float)reg[0x11] / 100;
-      sensor("voltage", _v);
+      /*sensor("voltage", _v);
       sensor("current", _i);
       sensor("frequency", _f);
       sensor("power-active", _ap);
-      sensor("power-reactive", _rap);
+      sensor("power-reactive", _rap);*/
       _stamp = millis();
 
       bool changed = false;

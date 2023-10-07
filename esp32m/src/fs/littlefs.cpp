@@ -66,10 +66,10 @@ namespace esp32m {
       return _inited;
     }
 
-    ConfigStore *Littlefs::newConfigStore() {
+    config::Store *Littlefs::newConfigStore() {
       if (!init())
         return nullptr;
-      return new ConfigVfs("/root/config.json");
+      return new config::Vfs("/root/config.json");
     }
   }  // namespace fs
 }  // namespace esp32m

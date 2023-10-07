@@ -6,13 +6,8 @@
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
+  namespace config {
 
-  class ConfigStore : public log::Loggable {
-   protected:
-    virtual void write(const DynamicJsonDocument& config) = 0;
-    virtual DynamicJsonDocument* read() = 0;
-    virtual void reset() = 0;
-    friend class Config;
-  };
+  }  // namespace config
 
 }  // namespace esp32m

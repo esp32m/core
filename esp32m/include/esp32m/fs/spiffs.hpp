@@ -2,7 +2,7 @@
 
 #include <esp_spiffs.h>
 
-#include "esp32m/config/store.hpp"
+#include "esp32m/config/config.hpp"
 #include "esp32m/app.hpp"
 
 
@@ -16,7 +16,7 @@ namespace esp32m {
       }
 
       static Spiffs &instance();
-      ConfigStore *newConfigStore();
+      config::Store *newConfigStore();
 
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;

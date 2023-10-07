@@ -5,8 +5,10 @@
 namespace esp32m {
   namespace dev {
 
-    Fc37::Fc37(io::IPin *pin) {
+    Fc37::Fc37(io::IPin *pin) : _sensor(this, "rain") {
       Device::init(Flags::HasSensors);
+      _sensor.unit = "%";
+      _sensor.precision = 1;
       _adc = pin ? pin->adc() : nullptr;
     }
 

@@ -26,6 +26,7 @@ namespace esp32m {
       uint8_t _addr;
       int16_t _pv = 0, _ad = 0;
       unsigned long _stamp = 0;
+      Sensor _sensor;
     };
 
     Yw801r *useYw801r(uint8_t addr = 192);

@@ -5,7 +5,9 @@
 
 namespace esp32m {
   namespace dev {
-    Yw801r::Yw801r(uint8_t addr) : _addr(addr) {
+    Yw801r::Yw801r(uint8_t addr) : _addr(addr), _sensor(this, "distance", "level") {
+      _sensor.unit = "cm";
+      _sensor.precision = 1;
       Device::init(Flags::HasSensors);
     }
 
@@ -38,7 +40,8 @@ namespace esp32m {
         return true;
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 1, 1, &_pv));
-      sensor("pv", _pv);
+/*      sensor("pv", _pv);*/
+      _sensor.set(_pv);
       _stamp = millis();
       delay(500);
       /*if (mb.request(_addr, modbus::Command::ReadHolding, 63, 1, &_ad) ==

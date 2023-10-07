@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/config/store.hpp"
+#include "esp32m/config/config.hpp"
 #include "esp32m/app.hpp"
 
 
@@ -14,7 +14,7 @@ namespace esp32m {
       }
 
       static Littlefs &instance();
-      ConfigStore *newConfigStore();
+      config::Store *newConfigStore();
 
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;

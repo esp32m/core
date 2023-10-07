@@ -160,7 +160,7 @@ namespace esp32m {
     _appInstance->_maxInitLevel = maxInitLevel;
   }
 
-  void App::Init::setConfigStore(ConfigStore *store) {
+  void App::Init::setConfigStore(config::Store *store) {
     _appInstance->_config.reset(new Config(store));
   }
 

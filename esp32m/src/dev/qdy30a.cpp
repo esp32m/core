@@ -55,11 +55,11 @@ namespace esp32m {
       _value = ((int16_t)_regs[4]) / div;
       _min = ((int16_t)_regs[5]) / div;
       _max = ((int16_t)_regs[6]) / div;
-      sensor("value", _value);
-      sensor("raw", (int16_t)_regs[10]);
+/*      sensor("value", _value);
+      sensor("raw", (int16_t)_regs[10]);*/
       _stamp = millis();
       _sensor.set(_value);
-      delay(500);
+//      delay(500);
       return true;
     }
 

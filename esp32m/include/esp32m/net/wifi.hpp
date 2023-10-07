@@ -214,7 +214,8 @@ namespace esp32m {
         return _txp;
       }
       esp_err_t setTxp(int8_t txp) {
-        ESP_CHECK_RETURN(esp_wifi_set_max_tx_power(txp));
+        if (isInitialized())
+          ESP_CHECK_RETURN(esp_wifi_set_max_tx_power(txp));
         _txp = txp;
         return ESP_OK;
       }

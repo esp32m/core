@@ -41,6 +41,7 @@ namespace esp32m {
       float _value = NAN;
       float _consumption = 0, _dumpedConsumption = 0;
       unsigned long _stamp = 0, _lastDump = 0;
+      Sensor _sensorFlow, _sensorConsumption;
     };
 
     FlowSensor *useFlowSensor(const char *name, io::IPin *pin);

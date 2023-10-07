@@ -61,10 +61,10 @@ namespace esp32m {
       return esp_spiffs_check(_label) == ESP_OK;
     }
 
-    ConfigStore *Spiffs::newConfigStore() {
+    config::Store *Spiffs::newConfigStore() {
       if (!init())
         return nullptr;
-      return new ConfigVfs("/root/config.json");
+      return new config::Vfs("/root/config.json");
     }
   }  // namespace io
 }  // namespace esp32m

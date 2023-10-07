@@ -9,6 +9,7 @@
 namespace esp32m {
   
   class AppObject;
+  class Config;
 
   namespace config {
 
@@ -37,6 +38,14 @@ namespace esp32m {
       constexpr static const char *Type = "config-changed";
     };
 
+    class Store : public log::Loggable {
+     protected:
+      virtual void write(const DynamicJsonDocument& config) = 0;
+      virtual DynamicJsonDocument* read() = 0;
+      virtual void reset() = 0;
+      friend class esp32m::Config;
+    };
+
   }  // namespace config
 
   class Config : public virtual log::Loggable {
@@ -44,7 +53,7 @@ namespace esp32m {
     static const char *KeyConfigGet;
     static const char *KeyConfigSet;
 
-    Config(ConfigStore *store) : _store(store){};
+    Config(config::Store *store) : _store(store){};
     Config(const Config &) = delete;
     const char *name() const override {
       return "config";
@@ -55,7 +64,7 @@ namespace esp32m {
     DynamicJsonDocument *read();
 
    private:
-    std::unique_ptr<ConfigStore> _store;
+    std::unique_ptr<config::Store> _store;
     std::mutex _mutex;
   };
 

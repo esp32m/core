@@ -9,7 +9,9 @@ namespace esp32m {
   namespace dev {
 
     FlowSensor::FlowSensor(const char *name, io::IPin *pin)
-        : _name(name) {
+        : _name(name),
+          _sensorFlow(this, "flow"),
+          _sensorConsumption(this, "consumption") {
       Device::init(Flags::HasSensors);
       _pin = pin;
     }
@@ -39,8 +41,10 @@ namespace esp32m {
         _value = compute(pc, passed);
         _consumption += _value * passed / 1000 / 60;
         _stamp = ms;
-        sensor("flow", _value);
-        sensor("consumption", _consumption);
+        _sensorFlow.set(_value);
+        _sensorConsumption.set(_consumption);
+        // sensor("flow", _value);
+        // sensor("consumption", _consumption);
         if (ms - _lastDump > 10000 &&
             abs(_consumption - _dumpedConsumption) >
                 std::numeric_limits<float>::epsilon()) {

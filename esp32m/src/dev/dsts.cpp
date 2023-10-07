@@ -341,14 +341,14 @@ namespace esp32m {
       for (dsts::Probe &p : probes())
         if (!p.disabled()) {
           props["code"] = p.codestr();
-          auto fc = p.failcount();
+/*          auto fc = p.failcount();
           if (fc)
             sensor("failures", fc, props.as<JsonObjectConst>());
-          sensor("success-rate", p.successRate(), props.as<JsonObjectConst>());
+          sensor("success-rate", p.successRate(), props.as<JsonObjectConst>());*/
           if (getTemperature(p)) {
             float t = p.temperature();
             if (!isnan(t)) {
-              sensor("temperature", t, props.as<JsonObjectConst>());
+              // sensor("temperature", t, props.as<JsonObjectConst>());
 
               auto &s = getSensor(p);
               s.set(t, &changed);
