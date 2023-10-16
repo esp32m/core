@@ -59,6 +59,8 @@ namespace esp32m {
       if (sensorsReady() && !pollSensors())
         resetSensors();
       _sensorsPolledAt = millis();
+      /*logI("sensors polled at %d, next poll at %d", _sensorsPolledAt,
+           nextSensorsPollTime());*/
     }
   }
 
@@ -100,6 +102,8 @@ namespace esp32m {
                   ev.publish();
                 } else
                   sleepTime = next - current;  // sleeper.sleep();
+                /*logi("next poll at %d, current time %d, sleep %d", next,
+                     current, sleepTime);*/
               } else
                 sleepTime = 1000;
               auto wdt = App::instance().wdtTimeout() - 100;
