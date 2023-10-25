@@ -175,7 +175,7 @@ namespace esp32m {
 
     esp_err_t Core::calibrate() {
       int8_t gain;  // work variable for the programmable gain
-      uint32_t calibration, maxShuntmV;
+      uint32_t calibration = 0, maxShuntmV;
       bool updateConfig = false, calibrate = false;
       if (is3221()) {
         _lsbCurrent = 0;

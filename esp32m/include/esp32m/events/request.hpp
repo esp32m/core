@@ -39,7 +39,7 @@ namespace esp32m {
       return _origin == nullptr;
     }
 
-    void publish() override;
+    void publish();
 
     void respond(const char *source, const JsonVariantConst data, bool error);
     void respond(const char *source, const JsonVariantConst dataOrError);

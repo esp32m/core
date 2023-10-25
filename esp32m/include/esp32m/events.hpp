@@ -35,7 +35,7 @@ namespace esp32m {
      *  @brief Helper method to publish this event using @c EventMaanger
      * singleton
      */
-    virtual void publish();
+    void publish();
 
    private:
     const char *_type;

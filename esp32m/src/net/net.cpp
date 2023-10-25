@@ -19,7 +19,7 @@ namespace esp32m {
     }
 
     void to(JsonObject target, const char *key, const ip_addr_t &value) {
-      if (ip_addr_isany(&value))
+      if (ip_addr_isany_val(value))
         return;
       char buf[net::Ipv6MaxChars];
       ipaddr_ntoa_r(&value, buf, sizeof(buf));
