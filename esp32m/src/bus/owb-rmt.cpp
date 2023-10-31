@@ -142,7 +142,7 @@ namespace esp32m {
             .mem_block_symbols = (_maxRxBytes + 2) * 8,
 #endif
             .flags = {},
-            .intr_priority = 0,
+//            .intr_priority = 0,
           };
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
           rmt_tx_channel_config_t txcfg = {
@@ -159,7 +159,7 @@ namespace esp32m {
                                    // channel on the same gpio pin
                         .io_od_mode =
                             true},  // enable open-drain mode for 1-wire bus
-              .intr_priority = 0,
+//              .intr_priority = 0,
           };
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
           const static rmt_transmit_config_t txconfig = {

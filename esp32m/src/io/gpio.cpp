@@ -472,7 +472,7 @@ namespace esp32m {
         pcnt_unit_config_t unit_config = {
             .low_limit = SHRT_MIN,
             .high_limit = SHRT_MAX,
-            .intr_priority = 0,
+            // .intr_priority = 0,
             .flags =
                 {
                     .accum_count = true,

@@ -98,7 +98,7 @@ namespace esp32m {
               .mem_block_symbols = 64,  // we can't go lower, even though we
                                         // need only FrameSizeBits
               .flags = {},
-              .intr_priority = 0,
+//              .intr_priority = 0,
               };
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
           // be a little more permissive, especially for the max pulse duration,
@@ -115,7 +115,7 @@ namespace esp32m {
                         .with_dma = false,
                         .io_loop_back = false,
                         .io_od_mode = false},
-              .intr_priority = 0,
+              // .intr_priority = 0,
           };
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
           const static rmt_transmit_config_t txconfig = {
