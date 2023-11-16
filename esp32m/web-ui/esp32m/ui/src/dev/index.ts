@@ -22,6 +22,7 @@ export * from './valve';
 export * from './yw801r';
 export * from './qdy30a';
 export * from './em';
+export * from './ntc';
 
 export * from './shared';
 export * from './types';
