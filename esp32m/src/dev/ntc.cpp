@@ -11,7 +11,7 @@ namespace esp32m {
     Ntc::Ntc(const char *name, io::IPin *pin)
         : _name(name), _temperature(this, "temperature") {
       _adc = pin ? pin->adc() : nullptr;
-      _temperature.precision = 2;
+      _temperature.precision = 1;
       Device::init(Flags::HasSensors);
     }
 
