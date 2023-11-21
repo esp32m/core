@@ -7,17 +7,17 @@
   "type": "module",
   "main": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^20.8.7",
-    "@types/react": "^18.2.29",
+    "@types/node": "^20.9.3",
+    "@types/react": "^18.2.38",
     "rimraf": "^5.0.5",
-    "typescript": "^5.2.2"
+    "typescript": "^5.3.2"
   },
   "peerDependencies": {
     "react-dom": "^18.2.0"
   },
   "dependencies": {
-    "@mui/icons-material": "^5.14.14",
-    "@mui/material": "^5.14.14",
+    "@mui/icons-material": "^5.14.18",
+    "@mui/material": "^5.14.18",
     "@reduxjs/toolkit": "^1.9.7",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",

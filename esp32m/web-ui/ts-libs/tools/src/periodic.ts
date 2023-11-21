@@ -21,7 +21,7 @@ export class Periodic implements TPeriodicOptions {
     return this._running;
   }
   async start() {
-    await Promise.resolve(this._pending);
+    await this.whenComplete();
     if (this._running) await this.reset();
     else {
       this._running = true;
@@ -40,6 +40,11 @@ export class Periodic implements TPeriodicOptions {
     setImmediate(() =>
       this.startTimer(duration).catch((e) => this.logger?.warn(e, 'suspend'))
     );
+  }
+  async trigger() {
+    if (!this._running) return;
+    await this.whenComplete();
+    await this.run();
   }
   async reset() {
     if (!this._running) return;

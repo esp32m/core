@@ -39,7 +39,7 @@ namespace esp32m {
       }
       if (samples) {
         average /= samples;
-        average = _rref / average;
+        average = _rref / (1.0 / average - 1.0);
 
         float t = average / _rnom;    // (R/Ro)
         t = ::log(t);                 // ln(R/Ro)
@@ -47,7 +47,7 @@ namespace esp32m {
         t += 1.0 / (_tnom + 273.15);  // + (1/To)
         t = 1.0 / t;                  // Invert
         t -= 273.15;                  // convert absolute temp to C
-        _temperature.set(t);
+        _temperature.set(t + _adj);
         _stamp = millis();
       }
       return true;

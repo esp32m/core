@@ -20,12 +20,14 @@ namespace esp32m {
       const char *name() const override {
         return _name;
       }
-      void configure(int rnom, int tnom, int beta, int rref, int samples) {
+      void configure(int rnom, int tnom, int beta, int rref, int samples,
+                     float adj = 0) {
         _rnom = rnom;
         _tnom = tnom;
         _beta = beta;
         _rref = rref;
         _samples = samples;
+        _adj = adj;
       }
 
      protected:
@@ -36,6 +38,7 @@ namespace esp32m {
       const char *_name;
       io::pin::IADC *_adc;
       int _rnom = 10000, _tnom = 25, _beta = 3950, _rref = 10000, _samples = 5;
+      float _adj = 0;
       Sensor _temperature;
       unsigned long _stamp = 0;
     };
