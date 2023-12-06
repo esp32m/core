@@ -18,6 +18,7 @@
 #include <esp_rrm.h>
 #include <esp_task_wdt.h>
 #include <esp_wnm.h>
+#include <esp_wps.h>
 #include <lwip/dns.h>
 #include <algorithm>
 
@@ -61,6 +62,14 @@ namespace esp32m {
       esp_err_t Sta::disconnect() {
         if (isConnected())
           return ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_disconnect());
+        return ESP_OK;
+      }
+
+      esp_err_t Sta::startWPS() {
+        esp_wps_config_t config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
+        ESP_CHECK_RETURN(esp_wifi_wps_enable(&config));
+        ESP_CHECK_RETURN(esp_wifi_wps_start(0));
+        logI("WPS started");
         return ESP_OK;
       }
 
@@ -793,6 +802,36 @@ namespace esp32m {
               }
             }
           } break;
+          case WIFI_EVENT_STA_WPS_ER_SUCCESS: {
+            wifi_event_sta_wps_er_success_t *evt =
+                (wifi_event_sta_wps_er_success_t *)wifi->data();
+            int i;
+
+            if (evt) {
+              for (i = 0; i < evt->ap_cred_cnt; i++) {
+                auto ssid = (const char *)evt->ap_cred[i].ssid;
+                auto passphrase = (const char *)evt->ap_cred[i].passphrase;
+                auto ap = new ApInfo(0, ssid, passphrase, nullptr);
+                logI("got WPS credentials: %s (%s)", ssid, passphrase);
+                if (_connect)
+                  addOrUpdateAp(ap);
+                else
+                  _connect = std::unique_ptr<ApInfo>();
+              }
+
+              _sta.disconnect();
+              xTaskNotifyGive(_task);
+            }
+            ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_wps_disable());
+          } break;
+          case WIFI_EVENT_STA_WPS_ER_FAILED:
+            logW("WPS failed");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_wps_disable());
+            break;
+          case WIFI_EVENT_STA_WPS_ER_TIMEOUT:
+            logW("WPS timed out");
+            ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_wps_disable());
+            break;
           case WIFI_EVENT_SCAN_DONE:
             // logI("scan done");
             xEventGroupClearBits(_eventGroup, WifiFlags::Scanning);

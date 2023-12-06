@@ -1,9 +1,14 @@
-import { AnyAction, configureStore, Selector, Store } from '@reduxjs/toolkit';
+import { configureStore, Selector, Store } from '@reduxjs/toolkit';
 import { isBrowser } from '@ts-libs/tools';
 import { getPlugins } from '@ts-libs/plugins';
 import { debounce } from '@ts-libs/tools';
 import deepEqual from 'fast-deep-equal';
-import { combineReducers, Middleware, ReducersMapObject } from 'redux';
+import {
+  combineReducers,
+  Middleware,
+  ReducersMapObject,
+  UnknownAction,
+} from 'redux';
 import {
   FLUSH,
   PAUSE,
@@ -26,7 +31,10 @@ import {
   TStateRoot,
 } from './types';
 
-function createDefaultStore<S>(): [Store<S>, Promise<Persistor> | undefined] {
+function createDefaultStore<S extends { [key: string]: any }>(): [
+  Store<S>,
+  Promise<Persistor> | undefined,
+] {
   const reducers: ReducersMapObject = {};
   const middleware: Array<Middleware> = [];
   const plugins = getPlugins<TReduxPlugin>((p) => !!p.redux);
@@ -72,7 +80,7 @@ function createDefaultStore<S>(): [Store<S>, Promise<Persistor> | undefined] {
   if (hasPesistence)
     ignoredActions.push(FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER);
   const reducer = combineReducers(reducers);
-  const store: Store<S> = configureStore({
+  const store = configureStore({
     reducer,
     middleware: (m) =>
       m({
@@ -82,7 +90,7 @@ function createDefaultStore<S>(): [Store<S>, Promise<Persistor> | undefined] {
         },
         immutableCheck: { warnAfter: 500 },
       }).concat(...middleware),
-  });
+  }) as Store<S>;
   let persistor: Promise<Persistor> | undefined;
   if (hasPesistence) {
     const ps = persistStore(store);
@@ -94,8 +102,8 @@ function createDefaultStore<S>(): [Store<S>, Promise<Persistor> | undefined] {
   return [store, persistor];
 }
 
-class Redux<S = TStateRoot> implements IRedux<S> {
-  readonly store: Store<S, AnyAction>;
+class Redux<S extends TStateRoot = TStateRoot> implements IRedux<S> {
+  readonly store: Store<S, UnknownAction>;
   readonly persistor?: Promise<Persistor>;
   get dispatch() {
     return this.store.dispatch;
@@ -167,7 +175,9 @@ const logger: Middleware = (store) => (next) => (action) => {
 let instance: Redux<any>;
 const wrappers = new Map<Store, Redux<any>>();
 
-export function getRedux<S = TStateRoot>(store?: Store<S>): IRedux<S> {
+export function getRedux<S extends TStateRoot = TStateRoot>(
+  store?: Store<S>
+): IRedux<S> {
   return store
     ? wrappers.get(store) ||
         (() => {
@@ -178,7 +188,7 @@ export function getRedux<S = TStateRoot>(store?: Store<S>): IRedux<S> {
     : instance || (instance = new Redux<S>());
 }
 
-export function observableSelector<T, S = TStateRoot>(
+export function observableSelector<T, S extends TStateRoot = TStateRoot>(
   selector: Selector<S, T>,
   options?: TObservableSelectorOptions<S>
 ): Observable<[T, T | undefined]> {

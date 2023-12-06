@@ -36,7 +36,7 @@ export type ThunkAction<S = TStateRoot> = (
 export type TSelector<
   R = unknown,
   S = TStateRoot,
-  P extends never | readonly any[] = any[]
+  P extends never | readonly any[] = any[],
 > = Selector<S, R, P>;
 
 export type TObservableSelectorOptions<S = TStateRoot> = {
@@ -46,7 +46,7 @@ export type TObservableSelectorOptions<S = TStateRoot> = {
   debounce?: number;
 };
 
-export interface IRedux<S = TStateRoot> {
+export interface IRedux<S extends TStateRoot = TStateRoot> {
   readonly store: Store<S>;
   readonly persistor?: Promise<Persistor | undefined>;
   readonly dispatch: ThunkDispatch<S, unknown, AnyAction>;

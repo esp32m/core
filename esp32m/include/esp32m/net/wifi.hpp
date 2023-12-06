@@ -50,6 +50,7 @@ namespace esp32m {
         }
         bool isConnected();
         esp_err_t disconnect();
+        esp_err_t startWPS();
 
        private:
         Sta();

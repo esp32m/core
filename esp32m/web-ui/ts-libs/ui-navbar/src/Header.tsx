@@ -6,7 +6,6 @@ import {
   useOffSetTop,
   useHeaderActions,
 } from './utils';
-import Iconify from './Iconify';
 import { MenuIcon } from './icons';
 
 type RootStyleProps = {

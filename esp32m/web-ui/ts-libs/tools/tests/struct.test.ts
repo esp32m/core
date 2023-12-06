@@ -94,3 +94,17 @@ describe('diff and apply', () => {
     expect(applied).toEqual(changed);
   });
 });
+
+describe('use case 1', () => {
+  const prev = {
+    active: 1,
+  };
+  const next = {
+    active: 0,
+  };
+  const fields: TStructFields = [['active']];
+  test('diff', () => {
+    const struct = new Struct(fields);
+    expect(struct.diff(prev, next)).toEqual({ '0': 0 });
+  });
+});

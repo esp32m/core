@@ -8,7 +8,7 @@ import {
   TLoggerPlugin,
 } from './types';
 
-const DefaultLevel = LogLevel.Info;
+let defaultLevel = LogLevel.Info;
 
 const implConstructor = (logger: ILogger) => {
   const plugins = getPlugins<TLoggerPlugin>((p) => !!p.logger?.impl);
@@ -25,7 +25,7 @@ const implConstructor = (logger: ILogger) => {
 class Logger implements ILogger {
   private _impl: Promise<ILoggerImpl> | undefined;
   get level() {
-    return this._level || this.parent?.level || DefaultLevel;
+    return this._level || this.parent?.level || defaultLevel;
   }
   set level(v: LogLevel) {
     this._level = v;
@@ -140,4 +140,8 @@ export function getLogger(name: string, options?: TLoggerOptions): ILogger {
     loggers[n] ||
     (loggers[n] = new Logger(n, p, options?.level, options?.group))
   );
+}
+
+export function setLogLevel(level: LogLevel) {
+  defaultLevel = level;
 }

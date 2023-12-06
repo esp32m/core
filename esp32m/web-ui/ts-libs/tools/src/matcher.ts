@@ -136,7 +136,10 @@ export enum MatchType {
 
 export class Matcher {
   readonly type: MatchType;
-  constructor(readonly expr: string | RegExp, type?: MatchType) {
+  constructor(
+    readonly expr: string | RegExp,
+    type?: MatchType
+  ) {
     if (isString(expr)) {
       this._str = expr;
       if (!type) type = MatchType.Exact;

@@ -10,9 +10,11 @@ const html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
 const clean_webpack_plugin_1 = require("clean-webpack-plugin");
 const compression_webpack_plugin_1 = __importDefault(require("compression-webpack-plugin"));
 const webpack_bundle_analyzer_1 = require("webpack-bundle-analyzer");
+const copy_webpack_plugin_1 = __importDefault(require("copy-webpack-plugin"));
 //import WebpackStringReplacer from 'webpack-string-replacer';
 const webpack_1 = require("webpack");
 require("webpack-dev-server");
+const fs_1 = require("fs");
 var Destination;
 (function (Destination) {
     Destination["Local"] = "local";
@@ -44,6 +46,7 @@ function ToMode(v) {
 function findModuleRule(rules, loader) {
     return Array.isArray(rules)
         ? rules.find((r) => r != '...' &&
+            r &&
             (r.loader == loader ||
                 (Array.isArray(r.use) &&
                     r.use.some((u) => u == loader || u['loader'] == loader))))
@@ -73,6 +76,32 @@ const bindingsFixLoader = {
         replace: 'opts.module_root = __dirname; //',
     },
 };
+/*const nodeGypFixLoader = {
+  test: /node-gyp-build\.js$/,
+  loader: 'string-replace-loader',
+  options: {
+    search: /path\.join\(dir, 'prebuilds'/g,
+    replace: "path.join(__dirname, 'prebuilds'",
+  },
+};*/
+const serialportFixLoaders = [
+    {
+        test: /load-bindings\.js$/,
+        loader: 'string-replace-loader',
+        options: {
+            search: /\(__dirname, '\.\.\/'\)/g,
+            replace: "(__dirname, './native/serialport')",
+        },
+    },
+    {
+        test: /poller\.js$/,
+        loader: 'string-replace-loader',
+        options: {
+            search: /\(__dirname, '\.\.\/'\)/g,
+            replace: "(__dirname, './native/serialport')",
+        },
+    },
+];
 const ipfsUtilsHttpFixLoader = (node) => ({
     test: /fetch\.js$/,
     loader: 'string-replace-loader',
@@ -136,6 +165,18 @@ class WebpackConfigBuilder {
         const { target } = this.config;
         return (target == 'node' || (Array.isArray(target) && target.includes('node')));
     }
+    findModule(name, tester) {
+        let curdir = this.dir;
+        for (;;) {
+            const dir = path_1.default.resolve(curdir, `./node_modules/${name}`);
+            if ((0, fs_1.existsSync)(dir) && (!tester || tester(dir)))
+                return dir;
+            const parent = path_1.default.resolve(curdir, '..');
+            if (parent == curdir)
+                break;
+            curdir = parent;
+        }
+    }
     buildBabelLoader() {
         let targets;
         if (this.hasNodeTarget())
@@ -188,6 +229,7 @@ class WebpackConfigBuilder {
             built.push(inlineJsonLoader);
         }
         built.push(bindingsFixLoader);
+        built.push(...serialportFixLoaders);
         const url = findModuleRule(rules, 'url-loader');
         if (!url && this.hasWebTargets())
             built.push(inlineImageLoader);
@@ -272,22 +314,16 @@ class WebpackConfigBuilder {
             result.push(new webpack_1.optimize.LimitChunkCountPlugin({
                 maxChunks: 1,
             }));
-            /*result.push(
-              new WebpackStringReplacer({
-                rules: [
-                  {
-                    fileInclude: /bindings\.js/,
-                    applyStage: 'loader',
-                    replacements: [
-                      {
-                        pattern: 'opts.module_root = ',
-                        replacement: 'opts.module_root = __dirname; //',
-                      },
+            const serialPort = this.findModule('@serialport', (p) => (0, fs_1.existsSync)(path_1.default.resolve(p, './bindings-cpp/prebuilds')));
+            if (serialPort)
+                result.push(new copy_webpack_plugin_1.default({
+                    patterns: [
+                        {
+                            from: path_1.default.resolve(serialPort, './bindings-cpp/prebuilds'),
+                            to: path_1.default.resolve(this.dir, './dist/native/serialport/prebuilds'),
+                        },
                     ],
-                  },
-                ],
-              })
-            );*/
+                }));
         }
         if (this.destination == Destination.Analyze)
             result.push(new webpack_bundle_analyzer_1.BundleAnalyzerPlugin());

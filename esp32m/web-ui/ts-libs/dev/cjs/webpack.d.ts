@@ -22,6 +22,7 @@ export declare class WebpackConfigBuilder {
     isProduction(): boolean;
     hasWebTargets(): boolean;
     hasNodeTarget(): boolean;
+    private findModule;
     private buildBabelLoader;
     private buildModule;
     private buildOptimization;

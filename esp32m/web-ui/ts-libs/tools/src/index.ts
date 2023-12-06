@@ -26,3 +26,5 @@ export * from './errors';
 export * from './env';
 export * from './capitalize';
 export * from './matcher';
+export * from './memoize';
+export * from './tree';

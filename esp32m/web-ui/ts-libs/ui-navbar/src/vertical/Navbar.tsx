@@ -1,4 +1,4 @@
-import { Box, Drawer, Stack, Typography } from '@mui/material';
+import { Box, Drawer, Stack } from '@mui/material';
 import { styled, useTheme } from '@mui/material/styles';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';

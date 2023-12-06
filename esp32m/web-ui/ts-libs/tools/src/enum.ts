@@ -36,10 +36,13 @@ class Tool<T extends TEnum> {
     return (
       this._options ||
       (this._options = Object.entries(this.enumType)
-        .reduce((out, [n, v]) => {
-          if (isNumber(v)) out.push([v, n]);
-          return out;
-        }, [] as Array<[number, string]>)
+        .reduce(
+          (out, [n, v]) => {
+            if (isNumber(v)) out.push([v, n]);
+            return out;
+          },
+          [] as Array<[number, string]>
+        )
         .sort(([a], [b]) => a - b))
     );
   }

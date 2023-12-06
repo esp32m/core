@@ -5,6 +5,7 @@ import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import CompressionPlugin from 'compression-webpack-plugin';
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
 import { PackageJson } from 'types-package-json';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 //import WebpackStringReplacer from 'webpack-string-replacer';
 
 import {
@@ -17,6 +18,7 @@ import {
   WebpackPluginInstance,
 } from 'webpack';
 import 'webpack-dev-server';
+import { existsSync } from 'fs';
 
 enum Destination {
   Local = 'local',
@@ -49,6 +51,7 @@ function findModuleRule(rules: ModuleOptions['rules'], loader: string) {
     ? rules.find(
         (r) =>
           r != '...' &&
+          r &&
           (r.loader == loader ||
             (Array.isArray(r.use) &&
               r.use.some((u) => u == loader || (u as any)['loader'] == loader)))
@@ -80,6 +83,32 @@ const bindingsFixLoader = {
     replace: 'opts.module_root = __dirname; //',
   },
 };
+/*const nodeGypFixLoader = {
+  test: /node-gyp-build\.js$/,
+  loader: 'string-replace-loader',
+  options: {
+    search: /path\.join\(dir, 'prebuilds'/g,
+    replace: "path.join(__dirname, 'prebuilds'",
+  },
+};*/
+const serialportFixLoaders = [
+  {
+    test: /load-bindings\.js$/,
+    loader: 'string-replace-loader',
+    options: {
+      search: /\(__dirname, '\.\.\/'\)/g,
+      replace: "(__dirname, './native/serialport')",
+    },
+  },
+  {
+    test: /poller\.js$/,
+    loader: 'string-replace-loader',
+    options: {
+      search: /\(__dirname, '\.\.\/'\)/g,
+      replace: "(__dirname, './native/serialport')",
+    },
+  },
+];
 const ipfsUtilsHttpFixLoader = (node: boolean) => ({
   test: /fetch\.js$/,
   loader: 'string-replace-loader',
@@ -153,6 +182,16 @@ export class WebpackConfigBuilder {
       target == 'node' || (Array.isArray(target) && target.includes('node'))
     );
   }
+  private findModule(name: string, tester?: (path: string) => boolean) {
+    let curdir = this.dir;
+    for (;;) {
+      const dir = path.resolve(curdir, `./node_modules/${name}`);
+      if (existsSync(dir) && (!tester || tester(dir))) return dir;
+      const parent = path.resolve(curdir, '..');
+      if (parent == curdir) break;
+      curdir = parent;
+    }
+  }
   private buildBabelLoader() {
     let targets: any;
     if (this.hasNodeTarget()) targets = { node: true };
@@ -201,6 +240,7 @@ export class WebpackConfigBuilder {
       built.push(inlineJsonLoader);
     }
     built.push(bindingsFixLoader);
+    built.push(...serialportFixLoaders);
     const url = findModuleRule(rules, 'url-loader');
     if (!url && this.hasWebTargets()) built.push(inlineImageLoader);
     return { rules: [...rules, ...built], ...rest };
@@ -293,22 +333,23 @@ export class WebpackConfigBuilder {
           maxChunks: 1,
         })
       );
-      /*result.push(
-        new WebpackStringReplacer({
-          rules: [
-            {
-              fileInclude: /bindings\.js/,
-              applyStage: 'loader',
-              replacements: [
-                {
-                  pattern: 'opts.module_root = ',
-                  replacement: 'opts.module_root = __dirname; //',
-                },
-              ],
-            },
-          ],
-        })
-      );*/
+      const serialPort = this.findModule('@serialport', (p) =>
+        existsSync(path.resolve(p, './bindings-cpp/prebuilds'))
+      );
+      if (serialPort)
+        result.push(
+          new CopyWebpackPlugin({
+            patterns: [
+              {
+                from: path.resolve(serialPort, './bindings-cpp/prebuilds'),
+                to: path.resolve(
+                  this.dir,
+                  './dist/native/serialport/prebuilds'
+                ),
+              },
+            ],
+          })
+        );
     }
     if (this.destination == Destination.Analyze)
       result.push(
@@ -343,8 +384,8 @@ export class WebpackConfigBuilder {
         devtool = this.isDevelopment()
           ? 'inline-source-map'
           : this.isProduction()
-          ? undefined
-          : undefined,
+            ? undefined
+            : undefined,
         devServer = this.hasWebTargets()
           ? {
               historyApiFallback: true,

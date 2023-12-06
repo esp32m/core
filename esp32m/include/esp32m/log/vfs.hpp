@@ -8,7 +8,7 @@
 namespace esp32m {
   namespace log {
     /**
-     * Sends output file system (SD, SPIFFS or other)
+     * Sends output to file system (SD, SPIFFS or other)
      */
     class Vfs : public FormattingAppender {
      public:

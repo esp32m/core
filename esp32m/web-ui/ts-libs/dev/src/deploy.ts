@@ -81,6 +81,12 @@ export class Deploy {
         await sftp.put(filepath, dest);
       }
     }
+    const nativeDir = path.join(project.config.dir, 'dist', 'native');
+    if (fs.existsSync(nativeDir)) {
+      const dest = path.posix.join(remotedir, 'native');
+      console.log(`copying directory ${nativeDir} -> ${dest}`);
+      sftp.uploadDir(nativeDir, dest);
+    }
   }
   async getSshConfig() {
     if (!this._sshConfig) {

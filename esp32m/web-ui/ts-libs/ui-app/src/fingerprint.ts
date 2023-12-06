@@ -1,11 +1,11 @@
 import FingerprintJS, { GetResult } from '@fingerprintjs/fingerprintjs';
-import { TBackendClientInfoPlugin } from '@ts-libs/ui-backend';
+import { TBackendClientInfoPlugin } from '@ts-libs/backend';
 
 let cachedPromise: Promise<GetResult | undefined>;
 
 async function fingerprint() {
   try {
-    const agent = await FingerprintJS.load({ monitoring: false });
+    const agent = await FingerprintJS.load();
     return agent.get();
   } catch (e) {
     console.warn(e);
