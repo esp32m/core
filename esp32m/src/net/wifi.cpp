@@ -456,6 +456,11 @@ namespace esp32m {
         xTaskNotifyGive(_task);
         return true;
       }
+      if (req.is("wps")) {
+        auto error = sta().startWPS();
+        req.respond(error);
+        return true;
+      }
       if (req.is("connect")) {
         auto data = req.data();
         uint8_t bssid[6];
@@ -804,6 +809,7 @@ namespace esp32m {
             }
           } break;
           case WIFI_EVENT_STA_WPS_ER_SUCCESS: {
+            logW("WPS succeeded");
             wifi_event_sta_wps_er_success_t *evt =
                 (wifi_event_sta_wps_er_success_t *)wifi->data();
             int i;
@@ -817,12 +823,26 @@ namespace esp32m {
                 if (_connect)
                   addOrUpdateAp(ap);
                 else
-                  _connect = std::unique_ptr<ApInfo>();
+                  _connect = std::unique_ptr<ApInfo>(ap);
               }
-
-              _sta.disconnect();
-              xTaskNotifyGive(_task);
+            } else {
+              wifi_config_t current_conf;
+              esp_wifi_get_config(WIFI_IF_STA, &current_conf);
+              auto ssid = (const char *)current_conf.sta.ssid;
+              if (strlen(ssid)) {
+                auto passphrase = (const char *)current_conf.sta.password;
+                logI("got WPS credentials: %s (%s)", ssid, passphrase);
+                auto ap = new ApInfo(0, ssid, passphrase, nullptr);
+                if (_connect)
+                  addOrUpdateAp(ap);
+                else
+                  _connect = std::unique_ptr<ApInfo>(ap);
+              }
             }
+
+            _sta.disconnect();
+            xTaskNotifyGive(_task);
+
             ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_wps_disable());
           } break;
           case WIFI_EVENT_STA_WPS_ER_FAILED:
