@@ -1,5 +1,7 @@
 #pragma once
 
+#include "esp32m/device.hpp"
+#include "esp32m/events/request.hpp"
 #include "esp32m/io/pins.hpp"
 
 #include <freertos/FreeRTOS.h>
@@ -11,10 +13,16 @@
 
 namespace esp32m {
   namespace dev {
-    class Rmtled : public log::SimpleLoggable {
+
+    class Rmtled : public Device {
      public:
       Rmtled(gpio_num_t pin);
       Rmtled(const Rmtled &) = delete;
+      const char *name() const override {
+        return "rmtled";
+      }
+     protected:
+      bool handleRequest(Request &req) override; 
 
      private:
       gpio_num_t _pin;
@@ -23,9 +31,10 @@ namespace esp32m {
       void configure_led();
       void init();
       void run();
-      void toggle_led();
       void blink(int count);
     };
+
     Rmtled *useRmtled(gpio_num_t pin);
+
   }  // namespace dev
 }  // namespace esp32m

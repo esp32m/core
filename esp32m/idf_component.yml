@@ -12,3 +12,4 @@ dependencies:
   bblanchon/arduinojson:
     public: true
     version: "^6.21.2"
+  espressif/led_strip: "^2.5.2"

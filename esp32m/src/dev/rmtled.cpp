@@ -11,12 +11,12 @@
 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
 #define LED_STRIP_RMT_RES_HZ  (10 * 1000 * 1000)
 
-static uint8_t s_led_state = 0;
+uint32_t led_color[3] = { 50, 50, 50 };  // Red, Green, Blue  (0-255) 
+
 
 namespace esp32m {
   namespace dev {
-    Rmtled::Rmtled(gpio_num_t pin) 
-      : SimpleLoggable("rmtled") {
+    Rmtled::Rmtled(gpio_num_t pin) {
       _pin=pin;
       init();
     }
@@ -25,19 +25,19 @@ namespace esp32m {
       logI( "Initialising addressable LED");
       /* LED strip initialization with the GPIO and pixels number*/
       led_strip_config_t strip_config = {
-        .strip_gpio_num = _pin,                   // The GPIO that connected to the LED strip's data line
-        .max_leds = 1,                            // The number of LEDs in the strip,
-        .led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
-        .led_model = LED_MODEL_WS2812,            // LED strip model
+        .strip_gpio_num = _pin,                   
+        .max_leds = 1,                            
+        .led_pixel_format = LED_PIXEL_FORMAT_GRB, 
+        .led_model = LED_MODEL_WS2812,            
         .flags = { 
-            .invert_out = false,                  // whether to invert the output signal
+            .invert_out = false,                  
           }
       };
 
      // LED strip backend configuration: RMT
       led_strip_rmt_config_t rmt_config = {
-          .clk_src = RMT_CLK_SRC_DEFAULT,         // different clock source can lead to different power consumption
-          .resolution_hz = LED_STRIP_RMT_RES_HZ,  // RMT counter clock frequency
+          .clk_src = RMT_CLK_SRC_DEFAULT,         
+          .resolution_hz = LED_STRIP_RMT_RES_HZ,  
           .mem_block_symbols=64,
           .flags = {
               .with_dma = false,                  // DMA feature is available on ESP target like ESP32-S3
@@ -54,26 +54,17 @@ namespace esp32m {
                   this, tskIDLE_PRIORITY + 1, &_task);
     }
 
-    void Rmtled::toggle_led() {
-      /* If the addressable LED is enabled */
-      if (s_led_state) {
-          /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-          led_strip_set_pixel(led_strip, 0, 0, 0, 48);
-          /* Refresh the strip to send data */
-          led_strip_refresh(led_strip);
-      } else {
-          /* Set all LED off to clear all pixels */
-          led_strip_clear(led_strip);
-      }
-      s_led_state = !s_led_state;
-    }
 
     void Rmtled::blink(int count) {
       for (int i = 0; i < count; i++) {
-        toggle_led();
-        delay(200);
-        toggle_led();
-        delay(200);
+          // Set the pixel color 
+          led_strip_set_pixel(led_strip, 0, led_color[0],led_color[1], led_color[2]);
+          // update strip
+          led_strip_refresh(led_strip);
+          delay(200);
+          // turn off all LEDs in strip
+          led_strip_clear(led_strip);
+          delay(200);
       }
     }
 
@@ -91,9 +82,23 @@ namespace esp32m {
       }
     }
 
+    bool Rmtled::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      if (req.is(name(), "color")) {
+        JsonArrayConst data = req.data();
+        if (data) {
+         led_color[0]=data[0];
+         led_color[1]=data[1];
+         led_color[2]=data[2];
+        }
+      }
+      return false;
+    }
+
     Rmtled *useRmtled(gpio_num_t pin) {
       return new Rmtled(pin);
     }
 
-  }  // namespace debug
+  }  // namespace dev
 }  // namespace esp32m
