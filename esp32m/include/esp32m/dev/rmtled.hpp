@@ -11,7 +11,7 @@
 
 namespace esp32m {
   namespace dev {
-    class Rmtled {
+    class Rmtled : public log::SimpleLoggable {
      public:
       Rmtled(gpio_num_t pin);
       Rmtled(const Rmtled &) = delete;
