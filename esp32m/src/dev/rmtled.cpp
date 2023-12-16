@@ -88,13 +88,21 @@ namespace esp32m {
       if (req.is(name(), "color")) {
         JsonArrayConst data = req.data();
         if (data) {
-         led_color[0]=data[0];
-         led_color[1]=data[1];
-         led_color[2]=data[2];
+          if (data.size() == 3) {
+            led_color[0]=data[0];
+            led_color[1]=data[1];
+            led_color[2]=data[2];
+          } else {
+            req.respond(ESP_ERR_INVALID_SIZE);
+            return true; 
+          }
         }
+        req.respond();
+        return true;  
       }
       return false;
     }
+
 
     Rmtled *useRmtled(gpio_num_t pin) {
       return new Rmtled(pin);
