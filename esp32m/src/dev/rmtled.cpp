@@ -11,7 +11,7 @@
 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
 #define LED_STRIP_RMT_RES_HZ  (10 * 1000 * 1000)
 
-uint32_t led_color[3] = { 50, 50, 50 };  // Red, Green, Blue  (0-255) 
+uint32_t led_color[3] = { 16, 0, 16 };  // Red, Green, Blue  (0-255) 
 
 
 namespace esp32m {
