@@ -40,8 +40,7 @@ namespace esp32m {
 
      private:
       rmt_rx_channel_config_t _config = {};
-      rmt_receive_config_t _thresholds = {.signal_range_min_ns = 1000,
-                                          .signal_range_max_ns = 1000 * 1000};
+      rmt_receive_config_t _thresholds = {};
       QueueHandle_t _queue;
       void *_buf;
       size_t _bufsize;

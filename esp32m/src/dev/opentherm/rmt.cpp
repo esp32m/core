@@ -91,36 +91,27 @@ namespace esp32m {
       bool _ready = false;
       esp_err_t ensureReady() {
         if (!_ready) {
-          rmt_rx_channel_config_t rxcfg = {
-              .gpio_num = _rxPin,
-              .clk_src = RMT_CLK_SRC_DEFAULT,
-              .resolution_hz = RmtResolutonHz,  // in us
-              .mem_block_symbols = 64,  // we can't go lower, even though we
-                                        // need only FrameSizeBits
-              .flags = {},
-//              .intr_priority = 0,
-              };
+          rmt_rx_channel_config_t rxcfg = {};
+          rxcfg.gpio_num = _rxPin;
+          rxcfg.clk_src = RMT_CLK_SRC_DEFAULT;
+          rxcfg.resolution_hz = RmtResolutonHz;  // in us
+          rxcfg.mem_block_symbols = 64;  // we can't go lower, even though we
+                                         // need only FrameSizeBits
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
           // be a little more permissive, especially for the max pulse duration,
           // I've seen it over 1.2ms
           ESP_CHECK_RETURN(
               _rx->setSignalThresholds((400 - 50) * 1000, (1150 + 150) * 1000));
-          rmt_tx_channel_config_t txcfg = {
-              .gpio_num = _txPin,
-              .clk_src = RMT_CLK_SRC_DEFAULT,
-              .resolution_hz = RmtResolutonHz,  // in us
-              .mem_block_symbols = 64,
-              .trans_queue_depth = 4,
-              .flags = {.invert_out = false,
-                        .with_dma = false,
-                        .io_loop_back = false,
-                        .io_od_mode = false},
-              // .intr_priority = 0,
-          };
+          rmt_tx_channel_config_t txcfg = {};
+          txcfg.gpio_num = _txPin;
+          txcfg.clk_src = RMT_CLK_SRC_DEFAULT;
+          txcfg.resolution_hz = RmtResolutonHz;  // in us
+          txcfg.mem_block_symbols = 64;
+          txcfg.trans_queue_depth = 4;
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
-          const static rmt_transmit_config_t txconfig = {
-              .loop_count = 0,  // no transfer loop
-              .flags = {.eot_level = 1}};
+          rmt_transmit_config_t txconfig = {};
+          txconfig.loop_count = 0;  // no transfer loop
+          txconfig.flags.eot_level = 1;
           ESP_CHECK_RETURN(_tx->setTxConfig(txconfig));
 
           ESP_CHECK_RETURN(_tx->enable());

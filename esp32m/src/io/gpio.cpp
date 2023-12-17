@@ -225,11 +225,11 @@ namespace esp32m {
 
 #if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
             if ((adc::calischeme & ADC_CALI_SCHEME_VER_LINE_FITTING) != 0) {
-              adc_cali_line_fitting_config_t cali_config = {
-                  .unit_id = _unit->unit(),
-                  .atten = _atten,
-                  .bitwidth = _width,
-                  .default_vref = DEFAULT_VREF};
+              adc_cali_line_fitting_config_t cali_config = {};
+              cali_config.unit_id = _unit->unit();
+              cali_config.atten = _atten;
+              cali_config.bitwidth = _width;
+              cali_config.default_vref = DEFAULT_VREF;
               ESP_CHECK_RETURN(adc_cali_create_scheme_line_fitting(
                   &cali_config, &_calihandle));
             }
@@ -237,11 +237,10 @@ namespace esp32m {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
             if (!_calihandle &&
                 (adc::calischeme & ADC_CALI_SCHEME_VER_CURVE_FITTING) != 0) {
-              adc_cali_curve_fitting_config_t cali_config = {
-                  .unit_id = _unit->unit(),
-                  .atten = _atten,
-                  .bitwidth = _width,
-              };
+              adc_cali_curve_fitting_config_t cali_config = {};
+              cali_config.unit_id = _unit->unit();
+              cali_config.atten = _atten;
+              cali_config.bitwidth = _width;
               ESP_CHECK_RETURN(adc_cali_create_scheme_curve_fitting(
                   &cali_config, &_calihandle));
             }
@@ -277,7 +276,7 @@ namespace esp32m {
               case ADC_ATTEN_DB_6:
                 *mvMax = 1300;
                 break;
-              case ADC_ATTEN_DB_11:
+              case AdcAttenDefault:
                 *mvMax = 2500;
                 break;
               default:
@@ -305,7 +304,7 @@ namespace esp32m {
               if (mvMax)
                 *mvMax = 1750;
               break;
-            case ADC_ATTEN_DB_11:
+            case AdcAttenDefault:
               if (mvMin)
                 *mvMin = 150;
               if (mvMax)
@@ -362,7 +361,7 @@ namespace esp32m {
       adc_channel_t _channel;
       adc_cali_handle_t _calihandle = nullptr;
       adc_bitwidth_t _width = ADC_BITWIDTH_DEFAULT;
-      adc_atten_t _atten = ADC_ATTEN_DB_11;
+      adc_atten_t _atten = AdcAttenDefault;
       adc::Flags _flags = adc::Flags::Dirty;
       ADC(Pin *pin, adc::Unit *unit, adc_channel_t channel)
           : _pin(pin), _unit(unit), _channel(channel) {}
@@ -469,15 +468,11 @@ namespace esp32m {
       };
 
       static esp_err_t create(Pin *pin, pin::Feature **feature) {
-        pcnt_unit_config_t unit_config = {
-            .low_limit = SHRT_MIN,
-            .high_limit = SHRT_MAX,
-            // .intr_priority = 0,
-            .flags =
-                {
-                    .accum_count = true,
-                },
-        };
+        pcnt_unit_config_t unit_config = {};
+        unit_config.low_limit = SHRT_MIN;
+        unit_config.high_limit = SHRT_MAX;
+        unit_config.flags.accum_count = true;
+
         pcnt_unit_handle_t unit;
         pcnt_channel_handle_t channel;
         ESP_CHECK_RETURN(pcnt_new_unit(&unit_config, &unit));

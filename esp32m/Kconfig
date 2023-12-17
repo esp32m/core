@@ -67,7 +67,7 @@ menu "ESP32 Manager configuration"
         bool "File system to use by default"
         default ESP32M_FS_ROOT_SPIFFS
         help
-            Specify how much output to see in esp32m logs.
+            Specify default file system.
         config ESP32M_FS_ROOT_SPIFFS
             bool "SPIFFS"
         config ESP32M_FS_ROOT_LITTLEFS

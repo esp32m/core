@@ -131,42 +131,34 @@ namespace esp32m {
       bool _ready = false;
       esp_err_t ensureReady() {
         if (!_ready) {
-          rmt_rx_channel_config_t rxcfg = {
-            .gpio_num = pin(),
-            .clk_src = RMT_CLK_SRC_DEFAULT,
-            .resolution_hz = RmtResolutonHz,  // in us
+          rmt_rx_channel_config_t rxcfg = {};
+          rxcfg.gpio_num = pin();
+          rxcfg.clk_src = RMT_CLK_SRC_DEFAULT;
+          rxcfg.resolution_hz = RmtResolutonHz;  // in us
 #if SOC_RMT_SUPPORT_RX_PINGPONG
-            .mem_block_symbols = 64,  // when the chip is ping-pong capable,
-                                      // we can use less rx memory blocks
+          rxcfg.mem_block_symbols = 64;  // when the chip is ping-pong capable,
+                                         // we can use less rx memory blocks
 #else
-            .mem_block_symbols = (_maxRxBytes + 2) * 8,
+          rxcfg.mem_block_symbols = (_maxRxBytes + 2) * 8;
 #endif
-            .flags = {},
-//            .intr_priority = 0,
-          };
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
-          rmt_tx_channel_config_t txcfg = {
-              .gpio_num = pin(),
-              .clk_src = RMT_CLK_SRC_DEFAULT,
-              .resolution_hz = RmtResolutonHz,  // in us
-              .mem_block_symbols = 64,  // ping-pong is always avaliable on tx
-                                        // channel, save hardware memory blocks
-              .trans_queue_depth = 4,
-              .flags = {.invert_out = false,
-                        .with_dma = false,
-                        .io_loop_back =
-                            true,  // make tx channel coexist with rx
-                                   // channel on the same gpio pin
-                        .io_od_mode =
-                            true},  // enable open-drain mode for 1-wire bus
-//              .intr_priority = 0,
-          };
+          rmt_tx_channel_config_t txcfg = {};
+          txcfg.gpio_num = pin();
+          txcfg.clk_src = RMT_CLK_SRC_DEFAULT;
+          txcfg.resolution_hz = RmtResolutonHz;  // in us
+          txcfg.mem_block_symbols = 64;  // ping-pong is always avaliable on tx
+                                         // channel, save hardware memory blocks
+          txcfg.trans_queue_depth = 4;
+          // make tx channel coexist with rx channel on the same gpio pin
+          txcfg.flags.io_loop_back = true;
+          // enable open-drain mode for 1-wire bus
+          txcfg.flags.io_od_mode = true;
+
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
-          const static rmt_transmit_config_t txconfig = {
-              .loop_count = 0,  // no transfer loop
-              .flags = {.eot_level =
-                            1}  // onewire bus should be released in IDLE
-          };
+          rmt_transmit_config_t txconfig = {};
+          txconfig.loop_count = 0;  // no transfer loop
+          // onewire bus should be released in IDLE
+          txconfig.flags.eot_level = 1;
           ESP_CHECK_RETURN(_tx->setTxConfig(txconfig));
 
           ESP_CHECK_RETURN(_rx->enable());

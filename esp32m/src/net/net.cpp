@@ -116,11 +116,9 @@ namespace esp32m {
       if (nr == 0)
         return;
       auto ifaces = target.createNestedArray("interfaces");
-      esp_netif_t *cif = nullptr;
-      for (;;) {
-        cif = esp_netif_next_unsafe(cif);
-        if (!cif)
-          break;
+      std::vector<esp_netif_t *> netifs;
+      net::netifEnum(netifs);
+      for (auto cif : netifs) {
         auto a = ifaces.createNestedArray();
         a.add(esp_netif_get_ifkey(cif));
         a.add(esp_netif_get_desc(cif));
@@ -129,6 +127,12 @@ namespace esp32m {
         if (esp_netif_get_netif_impl_name(cif, in) == ESP_OK && strlen(in))
           a.add(in);
       }
+      /*esp_netif_t *cif = nullptr;
+            for (;;) {
+              cif = esp_netif_next_unsafe(cif);
+              if (!cif)
+                break;
+            }*/
     }
     size_t interfacesSize() {
       auto nr = esp_netif_get_nr_of_ifs();
@@ -284,6 +288,26 @@ namespace esp32m {
 
   namespace net {
 
+    void netifEnum(std::vector<esp_netif_t *> &netifs) {
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+      esp_netif_find_if(
+          [](esp_netif_t *netif, void *ctx) {
+            auto vec = (std::vector<esp_netif_t *> *)ctx;
+            vec->push_back(netif);
+            return false;
+          },
+          &netifs);
+#else
+      esp_netif_t *cif = nullptr;
+      for (;;) {
+        cif = esp_netif_next(cif);
+        if (!cif)
+          break;
+        netifs.push_back(cif);
+      }
+#endif
+    }
+
     bool macParse(const char *macstr, uint8_t target[]) {
       if (!macstr)
         return false;
@@ -314,17 +338,21 @@ namespace esp32m {
     }
 
     bool isAnyNetifUp() {
-      esp_netif_t *cif = nullptr;
-      for (;;) {
-        cif = esp_netif_next(cif);
-        if (!cif)
-          break;
+      std::vector<esp_netif_t *> netifs;
+      netifEnum(netifs);
+      for (auto cif : netifs) {
         const char *key = esp_netif_get_ifkey(cif);
-        if (key && !strcmp("WIFI_AP_DEF", key)) 
+        if (key && !strcmp("WIFI_AP_DEF", key))
           continue;
         if (esp_netif_is_netif_up(cif))
           return true;
       }
+      /*      esp_netif_t *cif = nullptr;
+            for (;;) {
+              cif = esp_netif_next(cif);
+              if (!cif)
+                break;
+            }*/
       return false;
     }
 

@@ -336,16 +336,21 @@ namespace esp32m {
       }
       ErrorList el;
       if (!_mapValid || esp_netif_get_nr_of_ifs() != c) {
-        esp_netif_t *cif = nullptr;
+        std::vector<esp_netif_t *> netifs;
+        netifEnum(netifs);
         int ac = 0;
-        for (;;) {
-          cif = esp_netif_next_unsafe(cif);
-          if (!cif)
-            break;
+        for (auto cif : netifs) {
           const char *key = esp_netif_get_ifkey(cif);
           getOrAddInterface(key);
           ac++;
         }
+
+        /*        esp_netif_t *cif = nullptr;
+                for (;;) {
+                  cif = esp_netif_next_unsafe(cif);
+                  if (!cif)
+                    break;
+                }*/
         logI("%d configured, %d active", _map.size(), ac);
         _mapValid = true;
       }
@@ -381,7 +386,8 @@ namespace esp32m {
         }
         if (!old->second->_handle)
           delete old->second;
-        else if (old->second != i) // it's OK if we are registering the same interface
+        else if (old->second !=
+                 i)  // it's OK if we are registering the same interface
           logw("BUG: trying to register interface %s more than once",
                key.c_str());
         old->second = i;

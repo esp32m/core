@@ -9,8 +9,8 @@
 #include <map>
 #include <vector>
 
-#include "esp32m/events.hpp"
 #include "esp32m/errors.hpp"
+#include "esp32m/events.hpp"
 
 namespace esp32m {
 
@@ -70,7 +70,7 @@ namespace esp32m {
 
   namespace net {
 
-    constexpr const char* ErrNoInternet = "ERR_NO_INTERNET";
+    constexpr const char *ErrNoInternet = "ERR_NO_INTERNET";
 
     const int Ipv4MaxChars = 16;
     const int IpInfoJsonSize =
@@ -134,6 +134,8 @@ namespace esp32m {
     bool isEmptyMac(uint8_t *mac);
     bool isEmpty(esp_netif_dns_info_t *dns);
     bool macParse(const char *macstr, uint8_t target[]);
+
+    void netifEnum(std::vector<esp_netif_t *> &netifs);
 
     bool isAnyNetifUp();
     bool isDnsAvailable();

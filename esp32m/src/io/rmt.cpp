@@ -53,6 +53,8 @@ namespace esp32m {
     RmtRx::RmtRx(size_t bufsize) {
       _bufsize = bufsize * sizeof(rmt_symbol_word_t);
       _buf = malloc(_bufsize);
+      _thresholds.signal_range_min_ns = 1000;
+      _thresholds.signal_range_max_ns = 1000 * 1000;
       _queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
     }
     RmtRx::~RmtRx() {

@@ -232,7 +232,7 @@ namespace esp32m {
        private:
         Pin *_pin;
         adc_bitwidth_t _width = ADC_BITWIDTH_12;
-        adc_atten_t _atten = ADC_ATTEN_DB_11;
+        adc_atten_t _atten = AdcAttenDefault;
       };
 
       esp_err_t Pin::createFeature(pin::Type type, pin::Feature **feature) {

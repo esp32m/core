@@ -16,6 +16,13 @@
 
 namespace esp32m {
   namespace io {
+
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 2, 0)
+    const adc_atten_t AdcAttenDefault = ADC_ATTEN_DB_12;
+#else
+    const adc_atten_t AdcAttenDefault = ADC_ATTEN_DB_11;
+#endif
+
     class IPin;
 
     namespace pin {

@@ -17,6 +17,7 @@
 #include "esp32m/debug/button.hpp"
 #include "esp32m/events/broadcast.hpp"
 #include "esp32m/fs/spiffs.hpp"
+#include "esp32m/fs/littlefs.hpp"
 #include "esp32m/json.hpp"
 
 namespace esp32m {
