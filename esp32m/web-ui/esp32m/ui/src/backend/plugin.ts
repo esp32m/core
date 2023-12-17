@@ -1,15 +1,21 @@
-import { TReduxPlugin, TStateRoot } from '@ts-libs/redux';
-import { Action, Dispatch, Middleware } from 'redux';
-import { Name, actions, reducer } from './state';
+import { TReduxPlugin } from '@ts-libs/redux';
+import { Middleware } from 'redux';
+import { Name, TBackendStateRoot, actions, reducer } from './state';
 import { actions as publicActions } from './types';
 import { TAppLoadingPlugin, TUiRootPlugin } from '@ts-libs/ui-base';
 import { Hoc } from './hoc';
 import { ConnectionStatus } from './types';
 import { client, isBroadcast, isResponse } from './client';
+import { TErrorDeserializerPlugin } from '@ts-libs/tools';
+import { EspError } from './errors';
+import { Ti18nPlugin } from '@ts-libs/ui-i18n';
+import { i18n } from './i18n';
 
 export const pluginUiBackend = (): TReduxPlugin &
-  TAppLoadingPlugin &
-  TUiRootPlugin => {
+  TAppLoadingPlugin<TBackendStateRoot> &
+  TUiRootPlugin &
+  TErrorDeserializerPlugin &
+  Ti18nPlugin => {
   const middleware: Middleware = (api) => {
     const c = client();
     c.status.changed.subscribe(() => {
@@ -21,7 +27,7 @@ export const pluginUiBackend = (): TReduxPlugin &
         if (msg.name == 'state-get')
           api.dispatch(actions.deviceState([msg.source, msg.data]));
     });
-    return (next: Dispatch) => (action: Action) => next(action);
+    return (next) => (action) => next(action);
   };
   return {
     name: Name,
@@ -29,7 +35,11 @@ export const pluginUiBackend = (): TReduxPlugin &
       reducer,
       middleware,
     },
-    appLoadingSelector: (state: TStateRoot) =>
+    errors: {
+      deserializer: EspError.deserialize,
+    },
+    i18n,
+    appLoadingSelector: (state: TBackendStateRoot) =>
       state.backend.status != ConnectionStatus.Connected,
     ui: {
       root: {

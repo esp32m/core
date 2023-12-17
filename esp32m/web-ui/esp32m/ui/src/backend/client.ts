@@ -18,6 +18,7 @@ import { Subject } from 'rxjs';
 import WebSocket from 'reconnecting-websocket';
 import { selectors } from './state';
 import { createSelector } from '@reduxjs/toolkit';
+import { deserializeEsp32mError } from './errors';
 
 interface RequestOptions {
   timeout?: number;
@@ -46,7 +47,10 @@ export function isBroadcast(msg: TMessage): msg is TBroadcast {
 
 class Module implements IModuleApi {
   readonly selectors;
-  constructor(readonly api: Client, readonly name: string) {
+  constructor(
+    readonly api: Client,
+    readonly name: string
+  ) {
     this.selectors = {
       state: createSelector(
         selectors.modules,
@@ -101,7 +105,8 @@ class Client implements IBackendApi {
           const pending = this._pending[payload.seq];
           if (pending)
             if (parsed.partial) pending.partial(parsed);
-            else if (parsed.error) pending.reject(parsed.error);
+            else if (parsed.error)
+              pending.reject(deserializeEsp32mError(parsed.error));
             else pending.resolve(parsed);
         }
       }
@@ -147,10 +152,13 @@ class Client implements IBackendApi {
     const promise = new Promise<TResponse>((resolveFn, rejectFn) => {
       const capturedSeq = seq;
       const startTimer = () =>
-        setTimeout(() => {
-          delete this._pending[capturedSeq];
-          rejectFn('timeout');
-        }, options?.timeout || 10000);
+        setTimeout(
+          () => {
+            delete this._pending[capturedSeq];
+            rejectFn('timeout');
+          },
+          options?.timeout || 10000
+        );
       let timer = startTimer();
       resolve = (response) => {
         clearTimeout(timer);

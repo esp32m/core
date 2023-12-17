@@ -76,12 +76,34 @@ namespace esp32m {
     }
   }
 
+  void Request::respondError(esp_err_t error, const char *msg) {
+    if (!msg)
+      respond(error);
+    else {
+      DynamicJsonDocument doc(JSON_ARRAY_SIZE(2));
+      auto root = doc.to<JsonArray>();
+      root.add(error);
+      root.add(msg);
+      respondImpl(target(), doc, true);
+      _handled = true;
+    }
+  }
+
+  void Request::respondError(const char *code) {
+    DynamicJsonDocument doc(JSON_ARRAY_SIZE(1));
+    auto root = doc.to<JsonArray>();
+    root.add(code);
+    respondImpl(target(), doc, true);
+    _handled = true;
+  }
+
   void Request::respond(esp_err_t error) {
     if (error == ESP_OK)
       respond();
     else {
       DynamicJsonDocument doc(JSON_OBJECT_SIZE(1));
-      doc.set(error);
+      auto root = doc.to<JsonArray>();
+      root.add(error);
       respondImpl(target(), doc, true);
       _handled = true;
     }

@@ -14,10 +14,17 @@
 #include <string.h>
 #include <time.h>
 
+#include "sdkconfig.h"
+
 namespace esp32m {
   namespace log {
 
+#if CONFIG_ESP32M_LOG_LEVEL
+    Level _level = (Level)CONFIG_ESP32M_LOG_LEVEL;
+#else
     Level _level = Level::Debug;
+#endif
+
     LogMessageFormatter _formatter = nullptr;
     LogAppender *_appenders = nullptr;
     SemaphoreHandle_t _loggingLock = xSemaphoreCreateMutex();
@@ -410,6 +417,12 @@ namespace esp32m {
     }
 
     Level level() {
+      if (_level == Level::Default) {
+#if CONFIG_LOG_DEFAULT_LEVEL > 0
+        return (Level)(CONFIG_LOG_DEFAULT_LEVEL + 1);
+#endif
+        return Level::Debug;
+      }
       return _level;
     }
 

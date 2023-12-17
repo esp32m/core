@@ -16,7 +16,6 @@ namespace esp32m {
       }
 
       static Spiffs &instance();
-      config::Store *newConfigStore();
 
      protected:
       DynamicJsonDocument *getState(const JsonVariantConst args) override;
@@ -25,7 +24,7 @@ namespace esp32m {
      private:
       const char *_label = nullptr;
       bool _inited = false;
-      Spiffs(){};
+      Spiffs();
       bool init();
     };
 

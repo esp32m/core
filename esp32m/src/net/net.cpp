@@ -118,7 +118,7 @@ namespace esp32m {
       auto ifaces = target.createNestedArray("interfaces");
       esp_netif_t *cif = nullptr;
       for (;;) {
-        cif = esp_netif_next(cif);
+        cif = esp_netif_next_unsafe(cif);
         if (!cif)
           break;
         auto a = ifaces.createNestedArray();

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "esp32m/events.hpp"
+#include "esp32m/errors.hpp"
 
 namespace esp32m {
 
@@ -68,6 +69,8 @@ namespace esp32m {
   }  // namespace json
 
   namespace net {
+
+    constexpr const char* ErrNoInternet = "ERR_NO_INTERNET";
 
     const int Ipv4MaxChars = 16;
     const int IpInfoJsonSize =

@@ -15,12 +15,14 @@ import {
 import { TransitionGroup } from 'react-transition-group';
 import { PropsWithChildren, ReactElement } from 'react';
 import { useSnackApi } from './hooks';
+import { useTranslation } from '@ts-libs/ui-i18n';
 
 export const MyStack = ({ children }: PropsWithChildren<{}>) => (
   <Stack spacing={2}>{children}</Stack>
 );
 
 export const Snacks = () => {
+  const { t } = useTranslation();
   const items = useSelector(selectors.items);
   const api = useSnackApi();
   const content = items.map(
@@ -30,15 +32,15 @@ export const Snacks = () => {
       if (severity)
         children.push(
           <Alert severity={severity} action={action} key={0}>
-            {title && <AlertTitle>{title}</AlertTitle>}
-            {message}
+            {title && <AlertTitle>{t(title)}</AlertTitle>}
+            {t(message)}
           </Alert>
         );
       else
         children.push(
           <SnackbarContent
-            message={message}
-            title={title}
+            message={t(message)}
+            title={title && t(title)}
             action={action}
             elevation={3}
             square

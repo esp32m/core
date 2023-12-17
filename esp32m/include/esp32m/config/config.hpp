@@ -2,9 +2,10 @@
 
 #include <memory>
 #include <mutex>
+#include <ArduinoJson.h>
 
-#include "esp32m/config/store.hpp"
 #include "esp32m/events.hpp"
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
   

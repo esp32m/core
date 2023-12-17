@@ -4,6 +4,7 @@
 #include <esp_err.h>
 #include <memory>
 
+#include "esp32m/errors.hpp"
 #include "esp32m/events.hpp"
 
 namespace esp32m {
@@ -68,6 +69,19 @@ namespace esp32m {
       return name && !strcmp(_name, name);
     }
     static bool is(Event &ev, const char *transport, Response **r);
+    static void respond(std::unique_ptr<Response> &response,
+                        DynamicJsonDocument *data = nullptr) {
+      response->setData(data);
+      response->publish();
+      response.reset();
+    }
+    static void respondError(std::unique_ptr<Response> &response,
+                             ErrorList &errors) {
+      auto doc = errors.toJson(nullptr);
+      response->setError(doc);
+      response->publish();
+      response.reset();
+    }
 
    protected:
     static const char *NAME;

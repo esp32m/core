@@ -9,9 +9,8 @@ import { IBackendApi } from './types';
 import { useDispatch, useSelector } from 'react-redux';
 import { TSelector, TStateRoot } from '@ts-libs/redux';
 import { isNumber, noop } from '@ts-libs/tools';
-import { Name } from './state';
-import { AnyAction } from 'redux';
-import { ActionCreator } from 'redux';
+import { Name, TBackendStateRoot } from './state';
+import { ActionCreator, UnknownAction } from 'redux';
 
 export const ClientContext = createContext<IBackendApi | undefined>(undefined);
 
@@ -103,7 +102,7 @@ export function useRequest<T = unknown>(
 }
 
 type TCachedRequestOptions<T = unknown> = TRequestOptions & {
-  action: ActionCreator<AnyAction>;
+  action: ActionCreator<UnknownAction>;
   selector: TSelector<T>;
 };
 
@@ -141,7 +140,9 @@ export const useModuleState = <T>(
     if (once) api.getState(name, data);
     else if (condition === undefined || condition) return device.useState(data);
   }, [api, device, name, condition, once, data]);
-  return useSelector((state: TStateRoot) => device.selectors.state(state));
+  return useSelector((state: TBackendStateRoot) =>
+    device.selectors.state(state)
+  );
 };
 
 export function useModuleConfig<T = unknown>(
@@ -149,16 +150,6 @@ export function useModuleConfig<T = unknown>(
   options?: TRequestOptions
 ) {
   return useRequest<T>(target, 'config-get', options);
-  /* const [gen, setGen] = useState(0);
-  const [config, setConfig] = useState<T>();
-  const api = useBackendApi();
-  useEffect(() => {
-    api.getConfig(target).then(
-      (response) => setConfig(response.data),
-      (e) => console.error(e)
-    );
-  }, [api, target, gen]);
-  return [config, () => setGen(gen + 1)];*/
 }
 
 export const moduleStateSelector =

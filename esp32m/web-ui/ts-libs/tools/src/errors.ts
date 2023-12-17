@@ -1,14 +1,25 @@
 import { TPlugin, getPlugins } from '@ts-libs/plugins';
 import { isFunction, isPrimitive, isString, isUndefined } from './is-type';
 
-export type TErrorToStringOptions = {
+export type TErrorFormattingOptions = {
   stack: boolean;
 };
 
-export function errorToString(e: any, options?: TErrorToStringOptions) {
+export interface IFormattableError extends Error {
+  format(options?: TErrorFormattingOptions): string;
+}
+
+export function errorToString(
+  e: any,
+  options?: TErrorFormattingOptions
+): string | undefined {
   if (isUndefined(e)) return;
   if (!e) return 'error';
   if (isPrimitive(e)) return e.toString();
+  if (e instanceof CompositeError)
+    return e.errors.map((e) => errorToString(e, options)).join(';');
+  if (e instanceof Error && isFunction((e as IFormattableError).format))
+    return (e as IFormattableError).format(options);
   const { message, name, type, text, title, stack } = e;
   if (options?.stack && stack) return stack; // stack usually includes error message
   return message || text || title || name || type || e.toString();
@@ -70,8 +81,24 @@ function deserializeStandardError(serial: any) {
     }
 }
 
+export const CompositeErrorName = 'CompositeError';
+export class CompositeError extends Error {
+  readonly name = CompositeErrorName;
+  constructor(readonly errors: Array<Error>) {
+    super(errors.map((e) => `[${e.name}] ${e.message}`).join(';'));
+  }
+}
+
 export const deserializeError: ErrorDeserializer = (serial) => {
   if (serial instanceof Error) return serial;
+  if (Array.isArray(serial)) {
+    const errors = serial
+      .map(deserializeError)
+      .filter((e) => e instanceof Error);
+    if (errors.length == 0) return new Error();
+    if (errors.length == 1) return errors[0];
+    return new CompositeError(errors as Error[]);
+  }
   if (!serial) return new Error();
   const { stack, ...rest } = serial;
   let result = deserializeStandardError(rest);

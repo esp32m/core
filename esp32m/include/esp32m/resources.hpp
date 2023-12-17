@@ -18,21 +18,19 @@ namespace esp32m {
     }
 
     void setData(void* data, size_t size, bool owns = true) {
-      if (_owns && _data)
+      if (_ownsData && _data)
         free(_data);
       _data = data;
       _size = size;
-      _owns = owns && data;
+      _ownsData = owns && data;
     };
-
     size_t getData(void** data) const {
       if (data)
         *data = _data;
       return _size;
     }
-
     bool ownsData() const {
-      return _owns;
+      return _ownsData;
     }
     size_t size() const {
       return _size;
@@ -41,11 +39,20 @@ namespace esp32m {
       return _data;
     }
 
+    void setMeta(DynamicJsonDocument* meta) {
+      _meta.reset(meta);
+    }
+    JsonVariantConst getMeta() {
+      return _meta ? _meta->as<JsonVariantConst>()
+                   : json::empty().as<JsonVariantConst>();
+    }
+
    private:
     std::string _name;
     void* _data = nullptr;
     size_t _size = 0;
-    bool _owns = false;
+    bool _ownsData = false;
+    std::unique_ptr<DynamicJsonDocument> _meta;
   };
 
   struct ResourceRequestOptions {

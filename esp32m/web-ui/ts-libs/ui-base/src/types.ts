@@ -1,5 +1,5 @@
 import { TPlugin } from '@ts-libs/plugins';
-import { TSelector } from '@ts-libs/redux';
+import { TSelector, TStateRoot } from '@ts-libs/redux';
 import { ComponentType, PropsWithChildren, ReactElement } from 'react';
 import { RouteObject } from 'react-router-dom';
 
@@ -67,6 +67,6 @@ export type TMainMenuPlugin = TPlugin & {
   };
 };
 
-export type TAppLoadingPlugin = TPlugin & {
-  appLoadingSelector: TSelector<boolean>;
+export type TAppLoadingPlugin<S = TStateRoot> = TPlugin & {
+  appLoadingSelector: TSelector<boolean, S>;
 };

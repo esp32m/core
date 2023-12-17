@@ -7,7 +7,9 @@ import {
   DialogTitle,
   LinearProgress,
 } from '@mui/material';
+import { errorToString } from '@ts-libs/tools';
 import { ButtonBar, IButtonProps } from '@ts-libs/ui-base';
+import { useTranslation } from '@ts-libs/ui-i18n';
 import {
   Form,
   FormikConfig,
@@ -37,17 +39,22 @@ export const useDialogForm = (
     values: FormikValues,
     formikHelpers: FormikHelpers<FormikValues>
   ) => {
-    return new Promise((resolve, reject) => {
-      const r = props.onSubmit(values, formikHelpers);
-      if (r instanceof Promise)
-        r.then((v) => {
-          resolve(v);
-          setOpen(false);
-        }).catch((e) => {
-          reject(e);
-          setAlert(e + '');
-        });
-      else resolve(values);
+    return new Promise((resolve) => {
+      try {
+        const r = props.onSubmit(values, formikHelpers);
+        if (r instanceof Promise)
+          r.then((v) => {
+            resolve(v);
+            setOpen(false);
+          }).catch((e) => {
+            resolve(e); // we dont't reject, because formik is at a loss then
+            setAlert(errorToString(e));
+          });
+        else resolve(values);
+      } catch (e) {
+        resolve(e);
+        setAlert(errorToString(e));
+      }
     });
   };
   const formikBag = useFormik({ ...props, onSubmit, enableReinitialize });
@@ -78,8 +85,8 @@ interface IDialogFormProps extends Omit<Omit<DialogProps, 'open'>, 'children'> {
 }
 
 const defaultButtons = [
-  { name: 'OK', submits: true },
-  { name: 'Cancel', cancels: true },
+  { name: 'continue', submits: true },
+  { name: 'cancel', cancels: true },
 ];
 
 export const DialogForm = (props: IDialogFormProps) => {
@@ -87,9 +94,10 @@ export const DialogForm = (props: IDialogFormProps) => {
   const { alert, open, onClose, formikBag } = hook;
   const dp = { open, onClose, ...rest };
   const bbp = { buttons, onSubmit: formikBag.submitForm, onCancel: onClose };
+  const { t } = useTranslation();
   return (
     <Dialog {...dp}>
-      {title && <DialogTitle>{title}</DialogTitle>}
+      {title && <DialogTitle>{t(title)}</DialogTitle>}
       {formikBag.isSubmitting && <LinearProgress />}
       {alert && <Alert severity="error">{alert}</Alert>}
       <FormikProvider value={formikBag}>

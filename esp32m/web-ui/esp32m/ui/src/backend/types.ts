@@ -1,7 +1,7 @@
 import { createAction } from '@reduxjs/toolkit';
-import { TStateRoot } from '@ts-libs/redux';
 import { DiscreteStatus } from '@ts-libs/tools';
 import { Observable } from 'rxjs';
+import { TBackendStateRoot } from './state';
 
 export const enum ConnectionStatus {
   Disconnected = 'disconnected',
@@ -39,7 +39,7 @@ export interface IModuleApi {
   readonly api: IBackendApi;
   readonly name: string;
   readonly selectors: {
-    readonly state: (state: TStateRoot) => any;
+    readonly state: (state: TBackendStateRoot) => any;
   };
   useState(data?: any): VoidFunction;
 }

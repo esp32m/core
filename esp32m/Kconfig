@@ -1,0 +1,82 @@
+menu "ESP32 Manager configuration"
+    
+    menu "Log output"
+
+        choice ESP32M_LOG_LEVEL
+            bool "Default log verbosity"
+            default ESP32M_LOG_LEVEL_DEFAULT
+            help
+                Specify how much output to see in esp32m logs.
+            config ESP32M_LOG_LEVEL_NONE
+                bool "No output"
+            config ESP32M_LOG_LEVEL_DEFAULT
+                bool "Default"
+            config ESP32M_LOG_LEVEL_ERROR
+                bool "Error"
+            config ESP32M_LOGT_LEVEL_WARN
+                bool "Warning"
+            config ESP32M_LOG_LEVEL_INFO
+                bool "Info"
+            config ESP32M_LOG_LEVEL_DEBUG
+                bool "Debug"
+            config ESP32M_LOG_LEVEL_VERBOSE
+                bool "Verbose"
+        endchoice
+
+        config ESP32M_LOG_LEVEL
+            int
+            default 0 if ESP32M_LOG_LEVEL_NONE
+            default 1 if ESP32M_LOG_LEVEL_DEFAULT
+            default 2 if ESP32M_LOG_LEVEL_ERROR
+            default 3 if ESP32M_LOG_LEVEL_WARN
+            default 4 if ESP32M_LOG_LEVEL_INFO
+            default 5 if ESP32M_LOG_LEVEL_DEBUG
+            default 6 if ESP32M_LOG_LEVEL_VERBOSE
+
+    endmenu
+
+    menu "Over the Air Updates"
+
+        config ESP32M_NET_OTA_CHECK_FOR_UPDATES
+            bool "Enable automatic checking for firmware updates"
+            default n
+            help
+                Enables periodic checking for firmware updates using the specified HTTP URL.
+                ESP32M_NET_OTA_VENDOR_URL option must be defined for this feature to work.
+
+        config ESP32M_NET_OTA_VENDOR_URL
+            string "Vendor OTA URL"
+            default ""
+            depends on ESP32M_NET_OTA_CHECK_FOR_UPDATES
+            help 
+                HTTP or HTTPS URL of the remote folder with ${appname}.json file 
+
+        config ESP32M_NET_OTA_CHECK_INTERVAL
+            depends on ESP32M_NET_OTA_CHECK_FOR_UPDATES
+            int "Check interval (minutes)"
+            default 360
+                
+        config ESP32M_NET_OTA_VENDOR_ONLY
+            bool "Enable updates only from the specified vendor URL"
+            default y
+            depends on ESP32M_NET_OTA_CHECK_FOR_UPDATES
+    
+    endmenu
+
+    choice ESP32M_FS_ROOT
+        bool "File system to use by default"
+        default ESP32M_FS_ROOT_SPIFFS
+        help
+            Specify how much output to see in esp32m logs.
+        config ESP32M_FS_ROOT_SPIFFS
+            bool "SPIFFS"
+        config ESP32M_FS_ROOT_LITTLEFS
+            bool "LittleFS"
+    endchoice
+
+    config ESP32M_FS_ROOT
+        int
+        default 0 if ESP32M_FS_ROOT_SPIFFS
+        default 1 if ESP32M_FS_ROOT_LITTLEFS
+
+endmenu

@@ -76,15 +76,21 @@ export function Root() {
         <RouterProvider router={router} />
       </AppLoading>,
     ];
+    const uip = plugins.filter((p) => !!p.ui?.root);
     for (const {
       ui: {
-        root: { hoc, leaf },
+        root: { leaf },
       },
-    } of plugins.filter((p) => !!p.ui?.root).reverse()) {
+    } of uip)
       if (leaf)
         children = [...children, createElement(leaf, { key: children.length })];
+    for (const {
+      ui: {
+        root: { hoc },
+      },
+    } of uip.reverse())
       if (hoc) children = [createElement(hoc, { key: 0 }, children)];
-    }
+
     return children;
   }, [plugins, router]);
 

@@ -1,20 +1,23 @@
 #include "nvs_flash.h"
 
 #include <esp_image_format.h>
+#include <esp_mac.h>
 #include <esp_ota_ops.h>
 #include <esp_private/esp_int_wdt.h>
 #include <esp_task_wdt.h>
 #include <hal/efuse_hal.h>
 #include <lwip/apps/netbiosns.h>
 #include <sdkconfig.h>
-#include "esp_mac.h"
+
+#include <dirent.h>
 
 #include "esp32m/app.hpp"
 #include "esp32m/base.hpp"
+#include "esp32m/config/vfs.hpp"
 #include "esp32m/debug/button.hpp"
+#include "esp32m/events/broadcast.hpp"
 #include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
-#include "esp32m/events/broadcast.hpp"
 
 namespace esp32m {
 
@@ -234,8 +237,21 @@ namespace esp32m {
     if (initialized())
       return;
     logI("starting %s %s", _hostname.c_str(), _version ? _version : "");
+
+    DIR *dir = opendir("/");
+    if (dir) {
+      /* root already mounted */
+      logI("root found");
+      closedir(dir);
+    } else {
+#if CONFIG_ESP32M_FS_ROOT_LITTLEFS
+      fs::Littlefs::instance();
+#else
+      fs::Spiffs::instance();
+#endif
+    }
     if (!_config)
-      _config.reset(new Config(fs::Spiffs::instance().newConfigStore()));
+      _config.reset(new Config(new config::Vfs("/config.json")));
     _config->load();
     for (int i = 0; i <= _maxInitLevel; i++) {
       EventInit evt(i);

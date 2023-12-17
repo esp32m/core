@@ -47,6 +47,8 @@ namespace esp32m {
     void respond(const JsonVariantConst data, bool error);
     void respond(esp_err_t error);
     void respond();
+    void respondError(esp_err_t error, const char *msg);
+    void respondError(const char *code);
     Response *makeResponse();
 
     bool is(const char *name) const;

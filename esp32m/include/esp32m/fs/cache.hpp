@@ -31,7 +31,7 @@ namespace esp32m {
           FileResourceRequest frr(_localPath);
           frr.options = request.options;
           res = FileResourceRequestor::instance().obtain(frr);
-          request.errors().concat(frr.errors());
+          request.errors().copyFrom(frr.errors());
         }
         if (!res || res->size() == 0) {
           for (auto requestor : _requestors) {

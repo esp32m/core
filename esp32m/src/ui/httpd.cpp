@@ -6,7 +6,7 @@
 #include "esp32m/net/wifi.hpp"
 #include "esp32m/ui.hpp"
 #include "esp32m/ui/asset.hpp"
-#include "esp32m/version.hpp"
+#include "esp32m/version.h"
 
 #include <mdns.h>
 #include <algorithm>

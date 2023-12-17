@@ -3,6 +3,9 @@
 
 namespace esp32m {
   namespace fs {
+    Spiffs::Spiffs() {
+      init();
+    }
 
     Spiffs &Spiffs::instance() {
       static Spiffs i;
@@ -46,7 +49,7 @@ namespace esp32m {
       if (!_inited) {
         //    esp_log_level_set("partition", ESP_LOG_DEBUG);
         if (!esp_spiffs_mounted(_label)) {
-          esp_vfs_spiffs_conf_t conf = {.base_path = "/root",
+          esp_vfs_spiffs_conf_t conf = {.base_path = "",
                                         .partition_label = _label,
                                         .max_files = 5,
                                         .format_if_mount_failed = true};
@@ -57,14 +60,10 @@ namespace esp32m {
         if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_spiffs_check(_label)) != ESP_OK)
           ESP_ERROR_CHECK_WITHOUT_ABORT(esp_spiffs_format(_label));
         _inited = true;
+        logD("root mounted");
       }
       return esp_spiffs_check(_label) == ESP_OK;
     }
 
-    config::Store *Spiffs::newConfigStore() {
-      if (!init())
-        return nullptr;
-      return new config::Vfs("/root/config.json");
-    }
-  }  // namespace io
+  }  // namespace fs
 }  // namespace esp32m

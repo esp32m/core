@@ -47,7 +47,7 @@ export const Hoc = ({ children }: React.PropsWithChildren<unknown>) => {
     if (isFinished) setTimeout(() => window.location.reload(), 3000); // wait at least 3 sec for the chip to boot and reconnect
   }, [isFinished]);
   const percent =
-    state && state.total ? (state.progress * 100) / state.total : 0;
+    state && state.total ? ((state.progress || 0) * 100) / state.total : 0;
   return (
     <>
       {children}

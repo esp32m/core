@@ -6,11 +6,15 @@
 
 namespace esp32m {
 
+  constexpr const char * ErrBusy = "ERR_BUSY";
+
   class ErrorItem {
    public:
     esp_err_t code;
+    std::string name;
     std::string message;
     ErrorItem(esp_err_t c) : code(c) {}
+    ErrorItem(std::string name) : code(ESP_OK), name(name) {}
     ErrorItem(esp_err_t c, std::string m) : code(c), message(m) {}
   };
   class ErrorList {
@@ -36,6 +40,16 @@ namespace esp32m {
       }
       return err;
     };
+    void add(const char *name, ...) {
+      va_list args;
+      va_start(args, name);
+      add(name, args);
+      va_end(args);
+    };
+    void add(const char *name, va_list args) {
+      std::string n = string_printf(name, args);
+      _list.emplace_back(n);
+    };
     esp_err_t fail(const char *message, ...) {
       va_list args;
       va_start(args, message);
@@ -43,25 +57,54 @@ namespace esp32m {
       va_end(args);
       return result;
     };
-    DynamicJsonDocument *toJson(DynamicJsonDocument **result) {
+    size_t jsonSize() {
       auto ls = _list.size();
       if (!ls)
-        return nullptr;
-      size_t size = JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(ls);
-      for (auto &item : _list)
+        return 0;
+      size_t size = JSON_ARRAY_SIZE(ls);
+      for (auto &item : _list) {
+        size += JSON_ARRAY_SIZE(1);
+        if (item.name.size())
+          size += JSON_STRING_SIZE(item.name.size());
         if (item.message.size())
-          size += JSON_ARRAY_SIZE(2) + JSON_STRING_SIZE(item.message.size());
-        else
-          size += JSON_ARRAY_SIZE(1);
-      auto doc = new DynamicJsonDocument(size);
-      auto root = doc->to<JsonObject>();
-      auto arr = root.createNestedArray("error");
+          size += JSON_ARRAY_SIZE(1) + JSON_STRING_SIZE(item.message.size());
+      }
+      return size;
+    }
+    void toJson(JsonVariant target) {
+      JsonArray arr;
+      if (target.is<JsonObject>())
+        arr = target.createNestedArray("error");
+      else
+        arr = target.as<JsonArray>();
       for (auto &item : _list) {
         auto i = arr.createNestedArray();
-        i.add(item.code);
+        if (item.name.size())
+          i.add(item.name);
+        else {
+          auto name = esp_err_to_name(item.code);
+          if (name && strcmp(name, "ERROR") && strcmp(name, "UNKNOWN ERROR"))
+            i.add(name);
+          else
+            i.add(item.code);
+        }
         if (item.message.size())
           i.add(item.message);
       }
+    }
+    DynamicJsonDocument *toJson(DynamicJsonDocument **result) {
+      size_t size = jsonSize();
+      if (!size)
+        return nullptr;
+      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + size);
+      JsonVariant target;
+      if (result)  // TODO: make this more transparent (quick hack to include
+                   // "error" object in case we are responding from
+                   // setConfig/setState)
+        target = doc->to<JsonObject>();
+      else
+        target = doc->to<JsonArray>();
+      toJson(target);
       if (result)
         *result = doc;
       return doc;
@@ -69,7 +112,7 @@ namespace esp32m {
     bool empty() {
       return _list.empty();
     }
-    void concat(ErrorList &other) {
+    void copyFrom(ErrorList &other) {
       for (auto &item : other._list) _list.push_back(item);
     }
     void dump() {
@@ -80,6 +123,12 @@ namespace esp32m {
       delete doc;
       loge(str);
       free(str);
+    }
+    void clear() {
+      _list.clear();
+    }
+    void append(ErrorList &other) {
+      for (auto &item : other._list) _list.push_back(item);
     }
 
    private:

@@ -1,7 +1,7 @@
 import { useStore } from 'react-redux';
 import { ISnackApi, ISnackItem, TSnackItem } from './types';
 import { actions } from './state';
-import { AnyAction, Store } from '@reduxjs/toolkit';
+import { Store, UnknownAction } from '@reduxjs/toolkit';
 import { errorToString } from '@ts-libs/tools';
 
 const itemDefaults: Partial<TSnackItem> = {
@@ -62,7 +62,7 @@ class Item implements ISnackItem {
 
 class Api implements ISnackApi {
   readonly items: Record<number, Item> = {};
-  constructor(readonly store: Store<unknown, AnyAction>) {}
+  constructor(readonly store: Store<unknown, UnknownAction>) {}
   add(item: TSnackItem) {
     const id = ++idCounter;
     const effectiveItem = { ...itemDefaults, ...item };
@@ -71,7 +71,7 @@ class Api implements ISnackApi {
     return (this.items[id] = new Item(this, id, effectiveItem));
   }
   error(e: Error | string): ISnackItem {
-    return this.add({ message: errorToString(e), severity: 'error' });
+    return this.add({ message: errorToString(e) || '', severity: 'error' });
   }
   suspendClosure() {
     this.store.dispatch(actions.suspendClosure());

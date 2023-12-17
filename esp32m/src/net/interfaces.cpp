@@ -339,7 +339,7 @@ namespace esp32m {
         esp_netif_t *cif = nullptr;
         int ac = 0;
         for (;;) {
-          cif = esp_netif_next(cif);
+          cif = esp_netif_next_unsafe(cif);
           if (!cif)
             break;
           const char *key = esp_netif_get_ifkey(cif);

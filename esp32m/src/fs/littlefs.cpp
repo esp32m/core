@@ -8,6 +8,7 @@ namespace esp32m {
 
     Littlefs::Littlefs() {
       _label = "littlefs";
+      init();
     }
 
     Littlefs &Littlefs::instance() {
@@ -29,7 +30,7 @@ namespace esp32m {
                 esp_littlefs_info(_label, &total, &used)) == ESP_OK) {
           root["total"] = total;
           root["used"] = used;
-        }
+      }
       }
       return doc;
     }
@@ -51,7 +52,7 @@ namespace esp32m {
     bool Littlefs::init() {
       if (!_inited) {
         esp_vfs_littlefs_conf_t conf = {
-            .base_path = "/root",
+            .base_path = "",
             .partition_label = _label,
             .partition = nullptr,
             .format_if_mount_failed = true,
@@ -62,14 +63,10 @@ namespace esp32m {
             ESP_OK)
           return false;
         _inited = true;
+        logD("root mounted");
       }
       return _inited;
     }
 
-    config::Store *Littlefs::newConfigStore() {
-      if (!init())
-        return nullptr;
-      return new config::Vfs("/root/config.json");
-    }
   }  // namespace fs
 }  // namespace esp32m

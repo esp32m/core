@@ -14,11 +14,15 @@ type TBackendState = {
   modules: Record<string, TModuleState>;
 };
 
-declare module '@ts-libs/redux' {
+export type TBackendStateRoot = TStateRoot & {
+  [Name]: TBackendState;
+};
+
+/*declare module '@ts-libs/redux' {
   export interface TStateRoot {
     [Name]: TBackendState;
   }
-}
+}*/
 
 const initialState: TBackendState = {
   status: ConnectionStatus.Disconnected,
@@ -47,7 +51,7 @@ const slice = createSlice({
 });
 
 export const selectors = {
-  modules: (state: TStateRoot) => state[Name].modules,
+  modules: (state: TBackendStateRoot) => state[Name].modules,
 };
 
 export const { actions, reducer } = slice;
