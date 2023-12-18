@@ -13,7 +13,6 @@
 
 namespace esp32m {
   namespace dev {
-
     class Rmtled : public Device {
      public:
       Rmtled(gpio_num_t pin);
@@ -26,6 +25,7 @@ namespace esp32m {
 
      private:
       gpio_num_t _pin;
+      uint32_t _led_color[3] = { 0, 0, 16 };  // Red, Green, Blue  (0-255) 
       TaskHandle_t _task = nullptr;
       led_strip_handle_t led_strip;
       void configure_led();
