@@ -3,8 +3,6 @@
 
 namespace esp32m {
 
-  const char *Request::NAME = "request";
-
   bool Request::is(const char *name) const {
     return _name && name && !strcmp(_name, name);
   }
@@ -16,7 +14,7 @@ namespace esp32m {
   }
 
   bool Request::is(Event &ev, const char *target, Request **r) {
-    if (!ev.is(NAME))
+    if (!ev.is(Type))
       return false;
     const char *t = ((Request &)ev)._target;
     if (t && strcmp(t, target))
@@ -28,7 +26,7 @@ namespace esp32m {
 
   bool Request::is(Event &ev, const char *target, const char *name,
                    Request **r) {
-    if (!ev.is(NAME))
+    if (!ev.is(Type))
       return false;
     const char *t = ((Request &)ev)._target;
     if (!t || strcmp(t, target))

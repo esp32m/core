@@ -9,7 +9,7 @@
 
 namespace esp32m {
   namespace debug {
-    
+
     class Button;
 
     namespace button {
@@ -19,13 +19,13 @@ namespace esp32m {
           return _command;
         }
         static bool is(Event &ev, int command) {
-          return ev.is(NAME) && ((Command &)ev)._command == command;
+          return ev.is(Type) && ((Command &)ev)._command == command;
         }
 
        private:
-        Command(int command) : Event(NAME), _command(command) {}
+        Command(int command) : Event(Type), _command(command) {}
         int _command;
-        static const char *NAME;
+        constexpr static const char *Type = "debug-button-command";
         friend class debug::Button;
       };
     }  // namespace button

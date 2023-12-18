@@ -10,14 +10,12 @@
 namespace esp32m {
   namespace net {
 
-    const char *EthEvent::NAME = "ethernet";
-
     bool EthEvent::is(eth_event_t event) const {
       return _event == event;
     }
 
     bool EthEvent::is(Event &ev, EthEvent **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (r)
         *r = (EthEvent *)&ev;
@@ -25,7 +23,7 @@ namespace esp32m {
     }
 
     bool EthEvent::is(Event &ev, eth_event_t event, EthEvent **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       eth_event_t t = ((EthEvent &)ev)._event;
       if (t != event)

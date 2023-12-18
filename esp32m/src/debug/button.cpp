@@ -7,10 +7,6 @@
 namespace esp32m {
   namespace debug {
 
-    namespace button {
-      const char *Command::NAME = "debug-button-command";
-    }
-
     Button::Button(gpio_num_t pin) : _pin(gpio::pin(pin)) {
       xTaskCreate([](void *self) { ((Button *)self)->run(); }, "m/dbgbtn", 4096,
                   this, tskIDLE_PRIORITY + 1, &_task);

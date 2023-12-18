@@ -35,17 +35,17 @@ namespace esp32m {
           return _prev;
         }
         static bool is(Event &ev) {
-          return ev.is(NAME);
+          return ev.is(Type);
         }
         static bool is(Event &ev, Status next) {
-          return ev.is(NAME) && ((StatusChanged &)ev).next() == next;
+          return ev.is(Type) && ((StatusChanged &)ev).next() == next;
         }
 
        private:
         StatusChanged(Status next, Status prev)
-            : Event(NAME), _next(next), _prev(prev) {}
+            : Event(Type), _next(next), _prev(prev) {}
         Status _next, _prev;
-        static const char *NAME;
+        constexpr static const char *Type = "mqtt-status";
         friend class net::Mqtt;
       };
 
@@ -58,14 +58,14 @@ namespace esp32m {
           return _payload;
         }
         static bool is(Event &ev, const char *topic = nullptr) {
-          return ev.is(NAME) && (!topic || ((Incoming &)ev)._topic == topic);
+          return ev.is(Type) && (!topic || ((Incoming &)ev)._topic == topic);
         }
 
        private:
         Incoming(std::string topic, std::string payload)
-            : Event(NAME), _topic(topic), _payload(payload) {}
+            : Event(Type), _topic(topic), _payload(payload) {}
         std::string _topic, _payload;
-        static const char *NAME;
+        constexpr static const char *Type = "mqtt-incoming";
         friend class net::Mqtt;
       };
 

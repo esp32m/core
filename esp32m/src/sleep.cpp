@@ -7,14 +7,12 @@
 namespace esp32m {
   namespace sleep {
 
-    const char *Event::NAME = "sleep";
-
     Mode _mode = Mode::Delay;
     void setMode(Mode mode) {
       _mode = mode;
     }
     bool Event::is(esp32m::Event &ev, Event **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (r)
         *r = (Event *)&ev;

@@ -21,25 +21,25 @@ namespace esp32m {
       return _level;
     }
     static bool is(Event &ev, int level) {
-      return ev.is(NAME) && ((EventInit &)ev)._level == level;
+      return ev.is(Type) && ((EventInit &)ev)._level == level;
     }
 
    private:
-    EventInit(int level) : Event(NAME), _level(level) {}
+    EventInit(int level) : Event(Type), _level(level) {}
     int _level;
-    static const char *NAME;
+    constexpr static const char *Type = "init";
     friend class App;
   };
 
   class EventInited : public Event {
    public:
     static bool is(Event &ev) {
-      return ev.is(NAME);
+      return ev.is(Type);
     }
 
    private:
-    EventInited() : Event(NAME) {}
-    static const char *NAME;
+    EventInited() : Event(Type) {}
+    constexpr static const char *Type = "inited";
     friend class App;
   };
 
@@ -47,7 +47,7 @@ namespace esp32m {
   class EventDone : public Event {
    public:
     static bool is(Event &ev, DoneReason *reason) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (reason)
         *reason = ((EventDone &)ev)._reason;
@@ -59,15 +59,15 @@ namespace esp32m {
     }
 
    private:
-    EventDone(DoneReason reason) : Event(NAME), _reason(reason) {}
+    EventDone(DoneReason reason) : Event(Type), _reason(reason) {}
     DoneReason _reason;
-    static const char *NAME;
+    constexpr static const char *Type = "done";
   };
 
   class EventDescribe : public Event {
    public:
     static bool is(Event &ev, EventDescribe **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (r)
         *r = (EventDescribe *)&ev;
@@ -79,9 +79,9 @@ namespace esp32m {
     }
 
    private:
-    EventDescribe() : Event(NAME) {}
+    EventDescribe() : Event(Type) {}
     std::map<std::string, JsonVariantConst> descriptors;
-    static const char *NAME;
+    constexpr static const char *Type= "describe";;
     friend class App;
   };
 

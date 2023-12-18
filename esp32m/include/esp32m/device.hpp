@@ -22,7 +22,7 @@ namespace esp32m {
    public:
     EventSensor(const Device &device, const char *sensor, const float value,
                 const JsonObjectConst props)
-        : Event(NAME),
+        : Event(Type),
           _device(device),
           _sensor(sensor),
           _props(props),
@@ -45,7 +45,7 @@ namespace esp32m {
       ev.Event::publish();
     }
     static bool is(Event &ev) {
-      return ev.is(NAME);
+      return ev.is(Type);
     }
 
    private:
@@ -53,7 +53,8 @@ namespace esp32m {
     const char *_sensor;
     const JsonObjectConst _props;
     const float _value;
-    static const char *NAME;
+    constexpr static const char *Type= "sensor";
+    ;
   };
 
   class Device : public virtual AppObject, public virtual json::PropsContainer {

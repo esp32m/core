@@ -31,14 +31,14 @@ namespace esp32m {
       static void publish(eth_event_t event, esp_eth_handle_t handle);
 
      protected:
-      static const char *NAME;
+      constexpr static const char *Type = "ethernet";
 
      private:
       eth_event_t _event;
       esp_eth_handle_t _handle;
       Ethernet *_ethernet = nullptr;
       EthEvent(eth_event_t event, esp_eth_handle_t handle)
-          : Event(NAME), _event(event), _handle(handle) {}
+          : Event(Type), _event(event), _handle(handle) {}
       void claim(Ethernet *e) {
         _ethernet = e;
       }

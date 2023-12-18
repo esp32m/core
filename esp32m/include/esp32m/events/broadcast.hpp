@@ -24,8 +24,8 @@ namespace esp32m {
 
    protected:
     Broadcast(const char *source, const char *name, const JsonVariantConst data)
-        : Event(NAME), _source(source), _name(name), _data(data) {}
-    static const char *NAME;
+        : Event(Type), _source(source), _name(name), _data(data) {}
+    constexpr static const char *Type = "broadcast";
 
    private:
     const char *_source;

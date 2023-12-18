@@ -41,7 +41,7 @@ namespace esp32m {
       static void process(Ui *ui, uint32_t cid, JsonVariantConst msg) {
         if (msg.isNull())
           return;
-        if (msg["type"] != NAME)
+        if (msg["type"] != Type)
           return;
         const char *name = msg["name"];
         if (name) {

@@ -2,10 +2,9 @@
 
 namespace esp32m {
   namespace event {
-    const char *Diag::NAME = "diag";
 
     bool Diag::is(Event &ev, Diag **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (r)
         *r = (Diag *)&ev;

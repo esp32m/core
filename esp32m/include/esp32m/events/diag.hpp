@@ -20,8 +20,8 @@ namespace esp32m {
 
      private:
       uint8_t _id, _code;
-      static const char *NAME;
-      Diag(uint8_t id, uint8_t code) : Event(NAME), _id(id), _code(code){};
+      constexpr static const char *Type = "diag";
+      Diag(uint8_t id, uint8_t code) : Event(Type), _id(id), _code(code){};
     };
 
   }  // namespace event

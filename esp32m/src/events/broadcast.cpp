@@ -3,10 +3,8 @@
 
 namespace esp32m {
 
-  const char *Broadcast::NAME = "broadcast";
-
   bool Broadcast::is(Event &ev, Broadcast **r) {
-    if (!ev.is(NAME))
+    if (!ev.is(Type))
       return false;
     if (r)
       *r = (Broadcast *)&ev;

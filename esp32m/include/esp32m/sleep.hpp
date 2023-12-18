@@ -11,7 +11,7 @@ namespace esp32m {
 
     class Event : public esp32m::Event {
      public:
-      Event(Mode mode) : esp32m::Event(NAME), _mode(mode) {}
+      Event(Mode mode) : esp32m::Event(Type), _mode(mode) {}
       Mode mode() const {
         return _mode;
       }
@@ -26,7 +26,7 @@ namespace esp32m {
      private:
       Mode _mode;
       bool _blocked = false;
-      static const char *NAME;
+      constexpr static const char *Type = "sleep";
     };
 
     Mode mode();

@@ -13,7 +13,7 @@ namespace esp32m {
    public:
     Response(const char *transport, const char *name, const char *source,
              int seq)
-        : Event(NAME),
+        : Event(Type),
           _transport(transport),
           _name(name ? strdup(name) : nullptr),
           _source(source ? strdup(source) : nullptr),
@@ -51,7 +51,12 @@ namespace esp32m {
     bool isError() const {
       return _isError;
     }
-    void setError(esp_err_t err);
+    void setError(esp_err_t err) {
+      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+      doc->set(err);
+      setData(doc);
+      _isError = true;
+    }
     void setError(DynamicJsonDocument *data) {
       if (_data)
         delete (_data);
@@ -68,7 +73,13 @@ namespace esp32m {
     bool is(const char *name) const {
       return name && !strcmp(_name, name);
     }
-    static bool is(Event &ev, const char *transport, Response **r);
+    static bool is(Event &ev, const char *transport, Response **r) {
+      if (!ev.is(Type) || strcmp(transport, ((Response &)ev).transport()))
+        return false;
+      if (r)
+        *r = (Response *)&ev;
+      return true;
+    }
     static void respond(std::unique_ptr<Response> &response,
                         DynamicJsonDocument *data = nullptr) {
       response->setData(data);
@@ -84,7 +95,7 @@ namespace esp32m {
     }
 
    protected:
-    static const char *NAME;
+    constexpr static const char *Type = "response";
 
    private:
     DynamicJsonDocument *_data = nullptr;

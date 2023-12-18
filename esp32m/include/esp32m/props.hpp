@@ -10,7 +10,7 @@ namespace esp32m {
   class EventPropChanged : public Event {
    public:
     static bool is(Event &ev, const char *name, const char *key = nullptr) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       auto &e = (EventPropChanged &)ev;
       if (name && e._name && strcmp(name, e._name))
@@ -40,11 +40,11 @@ namespace esp32m {
    private:
     EventPropChanged(const char *name, const char *key, std::string prev,
                      std::string next)
-        : Event(NAME), _name(name), _key(key), _prev(prev), _next(next) {}
+        : Event(Type), _name(name), _key(key), _prev(prev), _next(next) {}
     const char *_name;
     const char *_key;
     std::string _prev, _next;
-    static const char *NAME;
+    constexpr static const char *Type = "prop-changed";
   };
 
   class Props {

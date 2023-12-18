@@ -326,14 +326,12 @@ namespace esp32m {
 
     const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
 
-    const char *WifiEvent::NAME = "wifi";
-
     bool WifiEvent::is(wifi_event_t event) const {
       return _event == event;
     }
 
     bool WifiEvent::is(Event &ev, WifiEvent **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       if (r)
         *r = (WifiEvent *)&ev;
@@ -341,7 +339,7 @@ namespace esp32m {
     }
 
     bool WifiEvent::is(Event &ev, wifi_event_t event, WifiEvent **r) {
-      if (!ev.is(NAME))
+      if (!ev.is(Type))
         return false;
       wifi_event_t t = ((WifiEvent &)ev)._event;
       if (t != event)

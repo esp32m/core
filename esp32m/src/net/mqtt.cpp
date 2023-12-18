@@ -16,9 +16,9 @@ namespace esp32m {
   namespace net {
 
     namespace mqtt {
-      const char *StatusChanged::NAME = "mqtt-status";
-      const char *Incoming::NAME = "mqtt-incoming";
+
       int subscriptionIdCounter = 0;
+
       Subscription::~Subscription() {
         _mqtt->unsubscribe(this);
       }
@@ -65,7 +65,7 @@ namespace esp32m {
 
     using namespace mqtt;
 
-    Mqtt::Mqtt() : _certCache("/root/mqtt-cert", http::Client::instance()) {
+    Mqtt::Mqtt() : _certCache("/mqtt-cert", http::Client::instance()) {
       memset(&_cfg, 0, sizeof(esp_mqtt_client_config_t));
       _uri = "mqtt://mqtt.lan";
       _cfg.session.keepalive = 120;

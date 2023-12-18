@@ -22,13 +22,13 @@ namespace esp32m {
     static void publish(ip_event_t event, void *data);
 
    protected:
-    static const char *NAME;
+    constexpr static const char *Type = "ip";
 
    private:
     ip_event_t _event;
     void *_data;
     IpEvent(ip_event_t event, void *data)
-        : Event(NAME), _event(event), _data(data) {}
+        : Event(Type), _event(event), _data(data) {}
     friend class Wifi;
   };
 

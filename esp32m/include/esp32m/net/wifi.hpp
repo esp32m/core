@@ -121,13 +121,13 @@ namespace esp32m {
       static void publish(wifi_event_t event, void *data);
 
      protected:
-      static const char *NAME;
+      constexpr static const char *Type = "wifi";
 
      private:
       wifi_event_t _event;
       void *_data;
       WifiEvent(wifi_event_t event, void *data)
-          : Event(NAME), _event(event), _data(data) {}
+          : Event(Type), _event(event), _data(data) {}
       friend class Wifi;
     };
 

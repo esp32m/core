@@ -61,7 +61,7 @@ namespace esp32m {
    protected:
     Request(const char *name, int seq, const char *target,
             const JsonVariantConst data, const char *origin)
-        : Event(NAME),
+        : Event(Type),
           _name(name),
           _seq(seq),
           _target(target),
@@ -72,7 +72,7 @@ namespace esp32m {
     virtual Response *makeResponseImpl() {
       assert(false);
     }
-    static const char *NAME;
+    constexpr static const char *Type = "request";
 
    private:
     const char *_name;

@@ -2,14 +2,13 @@
 
 namespace esp32m {
 
-  const char *IpEvent::NAME = "ip";
 
   bool IpEvent::is(ip_event_t event) const {
     return _event == event;
   }
 
   bool IpEvent::is(Event &ev, IpEvent **r) {
-    if (!ev.is(NAME))
+    if (!ev.is(Type))
       return false;
     if (r)
       *r = (IpEvent *)&ev;
@@ -17,7 +16,7 @@ namespace esp32m {
   }
 
   bool IpEvent::is(Event &ev, ip_event_t event, IpEvent **r) {
-    if (!ev.is(NAME))
+    if (!ev.is(Type))
       return false;
     ip_event_t t = ((IpEvent &)ev)._event;
     if (t != event)

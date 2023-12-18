@@ -13,14 +13,14 @@ namespace esp32m {
       class EventPopulate : public Event {
        public:
         static bool is(Event &ev) {
-          if (!ev.is(NAME))
+          if (!ev.is(Type))
             return false;
           return true;
         }
 
        private:
-        EventPopulate() : Event(NAME) {}
-        static const char *NAME;
+        EventPopulate() : Event(Type) {}
+        constexpr static const char *Type = "mdns-populate";
         friend class net::Mdns;
       };
 
@@ -67,7 +67,7 @@ namespace esp32m {
 
      private:
       bool _initialized = false;
-      std::map<std::string, std::unique_ptr<mdns::Service>> _services;
+      std::map<std::string, std::unique_ptr<mdns::Service> > _services;
       Mdns() {}
       void updateHostname();
       void updateServices();

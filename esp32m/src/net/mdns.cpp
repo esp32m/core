@@ -11,8 +11,6 @@ namespace esp32m {
 
     namespace mdns {
 
-      const char *EventPopulate::NAME = "mdns-populate";
-
       void Service::sync() {
         auto ap = App::instance().props().get();
         mdns_txt_item_t *items = (mdns_txt_item_t *)calloc(

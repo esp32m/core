@@ -8,7 +8,6 @@
 #include <math.h>
 
 namespace esp32m {
-  const char *EventSensor::NAME = "sensor";
 
   class EventPollSensors : public Event {
    public:

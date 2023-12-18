@@ -22,11 +22,6 @@
 
 namespace esp32m {
 
-  const char *EventInit::NAME = "init";
-  const char *EventInited::NAME = "inited";
-  const char *EventDone::NAME = "done";
-  const char *EventDescribe::NAME = "describe";
-  const char *EventPropChanged::NAME = "prop-changed";
   App *_appInstance = nullptr;
 
   const char *AppObject::KeyStateSet = "state-set";
