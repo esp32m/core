@@ -1,7 +1,6 @@
 #include "esp32m/net/ethernet.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/io/gpio.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 
 #include <esp_event.h>

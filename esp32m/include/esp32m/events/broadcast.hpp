@@ -17,10 +17,22 @@ namespace esp32m {
       return _data;
     }
 
-    static bool is(Event &ev, Broadcast **r);
-    static void publish(const char *source, const char *name);
+    static bool is(Event &ev, Broadcast **r) {
+      if (!ev.is(Type))
+        return false;
+      if (r)
+        *r = (Broadcast *)&ev;
+      return true;
+    }
+    static void publish(const char *source, const char *name) {
+      Broadcast ev(source, name, json::null<JsonVariantConst>());
+      ev.Event::publish();
+    }
     static void publish(const char *source, const char *name,
-                        const JsonVariantConst data);
+                        const JsonVariantConst data) {
+      Broadcast ev(source, name, data);
+      ev.Event::publish();
+    }
 
    protected:
     Broadcast(const char *source, const char *name, const JsonVariantConst data)

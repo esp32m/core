@@ -9,7 +9,6 @@
 #include "esp32m/app.hpp"
 #include "esp32m/events.hpp"
 #include "esp32m/log/udp.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/net/ota.hpp"
 namespace esp32m {
@@ -25,18 +24,6 @@ namespace esp32m {
       _addr.sin_port = htons(port);
       setHost(host);
       _format = port == 514 ? Format::Syslog : Format::Text;
-      /*      if (_addr.sin_addr.s_addr == 0)
-              EventManager::instance().subscribe([this](Event &ev) {
-                IpEvent *ip;
-                if (IpEvent::is(ev, &ip))
-                  switch (ip->event()) {
-                    case IP_EVENT_STA_LOST_IP:
-                      _addr.sin_addr.s_addr = 0;
-                      break;
-                    default:
-                      break;
-                  }
-              });*/
     }
 
     Udp::~Udp() {

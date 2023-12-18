@@ -15,8 +15,17 @@ namespace esp32m {
         return _code;
       }
 
-      static bool is(Event &ev, Diag **r);
-      static void publish(uint8_t id, uint8_t code);
+      static bool is(Event &ev, Diag **r) {
+        if (!ev.is(Type))
+          return false;
+        if (r)
+          *r = (Diag *)&ev;
+        return true;
+      }
+      static void publish(uint8_t id, uint8_t code) {
+        Diag ev(id, code);
+        ev.Event::publish();
+      }
 
      private:
       uint8_t _id, _code;

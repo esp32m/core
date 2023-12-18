@@ -3,7 +3,7 @@
 #include "freertos/timers.h"
 
 #include "esp32m/app.hpp"
-#include "esp32m/net/ip_event.hpp"
+#include "esp32m/net/net.hpp"
 #include "esp32m/net/mdns.hpp"
 
 namespace esp32m {

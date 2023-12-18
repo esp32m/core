@@ -131,6 +131,53 @@ namespace esp32m {
       constexpr static const char *Type = "net-if";
     };
 
+    class IpEvent : public Event {
+     public:
+      ip_event_t event() const {
+        return _event;
+      }
+      void *data() const {
+        return _data;
+      }
+
+      bool is(ip_event_t event) const {
+        return _event == event;
+      }
+
+      static bool is(Event &ev, IpEvent **r) {
+        if (!ev.is(Type))
+          return false;
+        if (r)
+          *r = (IpEvent *)&ev;
+        return true;
+      }
+      static bool is(Event &ev, ip_event_t event, IpEvent **r = nullptr) {
+        if (!ev.is(Type))
+          return false;
+        ip_event_t t = ((IpEvent &)ev)._event;
+        if (t != event)
+          return false;
+        if (r)
+          *r = (IpEvent *)&ev;
+        return true;
+      }
+
+      static void publish(ip_event_t event, void *data) {
+        IpEvent ev(event, data);
+        EventManager::instance().publish(ev);
+      }
+
+     protected:
+      constexpr static const char *Type = "ip";
+
+     private:
+      ip_event_t _event;
+      void *_data;
+      IpEvent(ip_event_t event, void *data)
+          : Event(Type), _event(event), _data(data) {}
+      friend class Wifi;
+    };
+
     bool isEmptyMac(uint8_t *mac);
     bool isEmpty(esp_netif_dns_info_t *dns);
     bool macParse(const char *macstr, uint8_t target[]);

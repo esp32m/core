@@ -8,7 +8,6 @@
 #include "esp32m/events/request.hpp"
 #include "esp32m/json.hpp"
 #include "esp32m/net/http.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/mqtt.hpp"
 #include "esp32m/net/net.hpp"
 

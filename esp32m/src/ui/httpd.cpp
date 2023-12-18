@@ -1,7 +1,6 @@
 #include "esp32m/ui/httpd.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/logging.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/mdns.hpp"
 #include "esp32m/net/wifi.hpp"
 #include "esp32m/ui.hpp"

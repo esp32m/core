@@ -6,7 +6,6 @@
 #include "freertos/timers.h"
 
 #include "esp32m/json.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/net/sntp.hpp"
 

@@ -5,7 +5,6 @@
 #include "esp32m/events/diag.hpp"
 #include "esp32m/events/response.hpp"
 #include "esp32m/integrations/ha/ha.hpp"
-#include "esp32m/net/ip_event.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
 
