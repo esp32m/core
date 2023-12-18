@@ -11,9 +11,6 @@
 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
 #define LED_STRIP_RMT_RES_HZ  (10 * 1000 * 1000)
 
-uint32_t led_color[3] = { 16, 0, 16 };  // Red, Green, Blue  (0-255) 
-
-
 namespace esp32m {
   namespace dev {
     Rmtled::Rmtled(gpio_num_t pin) {
@@ -58,7 +55,7 @@ namespace esp32m {
     void Rmtled::blink(int count) {
       for (int i = 0; i < count; i++) {
           // Set the pixel color 
-          led_strip_set_pixel(led_strip, 0, led_color[0],led_color[1], led_color[2]);
+          led_strip_set_pixel(led_strip, 0, _led_color[0], _led_color[1], _led_color[2]);
           // update strip
           led_strip_refresh(led_strip);
           delay(200);
@@ -88,13 +85,21 @@ namespace esp32m {
       if (req.is(name(), "color")) {
         JsonArrayConst data = req.data();
         if (data) {
-         led_color[0]=data[0];
-         led_color[1]=data[1];
-         led_color[2]=data[2];
+          if (data.size() == 3) {
+            _led_color[0]=data[0];
+            _led_color[1]=data[1];
+            _led_color[2]=data[2];
+          } else {
+            req.respond(ESP_ERR_INVALID_SIZE);
+            return true; 
+          }
         }
+        req.respond();
+        return true;  
       }
       return false;
     }
+
 
     Rmtled *useRmtled(gpio_num_t pin) {
       return new Rmtled(pin);
