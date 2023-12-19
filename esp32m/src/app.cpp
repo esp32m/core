@@ -152,25 +152,6 @@ namespace esp32m {
         version = desc->version;
     }
     
-#if CONFIG_ESP32M_LOG_CONSOLE
-    log::addAppender(&log::Console::instance());
-#endif
-#if CONFIG_ESP32M_LOG_UDP
-    log::addBufferedAppender(new log::Udp(CONFIG_ESP32M_LOG_UDP_HOST));
-#endif
-#if CONFIG_ESP32M_LOG_QUEUE
-#  if CONFIG_ESP32M_LOG_QUEUE_SIZE
-    log::useQueue(CONFIG_ESP32M_LOG_QUEUE_SIZE);
-#  else
-    log::useQueue();
-#  endif
-#endif
-#if CONFIG_ESP32M_LOG_HOOK_ESPIDF
-    log::hookEsp32Logger();
-#endif
-#if CONFIG_ESP32M_LOG_HOOK_UART
-    log::hookUartLogger();
-#endif
     _appInstance = new App(name, version);
   }
 
@@ -233,6 +214,25 @@ namespace esp32m {
     esp_task_wdt_deinit();
     esp_task_wdt_init(&wdtc);
     _sketchSize = sketchSize();
+#if CONFIG_ESP32M_LOG_CONSOLE
+    log::addAppender(&log::Console::instance());
+#endif
+#if CONFIG_ESP32M_LOG_UDP
+    log::addBufferedAppender(new log::Udp(CONFIG_ESP32M_LOG_UDP_HOST));
+#endif
+#if CONFIG_ESP32M_LOG_QUEUE
+#  if CONFIG_ESP32M_LOG_QUEUE_SIZE
+    log::useQueue(CONFIG_ESP32M_LOG_QUEUE_SIZE);
+#  else
+    log::useQueue();
+#  endif
+#endif
+#if CONFIG_ESP32M_LOG_HOOK_ESPIDF
+    log::hookEsp32Logger();
+#endif
+#if CONFIG_ESP32M_LOG_HOOK_UART
+    log::hookUartLogger();
+#endif
   }
 
   bool App::initialized() {
