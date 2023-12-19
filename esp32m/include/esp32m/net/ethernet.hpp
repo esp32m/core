@@ -74,5 +74,9 @@ namespace esp32m {
 #if CONFIG_ETH_USE_ESP32_EMAC
     Ethernet *useOlimexEthernet(const char *name = nullptr);
 #endif
+#if CONFIG_ETH_USE_OPENETH
+    Ethernet *useOpenethEthernet(const char *name = nullptr);
+#endif
+
   }  // namespace net
 }  // namespace esp32m
