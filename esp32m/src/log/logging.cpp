@@ -13,6 +13,7 @@
 #include <rom/ets_sys.h>
 #include <string.h>
 #include <time.h>
+#include <vector>
 
 #include "sdkconfig.h"
 
@@ -26,7 +27,7 @@ namespace esp32m {
 #endif
 
     LogMessageFormatter _formatter = nullptr;
-    LogAppender *_appenders = nullptr;
+    std::vector<LogAppender *> _appenders;
     SemaphoreHandle_t _loggingLock = xSemaphoreCreateMutex();
 
     const char DumpSubsitute = '.';
@@ -230,11 +231,7 @@ namespace esp32m {
           LogMessage *item =
               (LogMessage *)xRingbufferReceive(_buf, &size, pdMS_TO_TICKS(100));
           if (item) {
-            LogAppender *appender = _appenders;
-            while (appender) {
-              appender->append(item);
-              appender = appender->_next;
-            }
+            for (auto appender : _appenders) appender->append(item);
             vRingbufferReturnItem(_buf, item);
           }
         }
@@ -335,7 +332,7 @@ namespace esp32m {
       LogMessage *message = LogMessage::alloc(level, timeOrUptime(), name, msg);
       if (!message)
         return;
-      if (!_appenders) {
+      if (!_appenders.size()) {
         auto m = formatter()(message);
         if (m) {
           ets_printf(m);
@@ -349,11 +346,7 @@ namespace esp32m {
         if (queue && xTaskGetSchedulerState() != taskSCHEDULER_SUSPENDED)
           enqueued = queue->enqueue(message);
         if (!enqueued) {
-          LogAppender *appender = _appenders;
-          while (appender) {
-            appender->append(message);
-            appender = appender->_next;
-          }
+          for (auto appender : _appenders) appender->append(message);
         }
       }
       free(message);
@@ -406,14 +399,10 @@ namespace esp32m {
     void addAppender(LogAppender *a) {
       if (!a)
         return;
-      LogAppender *appender = _appenders;
-      if (!appender)
-        _appenders = a;
-      else {
-        while (appender->_next) appender = appender->_next;
-        appender->_next = a;
-        a->_prev = appender;
-      }
+      for (auto appender : _appenders)
+        if (appender == a)
+          return;
+      _appenders.push_back(a);
     }
 
     Level level() {
@@ -439,26 +428,14 @@ namespace esp32m {
     }
 
     bool hasAppenders() {
-      return _appenders != nullptr;
+      return _appenders.size() != 0;
     }
 
     void removeAppender(LogAppender *a) {
       if (!a)
         return;
-      LogAppender *appender = _appenders;
-      if (appender == a)
-        _appenders = nullptr;
-      else
-        while (appender) {
-          if (appender == a) {
-            if (a->_prev)
-              a->_prev->_next = a->_next;
-            if (a->_next)
-              a->_next->_prev = a->_prev;
-            break;
-          }
-          appender = appender->_next;
-        }
+      _appenders.erase(std::remove(_appenders.begin(), _appenders.end(), a),
+                       _appenders.end());
     }
 
     void useQueue(int size) {
