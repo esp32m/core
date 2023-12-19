@@ -320,6 +320,11 @@ namespace esp32m {
     void removeAppender(LogAppender *a);
 
     /**
+     * @returns true if at least one appender was added
+     */
+    bool hasAppenders();
+
+    /**
      * @brief Global log level, used in conjunction with the specific @c
      * Logger's level to calculate effective log level.
      */

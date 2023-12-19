@@ -10,9 +10,6 @@
 // #include <esp32m/dev/dsts.hpp>
 // #include <esp32m/dev/relay.hpp>
 
-#include <esp32m/log/console.hpp>
-#include <esp32m/log/udp.hpp>
-
 #include <esp32m/ui.hpp>
 #include <esp32m/ui/httpd.hpp>
 
@@ -25,21 +22,6 @@ extern "C" void app_main() {
   // Initialize ESP32 manager. This must be the first line in any esp32m
   // application
   App::Init app;
-  // Send log messages to UART0
-  log::addAppender(&log::Console::instance());
-  // Send log messages to rsyslog daemon over UDP.
-  // It will look for the syslog.lan name on the local network.
-  // If you want to specify a different name or IP address - just pass it to the
-  // Udp() constructor
-  log::addBufferedAppender(new log::Udp());
-  // Queue messages instead of sending them right away. Consumes slightly more
-  // RAM, but doesn't block current thread, the messages are being sent
-  // concurrently.
-  log::useQueue();
-  // Redirect ESP-IDF messages to our logger so we can send them over to rsyslog
-  // and/or other medium.
-  log::hookEsp32Logger();
-  // Add support for Over The Air firmware updates.
   net::useWifi();
   // Replace SSID/password with your WiFi credentials if you would like to hard-code AP credentials
   // If SSID/password is not set, ESP32 will start in Access Point mode and you will be able configure

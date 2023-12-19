@@ -1,6 +1,6 @@
 menu "ESP32 Manager configuration"
     
-    menu "Log output"
+    menu "Logging"
 
         choice ESP32M_LOG_LEVEL
             bool "Default log verbosity"
@@ -33,7 +33,54 @@ menu "ESP32 Manager configuration"
             default 5 if ESP32M_LOG_LEVEL_DEBUG
             default 6 if ESP32M_LOG_LEVEL_VERBOSE
 
-    endmenu
+        config ESP32M_LOG_CONSOLE
+            bool "Send log output to UART0 serial console"
+            default y
+
+        config ESP32M_LOG_UDP
+            bool "Send log output to remote server over UDP"
+            default n
+            help
+                This will send UDP packets to syslogd server
+
+        config ESP32M_LOG_UDP_HOST
+            string "Host name or IP for UDP syslogd server"
+            depends on ESP32M_LOG_UDP
+            default "syslog.lan"
+            help
+                If not specified or the host name could not be resolved, 
+                will attempt to send UDP packets to the default gateway
+
+        config ESP32M_LOG_QUEUE
+            bool "Queue log messages"
+            help
+                This option enables buffering of log messages instead of 
+                sending them to appenders immediately. When the message is logged,
+                it is appended to the in-memory queue and then sent to appenders
+                in a separate task, to minimize delays in the calling task
+                and ensure thread safety
+            default y
+
+        config ESP32M_LOG_QUEUE_SIZE
+            int "Queue size, bytes"
+            depends on ESP32M_LOG_QUEUE
+            default 1024
+
+        config ESP32M_LOG_HOOK_ESPIDF
+            bool "Capture ESP-IDF log messages"
+            help
+                Redirect messages logged by ESP-IDF ESP_LOGx macros to esp32m appenders
+            default y
+
+        config ESP32M_LOG_HOOK_UART
+            bool "Capture UART0 output"
+            help
+                Attempts to capture everything that is printed to serial console via putc() / printf().
+                This may help to capture additional output that does not use ESP_LOGx macros.
+                Not recommended to be used in production builds, as it has known stability issues.
+            default n
+
+        endmenu
 
     menu "Over the Air Updates"
 

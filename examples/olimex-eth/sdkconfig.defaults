@@ -1,6 +1,7 @@
 # the following two lines remove unnecessary blob of debug messages sent to UART0 during boot
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+ESP32M_LOG_LEVEL_DEBUG=y
 
 # comment out for default of 160MHz and less power consumption
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y

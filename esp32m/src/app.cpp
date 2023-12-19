@@ -16,9 +16,12 @@
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/debug/button.hpp"
 #include "esp32m/events/broadcast.hpp"
-#include "esp32m/fs/spiffs.hpp"
 #include "esp32m/fs/littlefs.hpp"
+#include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
+#include "esp32m/log/console.hpp"
+#include "esp32m/log/udp.hpp"
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
 
@@ -148,6 +151,26 @@ namespace esp32m {
       if (!version)
         version = desc->version;
     }
+    
+#if CONFIG_ESP32M_LOG_CONSOLE
+    log::addAppender(&log::Console::instance());
+#endif
+#if CONFIG_ESP32M_LOG_UDP
+    log::addBufferedAppender(new log::Udp(CONFIG_ESP32M_LOG_UDP_HOST));
+#endif
+#if CONFIG_ESP32M_LOG_QUEUE
+#  if CONFIG_ESP32M_LOG_QUEUE_SIZE
+    log::useQueue(CONFIG_ESP32M_LOG_QUEUE_SIZE);
+#  else
+    log::useQueue();
+#  endif
+#endif
+#if CONFIG_ESP32M_LOG_HOOK_ESPIDF
+    log::hookEsp32Logger();
+#endif
+#if CONFIG_ESP32M_LOG_HOOK_UART
+    log::hookUartLogger();
+#endif
     _appInstance = new App(name, version);
   }
 

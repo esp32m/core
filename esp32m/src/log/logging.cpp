@@ -438,6 +438,10 @@ namespace esp32m {
       _level = level;
     }
 
+    bool hasAppenders() {
+      return _appenders != nullptr;
+    }
+
     void removeAppender(LogAppender *a) {
       if (!a)
         return;
