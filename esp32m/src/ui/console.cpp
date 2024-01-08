@@ -6,12 +6,13 @@
 
 namespace esp32m {
   namespace ui {
+
     Console::Console() {
       _repl = nullptr;
       _repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
       _repl_config.prompt = "esp32m>";
-      _uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
     }
+  
     Console::~Console() {
       if (_repl)
         _repl->del(_repl);
@@ -70,8 +71,16 @@ namespace esp32m {
 
     void Console::init(Ui *ui) {
       Transport::init(ui);
-      ESP_ERROR_CHECK_WITHOUT_ABORT(
-          esp_console_new_repl_uart(&_uart_config, &_repl_config, &_repl));
+      #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
+          esp_console_dev_uart_config_t _uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+          ESP_ERROR_CHECK(esp_console_new_repl_uart(&_uart_config, &_repl_config, &_repl));
+      #elif CONFIG_ESP_CONSOLE_USB_CDC
+          esp_console_dev_usb_cdc_config_t _cdc_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
+          ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&_cdc_config, &_repl_config, &_repl));
+      #elif CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+          esp_console_dev_usb_serial_jtag_config_t _usbjtag_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+          ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&_usbjtag_config, &_repl_config, &_repl));
+      #endif
       request_args.name = arg_str1(nullptr, nullptr, "<name>", "request name");
       request_args.data = arg_str0(nullptr, nullptr, "<data>", "JSON data");
       request_args.target = arg_str0("t", "target", "<target>", "target name");

@@ -21,7 +21,6 @@ namespace esp32m {
       Console();
       esp_console_repl_t* _repl;
       esp_console_repl_config_t _repl_config;
-      esp_console_dev_uart_config_t _uart_config;
       friend int requestHandler(int argc, char** argv);
     };
 
