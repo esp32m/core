@@ -13,7 +13,9 @@
 #include <esp32m/ui.hpp>
 #include <esp32m/ui/httpd.hpp>
 
-#include <dist/ui.hpp>
+# if CONFIG_ESP32M_UI
+  #include <dist/ui.hpp>
+# endif
 
 // All ESP32 manager code is in under esp32m namespace
 using namespace esp32m;
@@ -33,9 +35,18 @@ extern "C" void app_main() {
   // Retrieve various pieces of info about ESP32 module to be displayed in the
   // UI.
   dev::useEsp32();
-  // Start embedded HTTP server for UI. Just type http://IP_addres_of_your_ESP32
-  // in your web browser to open the UI
-  initUi(new Ui(new ui::Httpd()));
+
+# if CONFIG_ESP32M_WS_API
+  # if CONFIG_ESP32M_UI
+    // Start embedded HTTP server for UI. 
+    initUi(new Ui(new ui::Httpd()));
+  # else
+    // when using localhost to serve UI, only start ws server on device
+    // and run  'yarn start' in ../build/webui to serve web app
+    new Ui(new ui::Httpd());
+  # endif
+# endif
+
   // Add more devices/modules here:
   // dev::useBme280();
   // dev::useBuzzer(GPIO_NUM_15);

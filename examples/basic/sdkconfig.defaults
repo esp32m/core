@@ -2,7 +2,7 @@
 # and reduce the size of the bootloader a little, too
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
-ESP32M_LOG_LEVEL_DEBUG=y
+CONFIG_ESP32M_LOG_LEVEL_DEBUG=y
 
 # comment out for default of 160MHz and less power consumption
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
@@ -11,6 +11,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
 # must be enabled if web-ui is used
 CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_ESP32M_WS_API=y
+CONFIG_ESP32M_UI=y
+
 # modern browsers send too much stuff in headers
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
 # the default of 10 sockets may not be enough for http server to handle incoming http/ws connections

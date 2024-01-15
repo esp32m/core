@@ -10,7 +10,9 @@
 #include <esp32m/ui.hpp>
 #include <esp32m/ui/httpd.hpp>
 
-#include <dist/ui.hpp>
+#if CONFIG_ESP32M_UI
+  #include <dist/ui.hpp>
+#endif
 
 using namespace esp32m;
 
@@ -23,5 +25,16 @@ extern "C" void app_main()
   net::useWifi();
   net::useOlimexEthernet();
   net::useInterfaces();
+  
+# if CONFIG_ESP32M_WS_API
+# if CONFIG_ESP32M_UI
+  // Start embedded HTTP server for UI. 
   initUi(new Ui(new ui::Httpd()));
+# else
+  // when using localhost to serve UI, only start ws server on device
+  // and run  'yarn start' in ../build/webui to serve web app
+  new Ui(new ui::Httpd());
+# endif
+# endif
+
 }

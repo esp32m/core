@@ -1,5 +1,5 @@
 menu "ESP32 Manager configuration"
-    
+
     menu "Logging"
 
         choice ESP32M_LOG_LEVEL
@@ -34,7 +34,7 @@ menu "ESP32 Manager configuration"
             default 6 if ESP32M_LOG_LEVEL_VERBOSE
 
         config ESP32M_LOG_CONSOLE
-            bool "Send log output to UART0 serial console"
+            bool "Send log output to serial console"
             default y
 
         config ESP32M_LOG_UDP
@@ -73,7 +73,7 @@ menu "ESP32 Manager configuration"
             default y
 
         config ESP32M_LOG_HOOK_UART
-            bool "Capture UART0 output"
+            bool "Capture UART output"
             help
                 Attempts to capture everything that is printed to serial console via putc() / printf().
                 This may help to capture additional output that does not use ESP_LOGx macros.
@@ -125,5 +125,29 @@ menu "ESP32 Manager configuration"
         int
         default 0 if ESP32M_FS_ROOT_SPIFFS
         default 1 if ESP32M_FS_ROOT_LITTLEFS
+
+    
+    menu "UI Options"
+
+        config ESP32M_WS_API
+            bool "Include Websockets server API"
+            default y
+            help
+                Runs ESP32M API over websockets
+        
+        config ESP32M_UI
+            bool "Include UI bundle in firmware"
+            depends on ESP32M_WS_API
+            default y
+            help
+                Select this option to include compiled javascript and HTML files in the build,
+                and serve the webapp UI from the device.
+
+                [ To serve the webapp from localhost:9000 (for example during development) 
+                unselect this option, and add the IP of your ESP32 in build/web-ui/webpack.config.js 
+                e.g.{ defines: { esp32m: { backend: { host: '192.168.4.1' } } } } 
+                and run  'yarn start' in build/webui ]
+        
+    endmenu # UI Options
 
 endmenu
