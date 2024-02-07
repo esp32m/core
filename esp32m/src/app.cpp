@@ -151,7 +151,7 @@ namespace esp32m {
       if (!version)
         version = desc->version;
     }
-    
+
     _appInstance = new App(name, version);
   }
 
@@ -218,7 +218,8 @@ namespace esp32m {
     log::addAppender(&log::Console::instance());
 #endif
 #if CONFIG_ESP32M_LOG_UDP
-    log::addBufferedAppender(new log::Udp(CONFIG_ESP32M_LOG_UDP_HOST));
+    _udpLogger = new log::Udp(CONFIG_ESP32M_LOG_UDP_HOST);
+    log::addBufferedAppender(_udpLogger);
 #endif
 #if CONFIG_ESP32M_LOG_QUEUE
 #  if CONFIG_ESP32M_LOG_QUEUE_SIZE
