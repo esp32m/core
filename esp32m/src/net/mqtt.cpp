@@ -194,6 +194,7 @@ namespace esp32m {
             break;
           case Status::Connected: {
             logI("connected");
+            esp_task_wdt_reset();
             publishBirth();
             std::map<std::string, int> toSubscribe;
             {
@@ -206,8 +207,10 @@ namespace esp32m {
                 toSubscribe[topic] = qos;
               }
             }
-            for (auto const &[topic, qos] : toSubscribe)
+            for (auto const &[topic, qos] : toSubscribe) {
+              esp_task_wdt_reset();
               this->intSubscribe(topic, qos);
+            }
             setState(Status::Ready);
             _timer = 0;
           } break;
