@@ -1,7 +1,35 @@
+import { IEvents, TEvent } from './events';
+import { TDisposer } from './types';
+
+export enum TreeEventType {
+  NodeInserting = 'node-inserting',
+  NodeInserted = 'node-inserted',
+  NodeRemoving = 'node-removing',
+  NodeRemoved = 'node-removed',
+}
+
+export type TTreeEvent = TEvent<TreeEventType>;
+export type TTreeNodeEvent = TEvent<TreeEventType> & {
+  readonly node: INode;
+  readonly parent: INode;
+};
+
+export interface TreeEventInterfaces {
+  [TreeEventType.NodeInserting]: TTreeNodeEvent;
+  [TreeEventType.NodeInserted]: TTreeNodeEvent;
+  [TreeEventType.NodeRemoving]: TTreeNodeEvent;
+  [TreeEventType.NodeRemoved]: TTreeNodeEvent;
+}
+
 export interface ITree {
   readonly root: INode;
-  onNodeInserted?: (node: INode) => void;
-  onNodeRemoved?: (node: INode, parent: INode) => void;
+  readonly events: IEvents<TreeEventType, TreeEventInterfaces>;
+}
+
+export interface ISubtree<T extends INode> {
+  readonly node: INode;
+  flat(): T[];
+  watch(changed: (node: T, added: boolean) => void): TDisposer;
 }
 
 export interface INode extends Iterable<INode> {
@@ -14,7 +42,8 @@ export interface INode extends Iterable<INode> {
   insert(node: INode, before?: INode): void;
   remove(node: INode): boolean;
   traverseNext<T extends INode = INode>(root?: INode): T | undefined;
-  subtree<T extends INode = INode>(includeSelf?: boolean): T[];
+  subtree<T extends INode = INode>(includeSelf?: boolean): ISubtree<T>;
+  isAnscestorOf(child: INode): boolean;
   /**
    * @returns true if this node participates in the hierarchy (i.e. its deepest ancestor is the tree's root)
    * @return false if this node has no parent or
@@ -22,6 +51,36 @@ export interface INode extends Iterable<INode> {
   readonly isAttached: boolean;
   attach(parent: INode): void;
   detach(): void;
+}
+class Subtree<T extends INode> implements ISubtree<T> {
+  constructor(
+    readonly node: INode,
+    readonly includeRoot: boolean
+  ) {}
+  watch(changed: (node: T, added: boolean) => void): TDisposer {
+    const { tree } = this.node;
+    if (!tree) throw new Error('node does not belong to a tree');
+    const sub = tree.events.observable.subscribe((ev) => {
+      let added = false;
+      switch (ev.type) {
+        case TreeEventType.NodeInserted:
+          added = true;
+        case TreeEventType.NodeRemoved:
+          if (this.node.isAnscestorOf(ev.node)) changed(ev.node as T, added);
+      }
+    });
+    this.flat().forEach((n) => changed(n, true));
+    return () => sub.unsubscribe();
+  }
+  flat() {
+    const result: Array<T> = this.includeRoot ? [this.node as T] : [];
+    let n: T | undefined = this.node.firstChild as T;
+    while (n) {
+      result.push(n);
+      n = n.traverseNext<T>(this.node);
+    }
+    return result;
+  }
 }
 
 export abstract class AbstractNode implements INode {
@@ -57,6 +116,14 @@ export abstract class AbstractNode implements INode {
       if (p === node) throw new Error('insert would cause circular dependency');
       p = p._parent;
     }
+    const { tree } = node;
+    if (tree && oldParent != this)
+      tree.events.fire({
+        type: TreeEventType.NodeInserting,
+        node,
+        parent: this,
+      });
+
     node._parent = this;
     if (!this._head) {
       node._next = node;
@@ -70,11 +137,22 @@ export abstract class AbstractNode implements INode {
       next._prev = node;
       if (before != null && before === this._head) this._head = node;
     }
-    if (oldParent != node._parent && node.tree?.onNodeInserted)
-      node.tree.onNodeInserted(node);
+    if (tree && oldParent != node._parent)
+      tree.events.fire({
+        type: TreeEventType.NodeInserted,
+        node,
+        parent: this,
+      });
   }
   remove(node: AbstractNode): boolean {
     if (!node || node._parent !== this) return false;
+    const { tree } = node;
+    if (tree)
+      tree.events.fire({
+        type: TreeEventType.NodeRemoving,
+        node,
+        parent: this,
+      });
     if (node._next === node) delete this._head;
     else {
       node._next!._prev = node._prev;
@@ -84,7 +162,12 @@ export abstract class AbstractNode implements INode {
     delete node._parent;
     delete node._prev;
     delete node._next;
-    if (node.tree?.onNodeRemoved) node.tree.onNodeRemoved(node, this);
+    if (tree)
+      tree.events.fire({
+        type: TreeEventType.NodeRemoved,
+        node,
+        parent: this,
+      });
     return true;
   }
   traverseNext<T extends INode = INode>(root?: INode) {
@@ -104,21 +187,27 @@ export abstract class AbstractNode implements INode {
     return !!this.parentNode?.isAttached;
   }
   attach(parent: INode) {
-    if (this.isAttached) this.detach();
+    if (this.isAttached) {
+      if (parent === this.parentNode) return;
+      this.detach();
+    }
     parent.insert(this);
   }
   detach() {
     if (this.parentNode) this.parentNode.remove(this);
   }
 
-  subtree<T extends INode = INode>(includeSelf: boolean = false) {
-    const result: Array<T> = includeSelf ? [this as unknown as T] : [];
-    let n: T | undefined = this?.firstChild as T;
-    while (n) {
-      result.push(n);
-      n = n.traverseNext<T>(this);
+  subtree<T extends INode = INode>(includeSelf: boolean = false): ISubtree<T> {
+    return new Subtree<T>(this, includeSelf);
+  }
+
+  isAnscestorOf(child: INode) {
+    for (;;) {
+      const parent = child.parentNode;
+      if (!parent) return false;
+      if (parent === this) return true;
+      child = parent;
     }
-    return result;
   }
 
   [Symbol.iterator](): Iterator<INode, any, undefined> {

@@ -10,11 +10,13 @@ export interface IProps {
   probes?: Array<IProbe>;
 }
 
-export interface IState extends Array<string | number | boolean> {
-  0: string; // code
-  1: number; // resolution
-  2: boolean; // parasite
-  3: number; // temperature
-}
+export type TProbeState = [
+  code: string, // code
+  resolution: number, // resolution
+  parasite: boolean, // parasite
+  temperature: number, // temperature
+  failed: number,
+  label: string,
+];
 
-export type States = Array<IState>;
+export type States = Array<TProbeState>;

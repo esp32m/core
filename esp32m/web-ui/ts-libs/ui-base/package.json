@@ -5,18 +5,20 @@
     "author": "",
     "sideEffects": false,
     "main": "src/index.ts",
-    "scripts": {
-        "test": "jest",
-        "cover": "jest --coverage"
+    "exports": {
+        ".": {
+            "node": "./src/node/index.ts",
+            "browser": "./src/web/index.ts"
+        }
     },
     "devDependencies": {
-        "@types/node": "^20.10.4",
-        "@types/react": "^18.2.45",
+        "@types/node": "^20.11.16",
+        "@types/react": "^18.2.54",
         "@types/react-router-dom": "^5.3.3",
-        "rimraf": "^5.0.5",
         "typescript": "^5.3.3"
     },
     "dependencies": {
+        "@mui/material": "^5.15.7",
         "@ts-libs/log": "*",
         "@ts-libs/redux": "*",
         "@ts-libs/tools": "*",

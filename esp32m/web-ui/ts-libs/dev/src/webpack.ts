@@ -262,7 +262,7 @@ export class WebpackConfigBuilder {
   }
   private buildPerformance() {
     const { performance = {} } = this.baseConfig;
-    const limit = 8 * 1024 * 1024;
+    const limit = 16 * 1024 * 1024;
     return { maxEntrypointSize: limit, maxAssetSize: limit, ...performance };
   }
   private buildResolve() {

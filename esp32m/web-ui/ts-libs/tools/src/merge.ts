@@ -37,10 +37,13 @@ export function merge(
     }
   }
   const mergeObjects = <T extends Record<string, any>>(a: T, b: T) =>
-    [...new Set([...Object.keys(a), ...Object.keys(b)])].reduce((o, k) => {
-      o[k] = mergeAny(a[k], b[k]);
-      return o;
-    }, {} as Record<string, any>);
+    [...new Set([...Object.keys(a), ...Object.keys(b)])].reduce(
+      (o, k) => {
+        o[k] = mergeAny(a[k], b[k]);
+        return o;
+      },
+      {} as Record<string, any>
+    );
 
   function mergeAny(a: unknown, b: unknown) {
     if (isUndefined(b)) return a;

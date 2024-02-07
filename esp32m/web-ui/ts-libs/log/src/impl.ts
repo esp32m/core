@@ -128,7 +128,7 @@ class Logger implements ILogger {
 const loggers: Record<string, Logger> = {};
 
 export function getLogger(name: string, options?: TLoggerOptions): ILogger {
-  const { parent } = options || {};
+  const { parent, level, group, instance } = options || {};
   let n = name;
   let p: ILogger | undefined;
   if (parent) {
@@ -136,10 +136,8 @@ export function getLogger(name: string, options?: TLoggerOptions): ILogger {
     else if (parent instanceof Logger) p = parent;
   }
   if (p) n = `${p.name}.${name}`;
-  return (
-    loggers[n] ||
-    (loggers[n] = new Logger(n, p, options?.level, options?.group))
-  );
+  if (instance) n += `[${instance}]`;
+  return loggers[n] || (loggers[n] = new Logger(n, p, level, group));
 }
 
 export function setLogLevel(level: LogLevel) {

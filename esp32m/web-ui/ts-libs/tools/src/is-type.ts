@@ -20,7 +20,7 @@ export const isObject = (v: unknown): v is Record<any, any> =>
 
 export const isSymbol = (v: unknown): v is symbol => typeof v == 'symbol';
 
-export const isPlainObject = (v: unknown): v is Record<any, any> => {
+export const isPlainObject = <T extends object>(v: unknown): v is T => {
   if (!isObject(v)) return false;
   const ctor = v.constructor;
   if (ctor === undefined) return true;

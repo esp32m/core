@@ -30,8 +30,9 @@ type TFoldedStructItem =
 
 export type TFoldedStructData = Array<TFoldedStructItem>;
 export type TDiffStructData = {
-  [key: number]: TStructValue | TDiffStructData;
+  [key: number | string]: TStructValue | TDiffStructData;
 };
+
 export class Struct {
   constructor(readonly fields: TStructFields) {}
   /**
@@ -47,14 +48,14 @@ export class Struct {
           const key = Array.isArray(data) ? i : name;
           if (data?.hasOwnProperty(key)) {
             const value = data[key];
-            if (options?.array)
+            if (options?.array) {
               if (Array.isArray(value))
                 m[name] = value.map((item) =>
                   children ? walk(children, item) : item
                 );
-              else
+              else if (value != null)
                 throw new Error('array expected, got ' + JSON.stringify(value));
-            else m[name] = children ? walk(children, value) : value;
+            } else m[name] = children ? walk(children, value) : value;
           }
           return m;
         },
@@ -80,7 +81,8 @@ export class Struct {
             return value.map((item) =>
               children ? walk(children, item) : item
             );
-          else throw new Error('array expected, got ' + JSON.stringify(value));
+          else if (value != null)
+            throw new Error('array expected, got ' + JSON.stringify(value));
         return children ? walk(children, value) : value;
       });
     }
@@ -95,44 +97,70 @@ export class Struct {
 
   /** diff two plain objects */
   diff(prev: TUnfoldedStructData, next: TUnfoldedStructData): TDiffStructData {
+    function containsRemoveKeysOnly(diffobj: TDiffStructData | TStructValue) {
+      const keys = Object.keys(diffobj);
+      return keys.length > 0 && keys.every((k) => parseInt(k) < 0);
+    }
+    function set(
+      target: TDiffStructData,
+      index: number,
+      value: TDiffStructData | undefined
+    ) {
+      if (isUndefined(value)) target[-1 - index] = 0;
+      else target[index] = value;
+    }
     function walk(
       fields: TStructFields,
       prev: any,
       next: any
-    ): Record<number, any> {
-      if (isUndefined(prev)) return next;
-      return fields.reduce(
-        (md, [name, children, options], i) => {
-          let p = prev?.[name];
-          if (isUndefined(p)) p = [];
-          let n = next?.[name];
-          if (isUndefined(n)) n = [];
-          if (options?.array) {
-            if (!Array.isArray(p) || !Array.isArray(n))
-              throw new Error(
-                `array expected, got ${JSON.stringify(p)} ${JSON.stringify(n)}`
-              );
-            const c = Math.max(p.length, n.length);
-            const mda: Record<number, any> = {};
-            for (let j = 0; j < c; j++) {
-              const pj = p[j];
-              const nj = n[j];
-              if (children) {
-                const v = walk(children, pj, nj);
-                if (Object.keys(v).length) mda[j] = v;
-              } else if (!deepEqual(pj, nj)) mda[j] = nj;
-            }
-            if (Object.keys(mda).length) md[i] = mda;
-          } else if (children) {
-            const v = walk(children, p, n);
-            if (Object.keys(v).length) md[i] = v;
-          } else if (!deepEqual(p, n)) md[i] = n;
-          return md;
-        },
-        {} as Record<number, any>
-      );
+    ): TDiffStructData | TStructValue {
+      return fields.reduce((md, [name, children, options], i) => {
+        let p = prev?.[name];
+        let n = next?.[name];
+        const pu = isUndefined(p);
+        const nu = isUndefined(n);
+        if (p === n || (pu && nu)) return md;
+        if (options?.array) {
+          if (nu) {
+            set(md, i, n);
+            return md;
+          }
+          if (Array.isArray(n) && !n.length) {
+            set(md, i, {});
+            return md;
+          }
+          if (pu) p = [];
+          if (nu) n = [];
+          const pa = Array.isArray(p);
+          const na = Array.isArray(n);
+          if (!pa || !na)
+            throw new Error(
+              `array expected, got ${JSON.stringify(p)} ${JSON.stringify(n)}`
+            );
+          const c = Math.max(p.length, n.length);
+          const mda: Record<number, any> = {};
+          for (let j = 0; j < c; j++) {
+            const pj = p[j];
+            const nj = n[j];
+            if (children) {
+              const v = walk(children, pj, nj);
+              if (Object.keys(v).length) mda[j] = v;
+            } else if (!deepEqual(pj, nj)) mda[j] = nj;
+          }
+          if (Object.keys(mda).length) md[i] = mda;
+        } else if (children) {
+          const v = walk(children, p, n);
+          if (isUndefined(v)) set(md, i, v);
+          else if (containsRemoveKeysOnly(v)) {
+            if (nu) set(md, i, n);
+            else md[i] = {};
+          } else if (Object.keys(v).length) md[i] = v;
+          else if (nu) set(md, i, n);
+        } else if (!deepEqual(p, n)) set(md, i, n);
+        return md;
+      }, {} as TDiffStructData);
     }
-    return walk(this.fields, prev, next);
+    return walk(this.fields, prev, next) as TDiffStructData;
   }
 
   applyDiff(
@@ -142,17 +170,18 @@ export class Struct {
     function walk(fields: TStructFields, data: any, diff: any): any {
       return fields.reduce(
         (map, [name, children, options], i) => {
-          const prev = data?.[name];
+          let prev = data?.[name];
           if (diff.hasOwnProperty(i)) {
             const next = diff[i];
             if (options?.array) {
+              if (isUndefined(prev)) prev = [];
               if (!Array.isArray(prev))
                 //  next will be an object even if data is array
                 throw new Error('array expected, got ' + JSON.stringify(prev));
               const c = Math.max(
                 prev.length,
                 Object.keys(next)
-                  .map((n) => Number(n))
+                  .map((n) => Number(n) + 1)
                   .reduce((p, n) => (n > p ? n : p), 0)
               );
               const a = Array(c);
@@ -161,8 +190,17 @@ export class Struct {
                   a[j] = children ? walk(children, prev[j], next[j]) : next[j];
                 else if (prev.hasOwnProperty(j)) a[j] = prev[j];
               map[name] = a;
-            } else map[name] = children ? walk(children, prev, next) : next;
-          } else if (data && data.hasOwnProperty(name)) map[name] = prev;
+            } else
+              map[name] =
+                children && Object.keys(next).length
+                  ? walk(children, prev, next)
+                  : next;
+          } else if (
+            data &&
+            data.hasOwnProperty(name) &&
+            !diff.hasOwnProperty(-1 - i)
+          )
+            map[name] = prev;
           return map;
         },
         {} as Record<string, any>

@@ -59,7 +59,7 @@ const slice = createSlice({
 function constructSelectors() {
   const items = createSelector(
     (state: TStateRoot) => state[Name],
-    (state) => Object.values(state.items).sort((a, b) => a.id - b.id)
+    (state) => Object.values(state?.items || {}).sort((a, b) => a.id - b.id)
   );
   return { items };
 }

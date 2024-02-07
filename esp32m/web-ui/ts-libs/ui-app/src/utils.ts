@@ -1,5 +1,6 @@
 import { useState, useEffect, createElement, ComponentType } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Root } from './root';
 
 export const formatError = (e: any) => {
   if (!e) return 'error';
@@ -29,11 +30,11 @@ export const useGeoPosition = () => {
   }, []);
   return [position, error] as [
     GeolocationCoordinates | undefined,
-    string | undefined
+    string | undefined,
   ];
 };
 
-export function renderRoot(root: ComponentType): void {
+export function renderRoot(root: ComponentType = Root): void {
   function init() {
     const app = document.getElementById('app');
     if (app) createRoot(app).render(createElement(root));

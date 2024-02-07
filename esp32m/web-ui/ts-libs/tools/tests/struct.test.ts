@@ -1,17 +1,17 @@
 import { Struct, TStructFields } from '../src';
 
 type TInnerStruct = {
-  x: number;
-  y: string;
+  x?: number;
+  y?: string;
 };
 
 type TStruct = {
-  a: string;
-  b: boolean;
-  c: TInnerStruct;
-  d: number;
-  arrn: Array<number>;
-  arrs: Array<TInnerStruct>;
+  a?: string;
+  b?: boolean;
+  c?: TInnerStruct;
+  d?: number;
+  arrn?: Array<number>;
+  arrs?: Array<TInnerStruct>;
 };
 
 const InnerStructFields: TStructFields = [['x'], ['y']];
@@ -67,6 +67,29 @@ test('fold', () => {
 });
 
 describe('diff and apply', () => {
+  const cases: Array<[TStruct, TStruct]> = [
+    [{}, {}],
+    [{ a: 'b' }, {}],
+    [{ c: {} }, {}],
+    [{ c: { x: 1 } }, {}],
+    [{ c: { x: 1 } }, { c: {} }],
+    [{ d: undefined }, { d: 1 }],
+    [{ arrn: undefined }, { arrn: [] }],
+    [{ arrn: undefined }, { arrn: [1] }],
+  ];
+
+  cases.forEach((c, i) =>
+    test(`case ${i}`, () => {
+      const diff = struct.diff(c[0], c[1]);
+      if (i > 6) {
+        console.log(`case ${i}: diff = ${JSON.stringify(diff)}`);
+        debugger;
+      }
+      const applied = struct.applyDiff(c[0], diff);
+      expect(applied).toStrictEqual(c[1]);
+    })
+  );
+
   test('single value', () => {
     const newValue = 'a-new';
     const changed = { ...InitialData, a: newValue };
@@ -85,7 +108,7 @@ describe('diff and apply', () => {
   });
   test('array value', () => {
     const newValue1 = 999;
-    const newArrn = [...InitialData.arrn];
+    const newArrn = [...InitialData.arrn!];
     newArrn[1] = newValue1;
     const changed = { ...InitialData, arrn: newArrn };
     const diff = struct.diff(InitialData, changed);
@@ -106,5 +129,19 @@ describe('use case 1', () => {
   test('diff', () => {
     const struct = new Struct(fields);
     expect(struct.diff(prev, next)).toEqual({ '0': 0 });
+  });
+});
+
+describe('use case 2', () => {
+  type T = { active?: string };
+  const prev: T = { active: 'yes' };
+  const next: T = {};
+  const fields: TStructFields = [['active']];
+  test('diff', () => {
+    const struct = new Struct(fields);
+    const d = struct.diff(prev, next);
+    expect(Object.keys(d).length).toEqual(1);
+    expect(Object.keys(d)[0]).toEqual('-1');
+    expect(d[-1]).toStrictEqual(0);
   });
 });

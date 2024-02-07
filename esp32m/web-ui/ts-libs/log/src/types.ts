@@ -36,7 +36,7 @@ export interface ILogger extends ILoggerBase {
   asyncTry<
     P extends any[],
     T extends (...args: P) => any,
-    R extends ReturnType<T>
+    R extends ReturnType<T>,
   >(
     func: (...args: P) => R
   ): WrappedTry<T>;
@@ -60,4 +60,5 @@ export type TLoggerOptions = {
   parent?: ILogger | string;
   level?: LogLevel;
   group?: string;
+  instance?: number;
 };

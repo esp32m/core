@@ -1,12 +1,24 @@
-import { useState } from 'react';
-import { Box, Stack, styled } from '@mui/material';
+import {
+  Box,
+  Breadcrumbs,
+  Grid,
+  Link,
+  LinkProps,
+  Stack,
+  Typography,
+  styled,
+  useTheme,
+} from '@mui/material';
+import { createElement, useState } from 'react';
 
 import { Outlet } from 'react-router';
-import { useMainMenuSections } from './utils';
-import { useNavbarContext } from './context';
 import { Header } from './Header';
-import NavbarVertical from './vertical/Navbar';
+import { useNavbarContext } from './context';
 import { Footer } from './footer';
+import { useMainMenuSections } from './utils';
+import NavbarVertical from './vertical/Navbar';
+import { NavLink } from 'react-router-dom';
+import { useNavPath } from '@ts-libs/ui-base';
 
 const MainStyle = styled('main')(({ theme }) => {
   const { collapseClick } = useNavbarContext();
@@ -31,29 +43,48 @@ const MainStyle = styled('main')(({ theme }) => {
   };
 });
 
-/*
-interface Handle {
-  crumb: (arg: unknown) => ReactNode;
+interface LinkRouterProps extends LinkProps {
+  to: string;
+  replace?: boolean;
 }
-function Bcr() {
-  const matches = useMatches();
-  const crumbs = matches
-    .filter(({ handle }) => !!(handle as Handle)?.crumb)
-    .map((match) => (match.handle as Handle).crumb(match.data));
 
+function LinkRouter(props: LinkRouterProps) {
+  return <Link {...props} component={NavLink} />;
+}
+
+function Crumbs() {
+  const np = useNavPath();
   return (
-    <Breadcrumbs separator="›">
-      {crumbs.map((crumb, index) => (
-        <span key={index}>{crumb}</span>
-      ))}
-    </Breadcrumbs>
+    <Grid item xs>
+      <Breadcrumbs separator="›">
+        <LinkRouter underline="hover" color="inherit" to="/">
+          Home
+        </LinkRouter>
+        {np.segments.map((s, i) => {
+          const last = i == np.segments.length - 1;
+          const { name, path, label } = s;
+          const inner = label ? createElement(label) : name;
+          return last ? (
+            <Typography color="text.primary" key={i}>
+              {inner}
+            </Typography>
+          ) : (
+            <LinkRouter underline="hover" color="inherit" to={path} key={i}>
+              {inner}
+            </LinkRouter>
+          );
+        })}
+      </Breadcrumbs>
+    </Grid>
   );
 }
-*/
 export function Layout() {
   const sections = useMainMenuSections();
   const [open, setOpen] = useState(false);
   const { isCollapse } = useNavbarContext();
+  const {
+    config: { breadcrumbs },
+  } = useTheme();
   return (
     <Box
       sx={{
@@ -76,7 +107,10 @@ export function Layout() {
         }}
       >
         <MainStyle>
-          <Outlet />
+          <Grid container>
+            {breadcrumbs && <Crumbs />}
+            <Outlet />
+          </Grid>
         </MainStyle>
         <Footer />
       </Stack>

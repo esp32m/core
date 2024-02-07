@@ -1,16 +1,8 @@
-import { CircularProgress, styled } from '@mui/material';
 import { getPlugins } from '@ts-libs/plugins';
 import { TStateRoot, getRedux } from '@ts-libs/redux';
-import { TAppLoadingPlugin } from '@ts-libs/ui-base';
+import { Loading, TAppLoadingPlugin } from '@ts-libs/ui-base';
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-
-const Center = styled('div')({
-  position: 'absolute',
-  left: '50%',
-  top: '50%',
-  transform: 'translate(-50%, -50%)',
-});
 
 export const AppLoading = ({ children }: React.PropsWithChildren<unknown>) => {
   const plugins = getPlugins<TAppLoadingPlugin>();
@@ -26,12 +18,6 @@ export const AppLoading = ({ children }: React.PropsWithChildren<unknown>) => {
       }
     return result;
   });
-  if (!bootstrapped || loading) {
-    return (
-      <Center>
-        <CircularProgress />
-      </Center>
-    );
-  }
+  if (!bootstrapped || loading) return <Loading />;
   return <>{children}</>;
 };

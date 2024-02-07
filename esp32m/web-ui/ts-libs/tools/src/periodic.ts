@@ -35,11 +35,11 @@ export class Periodic implements TPeriodicOptions {
     await this.whenComplete();
   }
   suspend(duration: number) {
-    clearTimeout(this._timeoutHandle);
     // allows suspend to be called from within runnable
-    setImmediate(() =>
-      this.startTimer(duration).catch((e) => this.logger?.warn(e, 'suspend'))
-    );
+    setImmediate(() => {
+      clearTimeout(this._timeoutHandle);
+      this.startTimer(duration).catch((e) => this.logger?.warn(e, 'suspend'));
+    });
   }
   async trigger() {
     if (!this._running) return;

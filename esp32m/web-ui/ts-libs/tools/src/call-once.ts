@@ -1,5 +1,6 @@
 export type CallOnce<F extends (...args: any[]) => any> = {
   (...args: Parameters<F>): ReturnType<F>;
+  readonly called: boolean;
   reset(): void;
   pending(): Promise<ReturnType<F> | void>;
 };
@@ -59,5 +60,10 @@ export function callOnce<F extends (this: any, ...args: any[]) => any>(
   };
   callable.pending = () => pending;
   callable.reset = reset;
-  return callable;
+  Object.defineProperty(callable, 'called', {
+    enumerable: true,
+    configurable: false,
+    get: () => called,
+  });
+  return callable as CallOnce<F>;
 }

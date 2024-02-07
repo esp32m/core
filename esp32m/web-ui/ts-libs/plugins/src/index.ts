@@ -1,7 +1,13 @@
+import { Observable, Subject } from 'rxjs';
+
 export type TPlugin = {
   readonly name: string;
   readonly use?: TPlugin | Array<TPlugin>;
 };
+
+const pluginsSubject = new Subject<TPlugin>();
+
+export const pluginsObservable: Observable<TPlugin> = pluginsSubject;
 
 const IndexKey = Symbol('plugin-index');
 
@@ -36,7 +42,12 @@ export const registerPlugin = <T extends TPlugin>(
   if (!plugin) throw new Error('plugin cannot be empty');
   const { name, use } = plugin;
   if (!name) throw new Error('plugin must have a name');
-  if (plugins[name]) throw new Error('duplicate plugin: ' + name);
+  const existing = plugins[name] as RegisteredPlugin<T>;
+  if (existing) {
+    if (Object.entries(existing).every(([k, v]) => (plugin as any)[k] === v))
+      return existing;
+    throw new Error('duplicate plugin: ' + name);
+  }
   if (use)
     if (Array.isArray(use)) use.forEach(ensureRegistered);
     else ensureRegistered(use);
@@ -46,6 +57,7 @@ export const registerPlugin = <T extends TPlugin>(
   };
   plugins[name] = result;
   pluginsList = null;
+  pluginsSubject.next(plugin);
   return result;
 };
 

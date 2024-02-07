@@ -22,7 +22,10 @@ type TOptions = {
 
 class File {
   private _stream: WriteStream | undefined;
-  constructor(readonly path: string, readonly rollCount: number) {}
+  constructor(
+    readonly path: string,
+    readonly rollCount: number
+  ) {}
   writeLine(line: string) {
     if (!this._stream) {
       const dir = dirname(this.path);

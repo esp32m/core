@@ -1,6 +1,6 @@
 import { configureStore, Selector, Store } from '@reduxjs/toolkit';
-import { isBrowser } from '@ts-libs/tools';
-import { getPlugins } from '@ts-libs/plugins';
+import { isBrowser, isObject } from '@ts-libs/tools';
+import { getPlugins, pluginsObservable } from '@ts-libs/plugins';
 import { debounce } from '@ts-libs/tools';
 import deepEqual from 'fast-deep-equal';
 import {
@@ -27,9 +27,12 @@ import { Observable, timeout } from 'rxjs';
 import {
   IRedux,
   TObservableSelectorOptions,
+  TReducer,
   TReduxPlugin,
   TStateRoot,
 } from './types';
+
+export const EmptySelector = () => undefined;
 
 function createDefaultStore<S extends { [key: string]: any }>(): [
   Store<S>,
@@ -38,7 +41,9 @@ function createDefaultStore<S extends { [key: string]: any }>(): [
   const reducers: ReducersMapObject = {};
   const middleware: Array<Middleware> = [];
   const plugins = getPlugins<TReduxPlugin>((p) => !!p.redux);
-  const hasPesistence = plugins.some(({ redux }) => !!redux.persist);
+  const hasPesistence = plugins.some(
+    ({ redux }) => !!redux.persist || redux.reducers?.some((r) => !!r.persist)
+  );
   let defaultStorage: Storage | undefined;
   if (hasPesistence) {
     defaultStorage =
@@ -57,28 +62,36 @@ function createDefaultStore<S extends { [key: string]: any }>(): [
           require('redux-persist/lib/storage')?.default
         : new AsyncNodeStorage('./'));
   }
-  const ignoredActions: Array<string> = [];
-  plugins.forEach(({ name, redux }) => {
-    let { reducer } = redux;
-    const { middleware: m, persist } = redux;
+  function addReducer(descr: Partial<TReducer>, defaultName?: string) {
+    let { reducer } = descr;
+    const { persist, name = defaultName } = descr;
+    if (!name) throw new Error('reducer must have a name');
     if (reducer) {
       if (persist) {
         const pc: PersistConfig<S> = {
           key: name,
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          storage: redux.storage || defaultStorage!,
+          storage: defaultStorage!,
           keyPrefix: 'redux-',
         };
-        if (typeof persist === 'object') Object.assign(pc, persist);
+        if (isObject(persist)) Object.assign(pc, persist);
         reducer = persistReducer(pc, reducer);
       }
       reducers[name] = reducer;
     }
+  }
+  plugins.forEach(({ name, redux }) => {
+    const { middleware: m } = redux;
     if (m) middleware.push(m);
+    addReducer(redux, name);
+    redux.reducers?.forEach((r) => addReducer(r));
   });
   // middleware.push(logger);
+  const ignoredActions: Array<string> = [];
   if (hasPesistence)
     ignoredActions.push(FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER);
+  if (Object.keys(reducers).length == 0)
+    reducers['noop'] = (state = {}) => state; // redux doesn't like when stores have no reducer
   const reducer = combineReducers(reducers);
   const store = configureStore({
     reducer,
@@ -91,6 +104,12 @@ function createDefaultStore<S extends { [key: string]: any }>(): [
         immutableCheck: { warnAfter: 500 },
       }).concat(...middleware),
   }) as Store<S>;
+  pluginsObservable.subscribe((p) => {
+    if ((p as TReduxPlugin).redux?.reducer)
+      throw new Error(
+        `redux plugins must not be registered after the store is initialized (${p.name})`
+      );
+  });
   let persistor: Promise<Persistor> | undefined;
   if (hasPesistence) {
     const ps = persistStore(store);

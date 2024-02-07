@@ -1,5 +1,5 @@
 import FingerprintJS, { GetResult } from '@fingerprintjs/fingerprintjs';
-import { TBackendClientInfoPlugin } from '@ts-libs/backend';
+import { TBackendPluginUi } from '@ts-libs/backend';
 
 let cachedPromise: Promise<GetResult | undefined>;
 
@@ -12,15 +12,18 @@ async function fingerprint() {
   }
 }
 
-export const FingerprintPlugin: TBackendClientInfoPlugin = {
+export const FingerprintPlugin: TBackendPluginUi = {
   name: 'browser-fingerprint',
-  populateBackendClientInfo: (info: Record<string, unknown>) => {
-    if (!cachedPromise) cachedPromise = fingerprint();
-    return cachedPromise.then((r) => {
-      if (r && info) {
-        const { visitorId } = r;
-        if (visitorId) Object.assign(info, { fingerprint: { visitorId } });
-      }
-    });
+  backend: {
+    client: {
+      info: async (info: Record<string, unknown>) => {
+        if (!cachedPromise) cachedPromise = fingerprint();
+        const r = await cachedPromise;
+        if (r && info) {
+          const { visitorId } = r;
+          if (visitorId) Object.assign(info, { fingerprint: { visitorId } });
+        }
+      },
+    },
   },
 };

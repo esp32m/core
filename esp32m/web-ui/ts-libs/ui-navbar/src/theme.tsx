@@ -29,6 +29,7 @@ const config = {
   footer: {
     content: undefined as ComponentType | string | undefined,
   },
+  breadcrumbs: false,
   navbar: {
     width: 280,
     collapseWidth: 88,
