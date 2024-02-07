@@ -16,6 +16,7 @@ add_custom_command(OUTPUT ${web_ui_resources}
                    "--esp32m-dir=${CMAKE_CURRENT_SOURCE_DIR}" 
                    "--source-dir=${CMAKE_SOURCE_DIR}"
                    "--build-dir=${CMAKE_BINARY_DIR}"
+                   "--build-mode=${CONFIG_ESP32M_UI_BUILD_MODE}"
                    WORKING_DIRECTORY "${web_ui_build_dir}"
 )
 

@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import enum
 import glob
 import gzip
 import json
@@ -25,6 +26,11 @@ async def strip_non_ascii(input_stream, output_stream):
         output=''.join(filter(lambda x: x in ascii_chars, output))
         output_stream.buffer.write(output.encode("ascii"))
         output_stream.flush()
+
+class BuildMode(enum.IntEnum):
+    Full = 0
+    Once = 1
+    Never = 2
 
 class Yarn:
     def __init__(self, dir):
@@ -71,11 +77,13 @@ class Yarn:
 
 class PackageJson:
     def __init__(self, path):
-        if not os.path.exists(path):
-            raise Exception(f"file not found: {path}")
         self.path=path
         self.json=None
+    def exists(self):
+        return os.path.exists(self.path)
     def ensureLoaded(self):
+        if not os.path.exists(self.path):
+            raise Exception(f"file not found: {self.path}")
         if not self.json:
             with open(self.path, 'r') as f:
                 self.json = json.load(f)
@@ -109,18 +117,22 @@ class Esp32m:
         self.package=Package(os.path.join(dir, "web-ui"))
 
 class Project:
-    def __init__(self, dir, buildDir):
+    def __init__(self, dir, buildDir, buildMode):
         webUiDir=os.path.join(dir, "web-ui")
         buildWebUiDir=os.path.join(buildDir, "web-ui")
-        if buildDir!=dir:
-            copyPackage(webUiDir, buildWebUiDir)
         package=Package(buildWebUiDir)
+        if buildDir!=dir:
+            if not package.packageJson.exists() or buildMode==BuildMode.Full:
+                copyPackage(webUiDir, buildWebUiDir)
         package.packageJson.removeResolutions()
         package.packageJson.dump()
         self.package=package
+        self.buildMode=buildMode
 
     def generateResources(self):
         dir=self.package.distDir
+        if not os.path.isdir(dir):
+            os.makedirs(dir)
         types = [{'ext': 'html', 'ct': 'text/html; charset=UTF-8'},
                 {'ext': 'js', "ct": 'application/javascript'}]
         assets = []
@@ -136,7 +148,13 @@ class Project:
                     buf = cf.read()
                 assets.append(
                     {'name': name, 'ct': t['ct'], 'ce': 'gzip', 'size': len(buf), 'hash': hashlib.sha1(buf).digest()})
-        if len(assets) != 0:
+        for name in ['main.js.S', 'index.html.S']:
+            p=os.path.join(dir, name)
+            n=sanitizeName(name)
+            if not os.path.exists(p):
+                with open(p, 'w', newline='\n') as df:
+                    df.write(f'.data\n.section .rodata.embedded\n.global {n}_start\n{n}_start:\n.global {name}_end\n{name}_end:\n')
+        if len(assets) != 0 or self.buildMode!=BuildMode.Full:
             with open(os.path.join(dir, "ui.hpp"), 'w', newline='\n') as f:
                 f.write("// This is auto-generated file, do not edit!\n")
                 f.write("// This file is to be included only once from main.cpp!\n\n")
@@ -158,6 +176,8 @@ class Project:
                 f.write("  }\n")
                 f.write("}\n")
 
+    def uiHppExists(self):
+        return os.path.exists(os.path.join(self.package.distDir, "ui.hpp"))
 
 def copyPackage(fromDir, toDir, level=0):
     if not os.path.exists(toDir):
@@ -205,12 +225,29 @@ def main():
     parser.add_argument("--esp32m-dir", dest="esp32mDir", required=True, help="root of the esp32m manager component")
     parser.add_argument("--source-dir", dest="sourceDir", required=True, help="project root")
     parser.add_argument("--build-dir", dest="buildDir", required=True, help="destination directory for the compiled UI files")
+    parser.add_argument("--build-mode", dest="buildMode", required=True, help="UI build mode", type=int)
     args = parser.parse_args()
     esp32m=Esp32m(args.esp32mDir)
-    project=Project(args.sourceDir, args.buildDir)
-    yarn=Yarn(project.package.dir)
-    yarn.link(esp32m.package.dir)
-    yarn.build()
+    buildMode=BuildMode(args.buildMode)
+    project=Project(args.sourceDir, args.buildDir, buildMode)
+    buildUi=False
+    if buildMode==BuildMode.Full:
+        buildUi=True
+        logging.info ("building UI because UI build mode is set to FULL")
+    elif buildMode==BuildMode.Once:
+        if project.uiHppExists():
+            logging.info ("not building UI because dist/ui.hpp exists and UI build mode is set to ONCE")
+        else:
+            buildUi=True
+            logging.info ("building UI because dist/ui.hpp does not exist and UI build mode is set to ONCE")
+    elif buildMode==BuildMode.Never:
+            logging.info ("not building UI because UI build mode is set to NEVER")
+    else:
+        raise Exception(f"unknown UI build mode: {buildMode}") 
+    if buildUi:
+        yarn=Yarn(project.package.dir)
+        yarn.link(esp32m.package.dir)
+        yarn.build()
     project.generateResources()
 
 

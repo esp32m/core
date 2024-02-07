@@ -126,4 +126,23 @@ menu "ESP32 Manager configuration"
         default 0 if ESP32M_FS_ROOT_SPIFFS
         default 1 if ESP32M_FS_ROOT_LITTLEFS
 
+    choice ESP32M_UI_BUILD_MODE
+        bool "UI build mode"
+        default ESP32M_UI_BUILD_FULL
+        help
+            Specify default file system.
+        config ESP32M_UI_BUILD_FULL
+            bool "Perform full UI build every time"
+        config ESP32M_UI_BUILD_ONCE
+            bool "Build UI only once, don't re-build event if UI files change"
+        config ESP32M_UI_BUILD_NEVER
+            bool "Don't build UI, generate empty UI resources"
+    endchoice
+
+    config ESP32M_UI_BUILD_MODE
+        int
+        default 0 if ESP32M_UI_BUILD_FULL
+        default 1 if ESP32M_UI_BUILD_ONCE
+        default 2 if ESP32M_UI_BUILD_NEVER
+        
 endmenu
