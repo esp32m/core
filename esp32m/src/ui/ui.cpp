@@ -208,8 +208,10 @@ namespace esp32m {
       if (req) {
         JsonArrayConst arr = req->as<JsonArrayConst>();
         if (!arr.isNull())
-          for (JsonVariantConst v : arr)
+          for (JsonVariantConst v : arr) {
+            esp_task_wdt_reset();
             ui::Req::process(this, cid, v.as<JsonObjectConst>());
+          }
         else
           ui::Req::process(this, cid, req->as<JsonObjectConst>());
         delete req;
