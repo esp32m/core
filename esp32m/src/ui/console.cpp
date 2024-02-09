@@ -12,7 +12,7 @@ namespace esp32m {
       _repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
       _repl_config.prompt = "esp32m>";
     }
-  
+
     Console::~Console() {
       if (_repl)
         _repl->del(_repl);
@@ -71,27 +71,33 @@ namespace esp32m {
 
     void Console::init(Ui *ui) {
       Transport::init(ui);
-      #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
-          esp_console_dev_uart_config_t _uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-          ESP_ERROR_CHECK(esp_console_new_repl_uart(&_uart_config, &_repl_config, &_repl));
-      #elif CONFIG_ESP_CONSOLE_USB_CDC
-          esp_console_dev_usb_cdc_config_t _cdc_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
-          ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&_cdc_config, &_repl_config, &_repl));
-      #elif CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
-          esp_console_dev_usb_serial_jtag_config_t _usbjtag_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-          ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&_usbjtag_config, &_repl_config, &_repl));
-      #endif
+#if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || \
+    defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
+      esp_console_dev_uart_config_t _uart_config =
+          ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+      ESP_ERROR_CHECK(
+          esp_console_new_repl_uart(&_uart_config, &_repl_config, &_repl));
+#elif CONFIG_ESP_CONSOLE_USB_CDC
+      esp_console_dev_usb_cdc_config_t _cdc_config =
+          ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
+      ESP_ERROR_CHECK(
+          esp_console_new_repl_usb_cdc(&_cdc_config, &_repl_config, &_repl));
+#elif CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+      esp_console_dev_usb_serial_jtag_config_t _usbjtag_config =
+          ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+      ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(
+          &_usbjtag_config, &_repl_config, &_repl));
+#endif
       request_args.name = arg_str1(nullptr, nullptr, "<name>", "request name");
       request_args.data = arg_str0(nullptr, nullptr, "<data>", "JSON data");
       request_args.target = arg_str0("t", "target", "<target>", "target name");
       request_args.seq = arg_int0("s", "seq", "<sequence>", "sequence number");
       request_args.end = arg_end(3);
-      const esp_console_cmd_t request_cmd = {
-          .command = "request",
-          .help = "send request to the ESP32 manager",
-          .hint = NULL,
-          .func = &requestHandler,
-          .argtable = &request_args};
+      esp_console_cmd_t request_cmd = {};
+      request_cmd.command = "request";
+      request_cmd.help = "send request to the ESP32 manager";
+      request_cmd.func = &requestHandler;
+      request_cmd.argtable = &request_args;
       ESP_ERROR_CHECK(esp_console_cmd_register(&request_cmd));
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_console_start_repl(_repl));
     }

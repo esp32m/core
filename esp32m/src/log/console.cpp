@@ -7,6 +7,11 @@
 #include <esp_rom_uart.h>
 #include <string.h>
 
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
+#  define ESP_ROM_PUTC esp_rom_uart_putc
+#else
+#  define ESP_ROM_PUTC esp_rom_output_putc
+#endif
 namespace esp32m {
 
   namespace log {
@@ -23,10 +28,9 @@ namespace esp32m {
       if (message) {
         std::lock_guard guard(_mutex);
         auto l = strlen(message);
-        for (auto i = 0; i < l; i++) esp_rom_uart_putc(message[i]);
-        esp_rom_uart_putc('\n');
+        for (auto i = 0; i < l; i++) ESP_ROM_PUTC(message[i]);
+        ESP_ROM_PUTC('\n');
       }
-
       return true;
     }
   }  // namespace log
