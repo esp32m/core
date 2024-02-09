@@ -8,9 +8,9 @@
 #include <string.h>
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-#  define ESP_ROM_PUTC esp_rom_uart_putc
-#else
 #  define ESP_ROM_PUTC esp_rom_output_putc
+#else
+#  define ESP_ROM_PUTC esp_rom_uart_putc
 #endif
 namespace esp32m {
 
