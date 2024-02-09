@@ -408,7 +408,7 @@ namespace esp32m {
       if (enabled) {
         if (!_udpLogger) {
           _udpLogger = new log::Udp();
-          log::addAppender(_udpLogger);
+          log::addBufferedAppender(_udpLogger);
         }
       }
       if (_udpLogger) {

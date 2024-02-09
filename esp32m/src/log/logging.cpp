@@ -153,17 +153,11 @@ namespace esp32m {
         LogMessage *item;
         // try to add this message to the buffer
         for (;;) {
-          {
-            std::lock_guard guard(_lock);
-            if (xRingbufferSend(_handle, message, messageSize, 0))
-              break;
-          }
+          if (xRingbufferSend(_handle, message, messageSize, 0))
+            break;
           // buffer is full, take the oldest item, and either append or lose
           // it
-          {
-            std::lock_guard guard(_lock);
-            item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
-          }
+          item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
           if (!item)
             // this should be impossible, but still better to check so we don't
             // try to call vRingbufferReturnItem() with null item
@@ -172,21 +166,15 @@ namespace esp32m {
               item);  // we don't care whether it succeeded or not at this
                       // point, since there's no room in the buffer, so we're OK
                       // with dropping the oldest item in case of failure
-          {
-            std::lock_guard guard(_lock);
-            vRingbufferReturnItem(_handle, item);
-            item = nullptr;
-          }
+          vRingbufferReturnItem(_handle, item);
+          item = nullptr;
           // at this point some space has been freed in the buffer, so we try to
           // add message to the buffer again
         }
         // the buffer is consistent FIFO at this point, and we try to push as
         // many messages to the actual appender as possible
         for (;;) {
-          {
-            std::lock_guard guard(_lock);
-            item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
-          }
+          item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
           if (!item) {
             // the buffer is empty
             if (_autoRelease)
@@ -196,10 +184,7 @@ namespace esp32m {
           if (!_appender.append(item))
             // appender is not ready, we keep item in the buffer for later
             return true;
-          {
-            std::lock_guard guard(_lock);
-            vRingbufferReturnItem(_handle, item);
-          }
+          vRingbufferReturnItem(_handle, item);
         }
       }
 
@@ -208,11 +193,9 @@ namespace esp32m {
       bool _autoRelease;
       RingbufHandle_t _handle;
       size_t _maxItemSize;
-      std::mutex _lock;
       void release() {
         if (!_handle)
           return;
-        std::lock_guard guard(_lock);
         vRingbufferDelete(_handle);
         _handle = nullptr;
       }
@@ -230,21 +213,16 @@ namespace esp32m {
         logQueue = this;
       }
       ~LogQueue() {
-        std::lock_guard guard(_lock);
         vTaskDelete(_task);
         vRingbufferDelete(_buf);
         logQueue = nullptr;
       }
       bool enqueue(const LogMessage *message) {
-        std::lock_guard guard(_lock);
-        auto result =
-            xRingbufferSend(_buf, message, message->size(), pdMS_TO_TICKS(10));
-        return result;
+        return xRingbufferSend(_buf, message, message->size(), 0);
       }
 
      private:
       size_t _bufsize;
-      std::mutex _lock;
       RingbufHandle_t _buf;
       TaskHandle_t _task = nullptr;
       void run() {
@@ -253,20 +231,14 @@ namespace esp32m {
           esp_task_wdt_reset();
           size_t size;
           LogMessage *item;
-          {
-            std::lock_guard guard(_lock);
-            item = (LogMessage *)xRingbufferReceive(_buf, &size,
-                                                    pdMS_TO_TICKS(100));
-          }
+          item =
+              (LogMessage *)xRingbufferReceive(_buf, &size, pdMS_TO_TICKS(100));
           if (item) {
             {
               std::lock_guard guard(_appendersLock);
               for (auto appender : _appenders) appender->append(item);
             }
-            {
-              std::lock_guard guard(_lock);
-              vRingbufferReturnItem(_buf, item);
-            }
+            vRingbufferReturnItem(_buf, item);
           }
         }
       }
@@ -386,7 +358,9 @@ namespace esp32m {
           enqueued = queue->enqueue(message);
         if (!enqueued) {
           std::lock_guard guard(_appendersLock);
-          for (auto appender : _appenders) appender->append(message);
+          for (auto appender : _appenders) {
+            appender->append(message);
+          }
         }
       }
       free(message);

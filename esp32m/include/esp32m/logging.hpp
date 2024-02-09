@@ -241,8 +241,6 @@ namespace esp32m {
       virtual bool append(const LogMessage *message) = 0;
 
      private:
-      LogAppender *_prev = nullptr;
-      LogAppender *_next = nullptr;
       friend class Logger;
       friend class BufferedAppender;
       friend class LogQueue;
