@@ -5,6 +5,7 @@ import {
   Subject,
   Subscription,
 } from 'rxjs';
+import { TEnum } from './enum';
 
 type TStatusChangedCallback<T> = (
   state: DiscreteStatus<T>,
@@ -34,6 +35,9 @@ export class DiscreteStatus<T> {
     this._prev = prev;
     this._value = value;
     (this.changed as Subject<T>).next(prev);
+  }
+  toString(map?: TEnum) {
+    return map?.[this._value as string] || this._value;
   }
   /**
    * @summary Waits for specific status, then calls the provided callback and resolves the returned promise.

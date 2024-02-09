@@ -84,8 +84,8 @@ export class EspError
     return t(m, args);
   }
   static deserialize(serial: unknown) {
-    if (isPlainObject(serial) && serial.name === EspErrorName)
-      return newEspError(serial as TEspErrorSerial);
+    if (isPlainObject<TEspErrorSerial>(serial) && serial.name === EspErrorName)
+      return newEspError(serial);
   }
 }
 

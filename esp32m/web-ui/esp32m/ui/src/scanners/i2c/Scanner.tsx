@@ -111,7 +111,7 @@ const ValidationSchema = Yup.object().shape({
 
 export const Scanner = () => {
   const api = useBackendApi();
-  const [scan, setScan] = useState<IScanResponse>({});
+  const [scan, setScan] = useState<IScanResponse | undefined>();
   const handleSubmit = async (values: any) => {
     const resp = await api.request(Name, 'scan', values);
     setScan(resp.data);
@@ -122,7 +122,7 @@ export const Scanner = () => {
     placeholder: 'auto',
     InputLabelProps: { shrink: true },
   };
-  const haveResults = !!scan.ids;
+  const haveResults = !!scan?.ids;
 
   return (
     <MuiForm
