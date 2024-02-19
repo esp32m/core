@@ -12,8 +12,8 @@
 #include <esp_system.h>
 #include <math.h>
 #include <soc/rtc.h>
-#include <soc/rtc_cntl_reg.h>
-#include <soc/sens_reg.h>
+#include <soc/rtc_cntl_periph.h>
+#include <soc/sens_periph.h>
 #include "esp_private/esp_clk.h"
 
 #include "esp32m/dev/esp32.hpp"

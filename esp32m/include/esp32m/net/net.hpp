@@ -186,6 +186,7 @@ namespace esp32m {
 
     bool isAnyNetifUp();
     bool isDnsAvailable();
+    bool getDefaultGateway(esp_ip4_addr_t *addr);
 
     esp_err_t useNetif();
     bool isNetifInited();

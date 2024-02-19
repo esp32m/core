@@ -17,8 +17,6 @@ describe('error handling', () => {
     try {
       events.fire({ type: EventTypes.Error });
       fail('should have thrown');
-    } catch (e) {
-      console.log(e);
-    }
+    } catch {}
   });
 });

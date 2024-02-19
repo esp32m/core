@@ -186,7 +186,7 @@ namespace esp32m {
     _appInstance->_defaultHostname = hostname;
   }
 
-  App ::App(const char *name, const char *version)
+  App::App(const char *name, const char *version)
       : _version(version), _props("app") {
     _name = name;
     _hostname = name;

@@ -32,8 +32,12 @@ namespace esp32m {
       float _value = NAN;
       unsigned long _stamp = 0;
     };
-
+#if SOC_SPI_PERIPH_NUM > 2
+#define SPI_HOST SPI3_HOST
+#else
+#define SPI_HOST SPI2_HOST
+#endif
     Max6675 *useMax6675(const char *name = nullptr,
-                        spi_host_device_t host = SPI3_HOST);
+                        spi_host_device_t host = SPI_HOST);
   }  // namespace dev
 }  // namespace esp32m

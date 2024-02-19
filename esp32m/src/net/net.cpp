@@ -347,12 +347,6 @@ namespace esp32m {
         if (esp_netif_is_netif_up(cif))
           return true;
       }
-      /*      esp_netif_t *cif = nullptr;
-            for (;;) {
-              cif = esp_netif_next(cif);
-              if (!cif)
-                break;
-            }*/
       return false;
     }
 
@@ -361,6 +355,21 @@ namespace esp32m {
       if (!dns || ip_addr_isany(dns))
         return false;
       return isAnyNetifUp();
+    }
+
+    bool getDefaultGateway(esp_ip4_addr_t *addr) {
+      esp_netif_t *dif = esp_netif_get_default_netif();
+      if (!dif)
+        return false;
+      if (!esp_netif_is_netif_up(dif))
+        return false;
+      esp_netif_ip_info_t info;
+      auto err = esp_netif_get_ip_info(dif, &info);
+      if (err != ERR_OK)
+        return false;
+      if (addr)
+        *addr = info.gw;
+      return true;
     }
 
     struct {

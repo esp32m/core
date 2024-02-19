@@ -12,7 +12,7 @@
 #include <esp_timer.h>
 #include <limits.h>
 #include <sdkconfig.h>
-#include <soc/sens_reg.h>
+#include <soc/sens_periph.h>
 #include <string.h>
 #include <mutex>
 #if SOC_DAC_SUPPORTED

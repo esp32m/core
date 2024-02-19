@@ -81,10 +81,10 @@ describe('diff and apply', () => {
   cases.forEach((c, i) =>
     test(`case ${i}`, () => {
       const diff = struct.diff(c[0], c[1]);
-      if (i > 6) {
+      /*if (i > 6) {
         console.log(`case ${i}: diff = ${JSON.stringify(diff)}`);
         debugger;
-      }
+      }*/
       const applied = struct.applyDiff(c[0], diff);
       expect(applied).toStrictEqual(c[1]);
     })

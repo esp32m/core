@@ -15,6 +15,10 @@ namespace esp32m {
         _sensor = new Sensor(this, "wind_speed");
         _sensor->unit = "m/s";
         _sensor->precision = 1;
+      } else if (_model == 5387) {
+        _sensor = new Sensor(this, "wind_direction");
+        _sensor->unit = "°";
+        _sensor->precision = 0;
       }
     }
 

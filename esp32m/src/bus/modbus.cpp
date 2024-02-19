@@ -56,8 +56,10 @@ namespace esp32m {
           txp = 9;
           rxp = 10;
           break;
+#if SOC_UART_HP_NUM > 2
         case UART_NUM_2:
           break;
+#endif
         default:
           return ESP_FAIL;
       }

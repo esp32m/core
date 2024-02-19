@@ -17,8 +17,8 @@
   "dependencies": {
     "@esp32m/ui": "*",
     "@ts-libs/ui-app": "*",
-    "react": "*",
-    "lodash": "*"
+    "lodash": "*",
+    "react": "*"
   },
-  "packageManager": "yarn@3.5.0"
+  "packageManager": "yarn@4.1.0"
 }

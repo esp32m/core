@@ -28,7 +28,11 @@ namespace esp32m {
       unsigned long _stamp = 0;
     };
 
+#if SOC_UART_HP_NUM > 2
     MhZ19b *useMhZ19b(uart_port_t uart_num = UART_NUM_2);
+#else
+    MhZ19b *useMhZ19b(uart_port_t uart_num = UART_NUM_1);
+#endif
 
   }  // namespace dev
 }  // namespace esp32m
