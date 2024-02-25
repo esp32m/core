@@ -61,7 +61,7 @@ export type TErrorDeserializerPlugin = TPlugin & {
 };
 
 function deserializeStandardError(serial: any) {
-  if (typeof serial === 'object')
+  if (typeof serial === 'object' && serial !== null)
     switch (serial.name) {
       case 'Error':
       case 'InternalError':
@@ -78,6 +78,8 @@ function deserializeStandardError(serial: any) {
         return new URIError(serial.message, serial.options);
       case 'EvalError':
         return new EvalError(serial.message, serial.options);
+      case 'AssertErrorName':
+        return new AssertError(serial.message, serial.options);
     }
 }
 
@@ -118,3 +120,19 @@ export const deserializeError: ErrorDeserializer = (serial) => {
   if (stack) (result as any).remoteStack = stack;
   return result;
 };
+
+export const AssertErrorName = 'AssertError';
+
+export class AssertError extends Error {
+  constructor(
+    readonly message: string,
+    options?: ErrorOptions
+  ) {
+    super(`assertion failed${message ? `: ${message}` : ''}`, options);
+    this.name = AssertErrorName;
+  }
+}
+
+export function assert(condition: boolean, message?: string) {
+  if (!condition) throw new AssertError(message || '');
+}

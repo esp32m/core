@@ -6,6 +6,8 @@
 #include <esp_event.h>
 #include <esp_mac.h>
 
+#include <sdkconfig.h>
+
 namespace esp32m {
   namespace net {
 
@@ -55,7 +57,8 @@ namespace esp32m {
 
     void eth_ip_event_handler(void *arg, esp_event_base_t event_base,
                               int32_t event_id, void *event_data) {
-      IpEvent::publish((ip_event_t)event_id, event_data);
+      auto ethernet = (Ethernet *)arg;
+      IpEvent::publish(ethernet->netif(), (ip_event_t)event_id, event_data);
     }
 
     Ethernet::Ethernet(const char *name, esp_eth_config_t &config)
@@ -92,12 +95,16 @@ namespace esp32m {
       if (_handle) {
         if (_ready)
           ESP_CHECK_RETURN(esp_eth_stop(_handle));
-        ESP_CHECK_RETURN(esp_event_handler_instance_unregister(
-            IP_EVENT, IP_EVENT_ETH_GOT_IP, _gotIpHandle));
-        _gotIpHandle = nullptr;
-        ESP_CHECK_RETURN(esp_event_handler_instance_unregister(
-            IP_EVENT, IP_EVENT_ETH_LOST_IP, _lostIpHandle));
-        _lostIpHandle = nullptr;
+        if (_gotIpHandle) {
+          ESP_CHECK_RETURN(esp_event_handler_instance_unregister(
+              IP_EVENT, IP_EVENT_ETH_GOT_IP, _gotIpHandle));
+          _gotIpHandle = nullptr;
+        }
+        if (_lostIpHandle) {
+          ESP_CHECK_RETURN(esp_event_handler_instance_unregister(
+              IP_EVENT, IP_EVENT_ETH_LOST_IP, _lostIpHandle));
+          _lostIpHandle = nullptr;
+        }
         ESP_CHECK_RETURN(esp_eth_driver_uninstall(_handle));
         _handle = nullptr;
       }
@@ -112,13 +119,15 @@ namespace esp32m {
     void Ethernet::handleEvent(Event &ev) {
       Device::handleEvent(ev);
       EthEvent *eth;
-      IpEvent *ip;
       if (EthEvent::is(ev, &eth) && eth->handle() == _handle) {
         eth->claim(this);
         switch (eth->event()) {
           case ETHERNET_EVENT_CONNECTED:
             esp_eth_ioctl(_handle, ETH_CMD_G_MAC_ADDR, _macAddr);
             logI("link up, HW addr: " MACSTR, MAC2STR(_macAddr));
+#if CONFIG_LWIP_IPV6_AUTOCONFIG
+            esp_netif_create_ip6_linklocal(_if);
+#endif
             break;
           case ETHERNET_EVENT_DISCONNECTED:
             logI("link down");
@@ -132,27 +141,7 @@ namespace esp32m {
           default:
             break;
         }
-      } else if (IpEvent::is(ev, &ip))
-        switch (ip->event()) {
-          case IP_EVENT_ETH_GOT_IP: {
-            ip_event_got_ip_t *d = (ip_event_got_ip_t *)ip->data();
-            if (d->esp_netif != _if)
-              break;
-            const esp_netif_ip_info_t *ip_info = &d->ip_info;
-            logI("my IP: " IPSTR, IP2STR(&ip_info->ip));
-            break;
-          }
-          case IP_EVENT_ETH_LOST_IP: {
-            ip_event_got_ip_t *d = (ip_event_got_ip_t *)ip->data();
-            if (d->esp_netif != _if)
-              break;
-            logI("lost IP");
-            break;
-          }
-          default:
-            break;
-        }
-      else if (EventInit::is(ev, 0)) {
+      } else if (EventInit::is(ev, 0)) {
         ensureReady();
       } else if (EventPropChanged::is(ev, "app", "hostname")) {
         updateHostname();

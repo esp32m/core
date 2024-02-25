@@ -81,6 +81,7 @@ namespace esp32m {
         return "netifs";
       }
       static Interfaces &instance();
+      Interface *findInterface(const char *key);
 
      protected:
       void handleEvent(Event &ev) override;
@@ -93,6 +94,7 @@ namespace esp32m {
       bool _mapValid = false;
       std::map<std::string, Interface *> _map;
       std::mutex _mapMutex;
+      esp_event_handler_instance_t _gotIp6Handle = nullptr;
       Interfaces() {}
       void syncMap();
       Interface *getOrAddInterface(const char *key);

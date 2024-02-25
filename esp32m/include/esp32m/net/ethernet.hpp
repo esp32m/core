@@ -53,6 +53,9 @@ namespace esp32m {
       const char *name() const override {
         return _name;
       }
+      esp_netif_t *netif() const {
+        return _if;
+      }
 
      protected:
       void handleEvent(Event &ev) override;

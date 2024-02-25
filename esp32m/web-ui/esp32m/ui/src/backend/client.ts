@@ -87,11 +87,11 @@ class Client implements IBackendApi {
   constructor(readonly ws: WebSocket) {
     ws.onopen = () => {
       this.status.set(ConnectionStatus.Connected);
-      this._statePoller.start();
+      this._statePoller.enable();
     };
     ws.onclose = () => {
       this.status.set(ConnectionStatus.Connecting);
-      this._statePoller.stop();
+      this._statePoller.disable();
     };
     ws.onerror = (e: any) => {
       this.status.set(ConnectionStatus.Connecting, serializeError(e));
@@ -152,13 +152,10 @@ class Client implements IBackendApi {
     const promise = new Promise<TResponse>((resolveFn, rejectFn) => {
       const capturedSeq = seq;
       const startTimer = () =>
-        setTimeout(
-          () => {
-            delete this._pending[capturedSeq];
-            rejectFn('timeout');
-          },
-          options?.timeout || 10000
-        );
+        setTimeout(() => {
+          delete this._pending[capturedSeq];
+          rejectFn('timeout');
+        }, options?.timeout || 10000);
       let timer = startTimer();
       resolve = (response) => {
         clearTimeout(timer);

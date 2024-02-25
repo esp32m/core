@@ -131,6 +131,8 @@ namespace esp32m {
       constexpr static const char *Type = "net-if";
     };
 
+    enum class IpEventKind { Unknown, GotIpv4, LostIpv4, GotIpv6 };
+
     class IpEvent : public Event {
      public:
       ip_event_t event() const {
@@ -139,11 +141,15 @@ namespace esp32m {
       void *data() const {
         return _data;
       }
-
+      IpEventKind kind() const {
+        return _kind;
+      }
       bool is(ip_event_t event) const {
         return _event == event;
       }
-
+      esp_netif_t *netif() const {
+        return _netif;
+      }
       static bool is(Event &ev, IpEvent **r) {
         if (!ev.is(Type))
           return false;
@@ -162,8 +168,8 @@ namespace esp32m {
         return true;
       }
 
-      static void publish(ip_event_t event, void *data) {
-        IpEvent ev(event, data);
+      static void publish(esp_netif_t *netif, ip_event_t event, void *data) {
+        IpEvent ev(netif, event, data);
         EventManager::instance().publish(ev);
       }
 
@@ -171,10 +177,20 @@ namespace esp32m {
       constexpr static const char *Type = "ip";
 
      private:
+      esp_netif_t *_netif;
       ip_event_t _event;
+      IpEventKind _kind = IpEventKind::Unknown;
       void *_data;
-      IpEvent(ip_event_t event, void *data)
-          : Event(Type), _event(event), _data(data) {}
+      IpEvent(esp_netif_t *netif, ip_event_t event, void *data)
+          : Event(Type), _netif(netif), _event(event), _data(data) {
+        if (event == IP_EVENT_GOT_IP6)
+          _kind = IpEventKind::GotIpv6;
+        if (event == esp_netif_get_event_id(netif, ESP_NETIF_IP_EVENT_GOT_IP))
+          _kind = IpEventKind::GotIpv4;
+        else if (event ==
+                 esp_netif_get_event_id(netif, ESP_NETIF_IP_EVENT_LOST_IP))
+          _kind = IpEventKind::LostIpv4;
+      }
       friend class Wifi;
     };
 

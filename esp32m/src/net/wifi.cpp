@@ -504,7 +504,8 @@ namespace esp32m {
 
     void ip_event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data) {
-      IpEvent::publish((ip_event_t)event_id, event_data);
+      auto wifi = (Wifi *)arg;
+      IpEvent::publish(wifi->sta().handle(), (ip_event_t)event_id, event_data);
     }
 
     static inline uint32_t WPA_GET_LE32(const uint8_t *a) {
@@ -690,9 +691,11 @@ namespace esp32m {
         ESP_CHECK_RETURN(esp_wifi_set_storage(WIFI_STORAGE_RAM));
       }
       ESP_CHECK_RETURN(esp_event_handler_instance_register(
-          WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, nullptr, nullptr));
+          WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, this, nullptr));
       ESP_CHECK_RETURN(esp_event_handler_instance_register(
-          IP_EVENT, IP_EVENT_STA_GOT_IP, ip_event_handler, nullptr, nullptr));
+          IP_EVENT, IP_EVENT_STA_GOT_IP, ip_event_handler, this, nullptr));
+      ESP_CHECK_RETURN(esp_event_handler_instance_register(
+          IP_EVENT, IP_EVENT_STA_LOST_IP, ip_event_handler, this, nullptr));
       xEventGroupSetBits(_eventGroup, WifiFlags::Initialized);
       if (!_managedExternally)
         ESP_CHECK_RETURN(esp_wifi_start());
@@ -784,6 +787,9 @@ namespace esp32m {
           case WIFI_EVENT_STA_CONNECTED:
             // esp_wifi_set_rssi_threshold(-67);
             xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
+#if CONFIG_LWIP_IPV6_AUTOCONFIG
+            esp_netif_create_ip6_linklocal(_sta.handle());
+#endif
             break;
           case WIFI_EVENT_STA_DISCONNECTED: {
             auto r = (wifi_event_sta_disconnected_t *)wifi->data();
@@ -890,9 +896,6 @@ namespace esp32m {
         switch (ip->event()) {
           case IP_EVENT_STA_GOT_IP: {
             _errReason = (wifi_err_reason_t)0;
-            ip_event_got_ip_t *d = (ip_event_got_ip_t *)ip->data();
-            const esp_netif_ip_info_t *ip_info = &d->ip_info;
-            logI("my IP: " IPSTR, IP2STR(&ip_info->ip));
             xEventGroupSetBits(_eventGroup, WifiFlags::StaGotIp);
             break;
           }

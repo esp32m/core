@@ -26,9 +26,9 @@ function createNow() {
     const { performance } = window;
     if (typeof performance?.now === 'function')
       return () => {
-        const { now, timeOrigin } = performance;
+        const { timeOrigin } = performance;
         let seconds = ~~(timeOrigin / 1000);
-        let millis = now() + (timeOrigin - seconds * 1000);
+        let millis = performance.now() + (timeOrigin - seconds * 1000);
         if (millis > 1000) {
           const s = ~~(millis / 1000);
           seconds += s;

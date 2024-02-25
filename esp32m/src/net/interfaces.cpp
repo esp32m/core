@@ -3,6 +3,13 @@
 #include "esp32m/json.hpp"
 #include "esp32m/net/net.hpp"
 
+#include <esp_event.h>
+#include <sdkconfig.h>
+#if CONFIG_LWIP_IPV6_DHCP6
+#  include <esp_netif_net_stack.h>
+#  include <lwip/dhcp6.h>
+#endif
+
 namespace esp32m {
   namespace net {
 
@@ -73,16 +80,25 @@ namespace esp32m {
         return;
       if (_role == Role::Default)
         return;
+#if CONFIG_LWIP_IPV6_DHCP6
+      auto lwip_netif = (struct netif *)esp_netif_get_netif_impl(_handle);
+#endif
       switch (item) {
         case ConfigItem::Role:
           switch (_role) {
             case Role::Static:
               esp_netif_dhcpc_stop(_handle);
               esp_netif_dhcps_stop(_handle);
+#if CONFIG_LWIP_IPV6_DHCP6
+              dhcp6_disable(lwip_netif);
+#endif
               break;
             case Role::DhcpClient:
               esp_netif_dhcps_stop(_handle);
               esp_netif_dhcpc_start(_handle);
+#if CONFIG_LWIP_IPV6_DHCP6
+              errl.check(dhcp6_enable_stateless(lwip_netif));
+#endif
               break;
             case Role::DhcpServer: {
               esp_netif_dhcpc_stop(_handle);
@@ -276,14 +292,57 @@ namespace esp32m {
     }
 
     Interfaces::~Interfaces() {
+      if (_gotIp6Handle) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_event_handler_instance_unregister(
+            IP_EVENT, IP_EVENT_ETH_GOT_IP, _gotIp6Handle));
+        _gotIp6Handle = nullptr;
+      }
       std::lock_guard guard(_mapMutex);
       for (const auto &i : _map) delete i.second;
     }
 
+    void got_ip6_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data) {
+      auto interfaces = (Interfaces *)arg;
+      auto ip6ev = (ip_event_got_ip6_t *)event_data;
+      if (ip6ev && ip6ev->esp_netif) {
+        IpEvent::publish(ip6ev->esp_netif, (ip_event_t)event_id, event_data);
+        const char *key = esp_netif_get_ifkey(ip6ev->esp_netif);
+        auto iface = interfaces->findInterface(key);
+        if (iface)
+          iface->logger().logf(log::Level::Info, "got IPv6: " IPV6STR,
+                               IPV62STR(ip6ev->ip6_info.ip));
+      }
+    }
+
     void Interfaces::handleEvent(Event &ev) {
-      net::IfEvent *ifev;
-      if (net::IfEvent::is(ev, net::IfEventType::Created, &ifev)) {
+      union {
+        net::IfEvent *ifev;
+        net::IpEvent *ipev;
+      };
+      if (EventInit::is(ev, 0)) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_event_handler_instance_register(
+            IP_EVENT, IP_EVENT_GOT_IP6, got_ip6_event_handler, this,
+            &_gotIp6Handle));
+      } else if (net::IfEvent::is(ev, net::IfEventType::Created, &ifev)) {
         getOrAddInterface(ifev->key());
+      } else if (net::IpEvent::is(ev, &ipev)) {
+        const char *key = esp_netif_get_ifkey(ipev->netif());
+        auto iface = findInterface(key);
+        if (iface)
+          switch (ipev->kind()) {
+            case IpEventKind::GotIpv4: {
+              auto *d = (ip_event_got_ip_t *)ipev->data();
+              const esp_netif_ip_info_t *ip_info = &d->ip_info;
+              iface->logger().logf(log::Level::Info, "got IPv4: " IPSTR,
+                                   IP2STR(&ip_info->ip));
+            } break;
+            case IpEventKind::LostIpv4:
+              iface->logger().log(log::Level::Info, "lost IPv4");
+              break;
+            default:
+              break;
+          }
       }
     }
     DynamicJsonDocument *Interfaces::getState(const JsonVariantConst args) {
@@ -355,17 +414,23 @@ namespace esp32m {
         _mapValid = true;
       }
     }
-    Interface *Interfaces::getOrAddInterface(const char *key) {
+    Interface *Interfaces::findInterface(const char *key) {
       Interface *result = nullptr;
-      {
+      if (key) {
         std::lock_guard guard(_mapMutex);
         auto i = _map.find(key);
         if (i != _map.end())
           result = i->second;
       }
-      if (!result)
-        result = new Interface();
-      result->init(key);
+      return result;
+    }
+    Interface *Interfaces::getOrAddInterface(const char *key) {
+      Interface *result = findInterface(key);
+      if (key) {
+        if (!result)
+          result = new Interface();
+        result->init(key);
+      }
       return result;
     }
 
