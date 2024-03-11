@@ -1,11 +1,12 @@
-#include <freertos/FreeRTOS.h>
+#include "esp32m/logging.hpp"
+#include "esp32m/base.hpp"
+#include "esp32m/net/ota.hpp"
 
 #include <esp_rom_uart.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/ringbuf.h>
 #include <freertos/semphr.h>
-#include <freertos/task.h>
 #include <malloc.h>
 #include <rom/ets_sys.h>
 #include <string.h>
@@ -14,10 +15,6 @@
 #include <vector>
 
 #include "sdkconfig.h"
-
-#include "esp32m/base.hpp"
-#include "esp32m/logging.hpp"
-#include "esp32m/net/ota.hpp"
 
 namespace esp32m {
   namespace log {
@@ -100,15 +97,27 @@ namespace esp32m {
       auto maxml = 65535 - (sizeof(LogMessage) + nl);
       if (ml > maxml)
         ml = maxml;
-      auto size = sizeof(LogMessage) + nl + ml;
+      const char *task = pcTaskGetName(xTaskGetCurrentTaskHandle());
+      size_t tl = (task ? strlen(task) : 0) + 1;
+      if (tl > 255)
+        tl = 255;
+      auto size = sizeof(LogMessage) + nl + ml + tl;
       void *pool = malloc(size);
-      return new (pool) LogMessage(size, level, stamp, name, nl, message, ml);
+      return new (pool)
+          LogMessage(size, level, stamp, task, tl, name, nl, message, ml);
     }
 
     LogMessage::LogMessage(uint16_t size, Level level, int64_t stamp,
-                           const char *name, uint8_t namelen,
-                           const char *message, uint16_t messagelen)
-        : _size(size), _level(level), _namelen(namelen), _stamp(stamp) {
+                           const char *task, uint8_t tasklen, const char *name,
+                           uint8_t namelen, const char *message,
+                           uint16_t messagelen)
+        : _stamp(stamp),
+          _size(size),
+          _level(level),
+          _namelen(namelen),
+          _tasklen(tasklen)
+    {
+      strlcpy((char *)this->task(), task, tasklen);
       strlcpy((char *)this->name(), name, namelen);
       strlcpy((char *)this->message(), message, messagelen);
     }
@@ -265,6 +274,10 @@ namespace esp32m {
       char *buf = nullptr;
       auto level = msg->level();
       auto name = msg->name();
+      auto namelen = msg->namelen();
+      auto taskname = msg->task();
+      auto tasknamelen = msg->tasklen();
+      auto messagelen = msg->messagelen();
       char l = level >= 0 && level <= 6 ? levels[level] : '?';
       if (stamp < 0) {
         stamp = -stamp;
@@ -273,12 +286,13 @@ namespace esp32m {
         struct tm timeinfo;
         gmtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%F %T", &timeinfo);
-        buf = (char *)malloc(strlen(strftime_buf) + 1 /*dot*/ + 3 /*millis*/ +
-                             1 /*space*/ + 1 /*level*/ + 1 /*space*/ +
-                             strlen(name) + 2 /*spaces*/ + msg->message_size() +
-                             1 /*zero*/);
-        sprintf(buf, "%s.%03d %c %s  %s", strftime_buf, (int)(stamp % 1000), l,
-                name, msg->message());
+        auto buflen = strlen(strftime_buf) + 1 /*dot*/ + 3 /*millis*/ +
+                      1 /*space*/ + 1 /*level*/ + 1 /*space*/ + 1 /*lbracket*/ +
+                      tasknamelen + 2 /*rbracket space*/ + namelen +
+                      2 /*spaces*/ + messagelen + 1 /*zero*/;
+        buf = (char *)malloc(buflen);
+        snprintf(buf, buflen, "%s.%03d %c [%s] %s  %s", strftime_buf,
+                 (int)(stamp % 1000), l, taskname, name, msg->message());
       } else {
         int millis = stamp % 1000;
         stamp /= 1000;
@@ -288,13 +302,16 @@ namespace esp32m {
         stamp /= 60;
         int hours = stamp % 24;
         int days = stamp / 24;
-        buf = (char *)malloc(
-            6 /*days*/ + 1 /*colon*/ + 2 /*hours*/ + 1 /*colon*/ +
-            2 /*minutes*/ + 1 /*colon*/ + 2 /*seconds*/ + 1 /*colon*/ +
-            3 /*millis*/ + 1 /*space*/ + 1 /*level*/ + 1 /*space*/ +
-            strlen(name) + 2 /*spaces*/ + msg->message_size() + 1 /*zero*/);
-        sprintf(buf, "%d:%02d:%02d:%02d.%03d %c %s  %s", days, hours, minutes,
-                seconds, millis, l, name, msg->message());
+        auto buflen = 6 /*days*/ + 1 /*colon*/ + 2 /*hours*/ + 1 /*colon*/ +
+                      2 /*minutes*/ + 1 /*colon*/ + 2 /*seconds*/ +
+                      1 /*colon*/ + 3 /*millis*/ + 1 /*space*/ + 1 /*level*/ +
+                      1 /*space*/ + 1 /*lbracket*/ + tasknamelen +
+                      2 /*rbracket space*/ + namelen + 2 /*spaces*/ +
+                      messagelen + 1 /*zero*/;
+        buf = (char *)malloc(buflen);
+        snprintf(buf, buflen, "%d:%02d:%02d:%02d.%03d %c [%s] %s  %s", days,
+                 hours, minutes, seconds, millis, l, taskname, name,
+                 msg->message());
       }
       return buf;
     }

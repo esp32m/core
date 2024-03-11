@@ -136,18 +136,19 @@ namespace esp32m {
                     1 /* Z */ + 1 /* SP */ + strlen(hostname) + 1 /* SP */ +
                     strlen(name) + 1 /* SP */ + 1 + /* PROCID */ +1 /*SP*/ + 1 +
                     /* MSGID */ +1 /* SP */ + 1 +
-                    /* STRUCTURED-DATA */ +1 /* SP */ +
-                    message->message_size() + 1 /*NULL*/;
+                    /* STRUCTURED-DATA */ +1 /* SP */ + message->messagelen() +
+                    1 /*NULL*/;
           char *buf = (char *)malloc(ms);
           if (!buf)
             return true;
-          sprintf(buf, "<%d>1 %s.%04dZ %s %s - - - %s", pri, strftime_buf,
-                  (int)(stamp % 1000), hostname, name, message->message());
+          snprintf(buf, ms, "<%d>1 %s.%04dZ %s %s - - - %s", pri, strftime_buf,
+                   (int)(stamp % 1000), hostname, name, message->message());
           auto result = sendto(_fd, buf, strlen(buf), 0,
                                (struct sockaddr *)&_addr, sizeof(_addr));
           if (result == EMSGSIZE) {
-            sprintf(buf, "<%d>1 %s.%04dZ %s %s - - - %s", pri, strftime_buf,
-                    (int)(stamp % 1000), hostname, name, "message too long!");
+            snprintf(buf, ms, "<%d>1 %s.%04dZ %s %s - - - %s", pri,
+                     strftime_buf, (int)(stamp % 1000), hostname, name,
+                     "message too long!");
             result = sendto(_fd, buf, strlen(buf), 0, (struct sockaddr *)&_addr,
                             sizeof(_addr));
           }

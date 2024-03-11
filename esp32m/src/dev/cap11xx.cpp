@@ -97,14 +97,13 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Cap11xx::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(2));
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
-      /*      float t, h;
-            if (getReadings(&t, &h) == ESP_OK) {
-              arr.add(t);
-              arr.add(h);
-            }*/
+      uint8_t bits;
+      if (getTouchBitmap(bits) == ESP_OK) {
+        arr.add(bits);
+      }
       return doc;
     }
 

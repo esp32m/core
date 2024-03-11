@@ -1,5 +1,8 @@
 #pragma once
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <memory>
 
 #include <esp_log.h>
@@ -108,19 +111,28 @@ namespace esp32m {
        * @return The message itself
        */
       const char *message() const {
-        return ((char *)this) + sizeof(LogMessage) + _namelen;
+        return ((char *)this) + sizeof(LogMessage) + _namelen + _tasklen;
       }
       /**
        * @return Size of the message including null terminator
        */
-      size_t message_size() const {
-        return _size - sizeof(LogMessage) - _namelen;
+      size_t messagelen() const {
+        return _size - sizeof(LogMessage) - _namelen - _tasklen;
       }
       /**
        * @return Name of the logger emitted the message
        */
-      const char *name() const {
+      const char *task() const {
         return ((char *)this) + sizeof(LogMessage);
+      }
+      size_t tasklen() const {
+        return _tasklen - 1;
+      }
+      const char *name() const {
+        return ((char *)this) + sizeof(LogMessage) + _tasklen;
+      }
+      size_t namelen() const {
+        return _namelen - 1;
       }
       /**
        * @return Level of this message
@@ -139,12 +151,13 @@ namespace esp32m {
       }
 
      private:
+      int64_t _stamp;
       uint16_t _size;
       uint8_t _level;
-      uint8_t _namelen;  // including null terminator
-      int64_t _stamp;
-      LogMessage(uint16_t size, Level level, int64_t stamp, const char *name,
-                 uint8_t namelen, const char *message, uint16_t messagelen);
+      uint8_t _namelen, _tasklen;  // including null terminator
+      LogMessage(uint16_t size, Level level, int64_t stamp, const char *task,
+                 uint8_t tasklen, const char *name, uint8_t namelen,
+                 const char *message, uint16_t messagelen);
       static LogMessage *alloc(Level level, int64_t stamp, const char *name,
                                const char *message);
       friend class Logger;
