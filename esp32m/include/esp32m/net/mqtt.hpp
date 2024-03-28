@@ -213,6 +213,10 @@ namespace esp32m {
         return _birth;
       }
 
+      const esp_mqtt_client_config_t &getCfg() const {
+        return _cfg;
+      }
+
      protected:
       void handleEvent(Event &ev) override;
       bool handleRequest(Request &req) override;
