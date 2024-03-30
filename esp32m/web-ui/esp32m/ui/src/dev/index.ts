@@ -23,6 +23,7 @@ export * from './yw801r';
 export * from './qdy30a';
 export * from './em';
 export * from './ntc';
+export * from './ztsyux';
 
 export * from './shared';
 export * from './types';

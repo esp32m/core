@@ -51,6 +51,9 @@ namespace esp32m {
       void apply(ErrorList &errl);
       void stopDhcp();
       bool isUp();
+      Role role() const {
+        return _role;
+      }
 
      protected:
       // config
