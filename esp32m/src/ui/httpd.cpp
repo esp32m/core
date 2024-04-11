@@ -168,6 +168,8 @@ namespace esp32m {
     esp_err_t Httpd::incomingReq(httpd_req_t *req) {
       // logI("uri: %s", req->uri);
       // dumpHeaders(req);
+      if (!req)
+        return ESP_OK;
 
       auto cp = false;
       if (!strcmp(req->uri, "/generate_204") ||
@@ -195,7 +197,8 @@ namespace esp32m {
               httpd_resp_set_hdr(req, "Location", location));
           // httpd_resp_set_type(req, "text/plain");
           ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
-          logI("redirecting to captive portal %s", location);
+          // logI("redirecting to captive portal %s", location); // this line causes havoc on esp32c6, esp-idf 5.2.1
+          logI("redirecting to captive portal");
           return ESP_OK;
         } else
           logW("got %s request while AP is not running", req->uri);
@@ -219,7 +222,7 @@ namespace esp32m {
       if (!found) {
         logI("404: %s", req->uri);
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send_404(req));
-        return ESP_FAIL;
+        return ESP_OK;
       }
       char buf[40];
       // logI("serving %s", req->uri);

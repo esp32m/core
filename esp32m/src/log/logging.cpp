@@ -115,8 +115,7 @@ namespace esp32m {
           _size(size),
           _level(level),
           _namelen(namelen),
-          _tasklen(tasklen)
-    {
+          _tasklen(tasklen) {
       strlcpy((char *)this->task(), task, tasklen);
       strlcpy((char *)this->name(), name, namelen);
       strlcpy((char *)this->message(), message, messagelen);
@@ -399,13 +398,18 @@ namespace esp32m {
         return;
       char buf[64];
       char *temp = buf;
+      va_list a2;
+      va_copy(a2, arg); // spec says arg is undefined after vsnprintf() call, so need to make a copy
       auto len = vsnprintf(NULL, 0, format, arg);
       if (len >= sizeof(buf)) {
         temp = (char *)malloc(len + 1);
-        if (temp == NULL)
+        if (temp == NULL) {
+          va_end(a2);
           return;
+        }
       }
-      vsnprintf(temp, len + 1, format, arg);
+      vsnprintf(temp, len + 1, format, a2);
+      va_end(a2);
       log(level, temp);
       if (len >= sizeof(buf))
         free(temp);
