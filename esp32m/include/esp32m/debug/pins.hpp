@@ -114,6 +114,30 @@ namespace esp32m {
                   pwm->enable(v);
               }
             } break;
+            case pin::Type::Pcnt: {
+              auto pcnt = pin->pcnt();
+              if (pcnt) {
+                auto pea = state["pea"];
+                auto nea = state["nea"];
+                if (pea.is<int>() && nea.is<int>())
+                  pcnt->setEdgeAction((pcnt_channel_edge_action_t)pea,
+                                      (pcnt_channel_edge_action_t)nea);
+                auto hla = state["hla"];
+                auto lla = state["lla"];
+                if (hla.is<int>() && lla.is<int>())
+                  pcnt->setLevelAction((pcnt_channel_level_action_t)hla,
+                                       (pcnt_channel_level_action_t)lla);
+                v = state["gns"];
+                if (v.is<int>())
+                  pcnt->setFilter((uint32_t)v);
+
+                v = state["enabled"];
+                if (v.is<bool>()) {
+                  pcnt->getSampler();
+                  pcnt->enable(v);
+                }
+              }
+            } break;
 
             default:
               break;
@@ -143,6 +167,9 @@ namespace esp32m {
               break;
             case pin::Type::PWM:
               size += JSON_OBJECT_SIZE(3);
+              break;
+            case pin::Type::Pcnt:
+              size += JSON_OBJECT_SIZE(8);
               break;
             default:
               break;
@@ -192,6 +219,33 @@ namespace esp32m {
                   state["enabled"] = pwm->isEnabled();
                   state["freq"] = pwm->getFreq();
                   state["duty"] = pwm->getDuty();
+                }
+              } break;
+              case pin::Type::Pcnt: {
+                auto pcnt = pin->pcnt();
+                if (pcnt) {
+                  state["enabled"] = pcnt->isEnabled();
+                  int v;
+                  if (pcnt->read(v) == ESP_OK)
+                    state["value"] = v;
+                  auto sampler = pcnt->getSampler();
+                  if (sampler) {
+                    state["freq"] = sampler->getFreq();
+                  }
+                  pcnt_channel_edge_action_t pea, nea;
+                  if (pcnt->getEdgeAction(pea, nea) == ESP_OK) {
+                    state["pea"] = pea;
+                    state["nea"] = nea;
+                  }
+                  pcnt_channel_level_action_t hla, lla;
+                  if (pcnt->getLevelAction(hla, lla) == ESP_OK) {
+                    state["hla"] = hla;
+                    state["lla"] = lla;
+                  }
+                  uint32_t gns;
+                  if (pcnt->getFilter(gns) == ESP_OK) {
+                    state["gns"] = gns;
+                  }
                 }
               } break;
 

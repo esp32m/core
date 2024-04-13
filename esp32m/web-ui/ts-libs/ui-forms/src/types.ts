@@ -9,9 +9,12 @@ export type SubmitHandler = (
   formikHelpers: FormikHelpers<FormikValues>
 ) => void | Promise<unknown>;
 
+export type DataType = 'string' | 'number' | 'boolean';
+
 export type FieldProps<T> = T & {
   name: string;
   label: string;
+  dataType?: DataType;
   submitOnEnter?: boolean;
   grid?: GridProps | boolean;
 };

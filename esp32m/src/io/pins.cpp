@@ -158,6 +158,58 @@ namespace esp32m {
         return ESP_OK;
       }
 
+      PcntSampler::PcntSampler(IPcnt *pcnt) : _pcnt(pcnt) {
+        esp_timer_create_args_t args = {
+            .callback = [](void *self) { ((PcntSampler*)self)->cb(); },
+            .arg = this,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "pcntsmpl",
+            .skip_unhandled_events = true,
+        };
+        esp_timer_create(&args, &_timer);
+      }
+      PcntSampler::~PcntSampler() {
+        if (_timer) {
+          enable(false);
+          esp_timer_delete(_timer);
+          _timer = nullptr;
+        }
+      }
+      esp_err_t PcntSampler::setPeriod(uint64_t period) {
+        if (!_timer)
+          return ESP_ERR_INVALID_STATE;
+        if (_period) {
+          esp_timer_stop(_timer);
+          _period = 0;
+        }
+        _value = 0;
+        _freq = 0;
+        _ticks = 0;
+        if (period) {
+          ESP_CHECK_RETURN(esp_timer_start_periodic(_timer, period));
+          int value;
+          if (_pcnt->read(value) == ESP_OK)
+            _value = value;
+          _period = period;
+          _ticks = esp_timer_get_time();
+        }
+        return ESP_OK;
+      }
+
+      void PcntSampler::cb() {
+        if (!_pcnt->isEnabled())
+          return;
+        int value;
+        if (_pcnt->read(value) == ESP_OK) {
+          float ppp = value > _value ? value - _value : _value - value;
+          auto ticks = esp_timer_get_time();
+          auto elapsed = ticks > _ticks ? ticks - _ticks : _ticks - ticks;
+          _value = value;
+          _ticks = ticks;
+          _freq = (_freq + ppp * _period / elapsed) / 2;
+        }
+      }
+
     }  // namespace pin
 
   }  // namespace io

@@ -7,10 +7,11 @@ import { DigitalPlugin } from './digital';
 import { AdcPlugin } from './adc';
 import { PwmPlugin } from './pwm';
 import { DacPlugin } from './dac';
+import { PcntPlugin } from './pcnt';
 
 export const DebugPins = (): TDebugPlugin & TReduxPlugin => ({
   name: Name,
-  use: [Debug, DigitalPlugin, AdcPlugin, DacPlugin, PwmPlugin],
+  use: [Debug, DigitalPlugin, AdcPlugin, DacPlugin, PwmPlugin, PcntPlugin],
   redux: { reducer },
   debug: { content },
 });

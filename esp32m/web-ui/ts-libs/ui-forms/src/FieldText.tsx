@@ -1,17 +1,21 @@
 import { getIn, useFormikContext } from 'formik';
 import { TextField, TextFieldProps } from '@mui/material';
 
-import { FieldProps, FormValues } from './types';
+import { DataType, FieldProps, FormValues } from './types';
 import Hoc from './Hoc';
 import { useTranslation } from '@ts-libs/ui-i18n';
 
-const useField = (name: string, submitOnEnter?: boolean) => {
+const useField = (
+  name: string,
+  dataType?: DataType,
+  submitOnEnter?: boolean
+) => {
   const controller = useFormikContext<FormValues>();
   const {
     values,
     errors,
     touched,
-    handleChange: onChange,
+    handleChange,
     handleBlur: onBlur,
     submitForm,
   } = controller;
@@ -24,7 +28,7 @@ const useField = (name: string, submitOnEnter?: boolean) => {
     value,
     error,
     helperText: wasTouched && errorText,
-    onChange,
+    onChange: handleChange,
     onBlur,
   };
   if (submitOnEnter)
@@ -35,8 +39,8 @@ const useField = (name: string, submitOnEnter?: boolean) => {
 };
 
 export const FieldText = (props: FieldProps<Partial<TextFieldProps>>) => {
-  const { name, submitOnEnter, grid, label, ...rest } = props;
-  const field = useField(name, submitOnEnter);
+  const { name, submitOnEnter, grid, label, dataType, ...rest } = props;
+  const field = useField(name, dataType, submitOnEnter);
   const { t } = useTranslation();
   const p: TextFieldProps = {
     name,

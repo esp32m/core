@@ -80,11 +80,35 @@ export type TDACState = {
   value: number;
 };
 
+export enum PcntLevelAction {
+  Keep,
+  Inverse,
+  Hold,
+}
+
+export enum PcntEdgeAction {
+  Hold,
+  Increase,
+  Decrease,
+}
+
+export type TPcntState = {
+  enabled: boolean;
+  value: number;
+  freq: number;
+  pea: PcntEdgeAction;
+  nea: PcntEdgeAction;
+  hla: PcntLevelAction;
+  lla: PcntLevelAction;
+  gns: number;
+};
+
 export type TFeatureInfo = {
   feature: FeatureType;
   name: string;
   component: ComponentType;
   validationSchema?: any;
+  beforeSubmit?: (values: any) => any;
 };
 
 export type TDebugPinFeaturePlugin = TPlugin & {

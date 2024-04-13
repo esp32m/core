@@ -30,6 +30,7 @@ export const Form = ({ onChange }: TFormProps) => {
   const pinState = useSelector(selectors.pinState);
   const api = useBackendApi();
   const handleSubmit = async (values: any) => {
+    if (feature.info?.beforeSubmit) values = feature.info.beforeSubmit(values);
     await api.setState(Name, { pin, feature: feature?.feature, state: values });
     await onChange();
   };

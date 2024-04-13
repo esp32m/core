@@ -447,25 +447,49 @@ namespace esp32m {
           ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
         return ESP_OK;
       }
-      /*esp_err_t setLimits(int16_t min, int16_t max) override {
+      esp_err_t setEdgeAction(pcnt_channel_edge_action_t pos,
+                              pcnt_channel_edge_action_t neg) override {
+        ESP_CHECK_RETURN(pcnt_channel_set_edge_action(_channel, pos, neg));
+        _pea = pos;
+        _nea = neg;
         return ESP_OK;
-      };*/
-      esp_err_t setMode(pcnt_channel_edge_action_t pos,
-                        pcnt_channel_edge_action_t neg) override {
-        return pcnt_channel_set_edge_action(_channel, pos, neg);
       };
-      esp_err_t setFilter(uint16_t filter) override {
+      esp_err_t getEdgeAction(pcnt_channel_edge_action_t &pos,
+                              pcnt_channel_edge_action_t &neg) override {
+        pos = _pea;
+        neg = _nea;
+        return ESP_OK;
+      };
+      esp_err_t setLevelAction(pcnt_channel_level_action_t high,
+                               pcnt_channel_level_action_t low) override {
+        ESP_CHECK_RETURN(pcnt_channel_set_level_action(_channel, high, low));
+        _hla = high;
+        _lla = low;
+        return ESP_OK;
+      };
+      esp_err_t getLevelAction(pcnt_channel_level_action_t &high,
+                               pcnt_channel_level_action_t &low) override {
+        high = _hla;
+        low = _lla;
+        return ESP_OK;
+      };
+      esp_err_t setFilter(uint32_t glitchNs) override {
         pcnt_glitch_filter_config_t filter_config = {
-            .max_glitch_ns = filter,
+            .max_glitch_ns = glitchNs,
         };
-        ESP_CHECK_RETURN(pcnt_unit_stop(_unit));
-        ESP_CHECK_RETURN(pcnt_unit_disable(_unit));
+        auto wasEnabled = isEnabled();
+        if (wasEnabled)
+          ESP_CHECK_RETURN(enable(false));
         ESP_CHECK_RETURN(pcnt_unit_set_glitch_filter(_unit, &filter_config));
-        ESP_CHECK_RETURN(pcnt_unit_enable(_unit));
-        ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
-        ESP_CHECK_RETURN(pcnt_unit_start(_unit));
+        if (wasEnabled)
+          ESP_CHECK_RETURN(enable(true));
+        _glitchNs = glitchNs;
         return ESP_OK;
       };
+      esp_err_t getFilter(uint32_t &glitchNs) override {
+        glitchNs = _glitchNs;
+        return ESP_OK;
+      }
 
       static esp_err_t create(Pin *pin, pin::Feature **feature) {
         pcnt_unit_config_t unit_config = {};
@@ -482,17 +506,39 @@ namespace esp32m {
             .flags = {},
         };
         ESP_CHECK_RETURN(pcnt_new_channel(unit, &chan_config, &channel));
-        ESP_CHECK_RETURN(pcnt_unit_enable(unit));
-        ESP_CHECK_RETURN(pcnt_unit_clear_count(unit));
-        ESP_CHECK_RETURN(pcnt_unit_start(unit));
         *feature = new Pcnt(pin, unit, channel);
         return ESP_OK;
+      };
+      esp_err_t enable(bool on) override {
+        if (on != _enabled) {
+          if (on) {
+            ESP_CHECK_RETURN(pcnt_unit_enable(_unit));
+            ESP_CHECK_RETURN(pcnt_unit_clear_count(_unit));
+            ESP_CHECK_RETURN(pcnt_unit_start(_unit));
+          } else {
+            ESP_CHECK_RETURN(pcnt_unit_stop(_unit));
+            ESP_CHECK_RETURN(pcnt_unit_disable(_unit));
+          }
+          _enabled = on;
+        }
+        if (_sampler)
+          _sampler->enable(on);
+        return ESP_OK;
+      }
+      bool isEnabled() const override {
+        return _enabled;
       };
 
      private:
       Pin *_pin;
       pcnt_unit_handle_t _unit;
       pcnt_channel_handle_t _channel;
+      bool _enabled = false;
+      pcnt_channel_edge_action_t _pea = PCNT_CHANNEL_EDGE_ACTION_HOLD,
+                                 _nea = PCNT_CHANNEL_EDGE_ACTION_HOLD;
+      pcnt_channel_level_action_t _hla = PCNT_CHANNEL_LEVEL_ACTION_KEEP,
+                                  _lla = PCNT_CHANNEL_LEVEL_ACTION_KEEP;
+      uint32_t _glitchNs = 0;
       Pcnt(Pin *pin, pcnt_unit_handle_t unit, pcnt_channel_handle_t channel)
           : _pin(pin), _unit(unit), _channel(channel) {}
     };

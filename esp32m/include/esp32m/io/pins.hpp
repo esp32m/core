@@ -7,6 +7,7 @@
 #include <driver/pulse_cnt.h>
 #include <esp_bit_defs.h>
 #include <esp_err.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <hal/adc_types.h>
@@ -167,16 +168,64 @@ namespace esp32m {
         virtual bool isEnabled() const = 0;
       };
 
+      class IPcnt;
+
+      class PcntSampler {
+       public:
+        PcntSampler(IPcnt *pcnt);
+        ~PcntSampler();
+        esp_err_t enable(bool on) {
+          return setPeriod(on ? 1000000 : 0);
+        }
+        bool isEnabled() {
+          return getPeriod() != 0;
+        }
+        esp_err_t setPeriod(uint64_t period);
+        uint64_t getPeriod() {
+          if (!_timer)
+            return 0;
+          return _period;
+        }
+        float getFreq() const {
+          return _freq;
+        }
+
+       private:
+        IPcnt *_pcnt;
+        uint64_t _period = 0;
+        uint64_t _ticks = 0;
+        int _value = 0;
+        float _freq = 0;
+        esp_timer_handle_t _timer = nullptr;
+        void cb();
+      };
+
       class IPcnt : public Feature {
        public:
         Type type() override {
           return Type::Pcnt;
         };
         virtual esp_err_t read(int &value, bool reset = false) = 0;
-        // virtual esp_err_t setLimits(int16_t min, int16_t max) = 0;
-        virtual esp_err_t setMode(pcnt_channel_edge_action_t pos,
-                                  pcnt_channel_edge_action_t neg) = 0;
-        virtual esp_err_t setFilter(uint16_t filter) = 0;
+        virtual esp_err_t setEdgeAction(pcnt_channel_edge_action_t pos,
+                                        pcnt_channel_edge_action_t neg) = 0;
+        virtual esp_err_t getEdgeAction(pcnt_channel_edge_action_t &pos,
+                                        pcnt_channel_edge_action_t &neg) = 0;
+        virtual esp_err_t setLevelAction(pcnt_channel_level_action_t high,
+                                         pcnt_channel_level_action_t low) = 0;
+        virtual esp_err_t getLevelAction(pcnt_channel_level_action_t &high,
+                                         pcnt_channel_level_action_t &low) = 0;
+        virtual esp_err_t setFilter(uint32_t glitchNs) = 0;
+        virtual esp_err_t getFilter(uint32_t &glitchNs) = 0;
+        virtual esp_err_t enable(bool on) = 0;
+        virtual bool isEnabled() const = 0;
+        PcntSampler *getSampler() {
+          if (!_sampler)
+            _sampler.reset(new PcntSampler(this));
+          return _sampler.get();
+        }
+
+       protected:
+        std::unique_ptr<PcntSampler> _sampler;
       };
 
       class ILEDC : public Feature {
