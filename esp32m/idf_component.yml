@@ -4,6 +4,7 @@ url: https://esp32m.com
 dependencies:
   idf: ">=5.1"
   espressif/esp-modbus:
+    public: true
     version: "^1.0"
   espressif/mdns:
     version: "^1.0.5"
