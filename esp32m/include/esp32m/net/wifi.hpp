@@ -52,6 +52,9 @@ namespace esp32m {
         esp_err_t disconnect();
         esp_err_t startWPS();
 
+       protected:
+        void init(net::Wifi *wifi, const char *key) override;
+
        private:
         Sta();
         StaOptions _options = {};

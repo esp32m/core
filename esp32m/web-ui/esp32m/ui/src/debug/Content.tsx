@@ -3,7 +3,7 @@ import { Grid } from '@mui/material';
 import { TDebugPlugin } from './types';
 import { getPlugins } from '@ts-libs/plugins';
 
-export default () => {
+export const content = () => {
   const plugins = getPlugins<TDebugPlugin>();
   const widgets: Array<React.ReactElement> = useMemo(
     () =>

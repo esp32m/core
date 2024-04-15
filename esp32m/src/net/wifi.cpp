@@ -47,6 +47,16 @@ namespace esp32m {
         _role = Role::DhcpClient;
       };
 
+      void Sta::init(net::Wifi *wifi, const char *key) {
+        auto handle = esp_netif_get_handle_from_ifkey(key);
+        if (handle) {
+          auto flags = esp_netif_get_flags(handle);
+          if ((flags & ESP_NETIF_DHCP_CLIENT) == 0)
+            _role = Role::Default;
+        }
+        Iface::init(wifi, key);
+      }
+
       esp_err_t Sta::enable(bool enable) {
         wifi_mode_t m = WIFI_MODE_NULL;
         ESP_CHECK_RETURN(esp_wifi_get_mode(&m));
@@ -672,15 +682,20 @@ namespace esp32m {
       inited = true;
 
       esp_netif_t *ifsta = nullptr, *ifap = nullptr;
+      const char *staKey = getDefaultStaKey();
 
-      ifsta = esp_netif_get_handle_from_ifkey(getDefaultStaKey());
+      ifsta = esp_netif_get_handle_from_ifkey(staKey);
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
       ifap = esp_netif_get_handle_from_ifkey(getDefaultApKey());
 #endif
       // no need to fire net::IfEventType::Created because we subclass
       // net::IFace and call init()
-      if (!ifsta)
-        ifsta = esp_netif_create_default_wifi_sta();
+      if (!ifsta) {
+        IfEvent ev(staKey, IfEventType::Creating);
+        ev.Event::publish();
+        auto netif = ev.getNetif();
+        ifsta = netif ? netif : esp_netif_create_default_wifi_sta();
+      }
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
       if (!ifap)
         ifap = esp_netif_create_default_wifi_ap();
@@ -788,7 +803,8 @@ namespace esp32m {
             // esp_wifi_set_rssi_threshold(-67);
             xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
 #if CONFIG_LWIP_IPV6_AUTOCONFIG
-            esp_netif_create_ip6_linklocal(_sta.handle());
+            if (_sta.role() == Interface::Role::DhcpClient)
+              esp_netif_create_ip6_linklocal(_sta.handle());
 #endif
             break;
           case WIFI_EVENT_STA_DISCONNECTED: {

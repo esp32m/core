@@ -81,11 +81,15 @@ namespace esp32m {
     const int MacMaxChars = 18;
 
     enum class IfEventType {
-      Created,  // new interface created
+      Creating,  // a chance to create custom netif
+      Created,   // new interface created
     };
 
     class IfEvent : public Event {
      public:
+      IfEvent(const char *key, IfEventType event)
+          : Event(Type), _key(key), _event(event) {}
+
       IfEventType event() const {
         return _event;
       }
@@ -96,7 +100,12 @@ namespace esp32m {
       bool is(IfEventType event) const {
         return _event == event;
       }
-
+      esp_netif_t *getNetif() const {
+        return _netif;
+      }
+      void setNetif(esp_netif_t *netif) {
+        _netif = netif;
+      }
       static bool is(Event &ev, IfEvent **r) {
         auto result = ev.is(Type);
         if (result && r)
@@ -126,8 +135,7 @@ namespace esp32m {
      private:
       const char *_key;
       IfEventType _event;
-      IfEvent(const char *key, IfEventType event)
-          : Event(Type), _key(key), _event(event) {}
+      esp_netif_t *_netif = nullptr;
       constexpr static const char *Type = "net-if";
     };
 
