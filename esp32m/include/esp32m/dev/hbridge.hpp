@@ -9,9 +9,10 @@ namespace esp32m {
   namespace dev {
     class HBridge : public Device {
      public:
-      enum Mode { Break, Forward, Reverse, Off };
-      HBridge(const char *name, io::pin::IDigital *pinFwd, io::pin::IDigital *pinRev)
-          : _name(name), _pinFwd(pinFwd), _pinRev(pinRev) {
+      enum Mode { Brake, Forward, Reverse, Off };
+      const uint MaxFreq = 1000;
+      HBridge(const char *name, io::IPin *fwd, io::IPin *rev)
+          : _name(name), _fwd(fwd), _rev(rev) {
         init();
       };
       HBridge(const HBridge &) = delete;
@@ -25,6 +26,31 @@ namespace esp32m {
       }
       bool isPersistent() const {
         return _persistent;
+      }
+
+      float getDuty() const {
+        return _duty;
+      }
+      uint32_t getFreq() const {
+        return _freq;
+      }
+      esp_err_t setPwm(uint freq, float duty) {
+        if (duty < 0)
+          duty = 0;
+        if (duty > 1)
+          duty = 1;
+        if (freq > MaxFreq)
+          freq = MaxFreq;
+        auto wasPwm = isPwm();
+        _duty = duty;
+        _freq = freq;
+        if (wasPwm != isPwm())
+          init();
+        return ERR_OK;
+      }
+      esp_err_t setSpeed(float value) {
+        return (value > 0 && value < 1) ? setPwm(_freq == 0 ? 50 : _freq, value)
+                                        : setPwm(0, 0);
       }
 
      protected:
@@ -45,12 +71,19 @@ namespace esp32m {
 
      private:
       const char *_name;
-      io::pin::IDigital *_pinFwd, *_pinRev;
+      io::IPin *_fwd, *_rev;
+      float _duty = 0;
+      uint _freq = 0;
       bool _persistent = true;
       Mode _mode = Off;
       float _speed = 1;
       esp_err_t init();
       esp_err_t refresh();
+      esp_err_t setPins(bool fwd, bool rev);
+      esp_err_t getPins(bool &fwd, bool &rev);
+      bool isPwm() const {
+        return _duty > 0 && _duty < 1 && _freq > 0;
+      }
     };
 
     HBridge *useHBridge(const char *name, io::IPin *pinFwd, io::IPin *pinRev);

@@ -7,8 +7,12 @@
 namespace esp32m {
   namespace dev {
     esp_err_t HBridge::init() {
-      ESP_CHECK_RETURN(_pinFwd->setDirection(true, true));
-      ESP_CHECK_RETURN(_pinRev->setDirection(true, true));
+      if (!isPwm()) {
+        ESP_CHECK_RETURN(_fwd->pwm()->enable(false));
+        ESP_CHECK_RETURN(_rev->pwm()->enable(false));
+        ESP_CHECK_RETURN(_fwd->digital()->setDirection(true, true));
+        ESP_CHECK_RETURN(_rev->digital()->setDirection(true, true));
+      }
       return refresh();
     }
 
@@ -27,16 +31,16 @@ namespace esp32m {
           r = false;
           f = true;
           break;
-        case Mode::Break:
+        case Mode::Brake:
           r = false;
           f = false;
           break;
         default:
           return ESP_FAIL;
       }
+      ESP_CHECK_RETURN(setSpeed(speed));
       // logD("run %d", mode);
-      ESP_CHECK_RETURN(_pinFwd->write(f));
-      ESP_CHECK_RETURN(_pinRev->write(r));
+      ESP_CHECK_RETURN(setPins(f, r));
       ESP_CHECK_RETURN(refresh());
       if (_persistent)
         config::Changed::publish(this);
@@ -45,8 +49,7 @@ namespace esp32m {
 
     esp_err_t HBridge::refresh() {
       bool f, r;
-      ESP_CHECK_RETURN(_pinFwd->read(f));
-      ESP_CHECK_RETURN(_pinRev->read(r));
+      ESP_CHECK_RETURN(getPins(f, r));
       if (f && r)
         _mode = Mode::Off;
       else if (!f && r)
@@ -54,7 +57,29 @@ namespace esp32m {
       else if (f && !r)
         _mode = Mode::Reverse;
       else
-        _mode = Mode::Break;
+        _mode = Mode::Brake;
+      return ESP_OK;
+    }
+
+    esp_err_t HBridge::setPins(bool fwd, bool rev) {
+      if (isPwm()) {
+        ESP_CHECK_RETURN(_fwd->pwm()->enable(fwd));
+        ESP_CHECK_RETURN(_rev->pwm()->enable(rev));
+      } else {
+        ESP_CHECK_RETURN(_fwd->digital()->write(fwd));
+        ESP_CHECK_RETURN(_rev->digital()->write(rev));
+      }
+      return ESP_OK;
+    }
+
+    esp_err_t HBridge::getPins(bool &fwd, bool &rev) {
+      if (isPwm()) {
+        fwd = _fwd->pwm()->isEnabled();
+        rev = _rev->pwm()->isEnabled();
+      } else {
+        ESP_CHECK_RETURN(_fwd->digital()->read(fwd));
+        ESP_CHECK_RETURN(_rev->digital()->read(rev));
+      }
       return ESP_OK;
     }
 
@@ -89,7 +114,7 @@ namespace esp32m {
     }
 
     HBridge *useHBridge(const char *name, io::IPin *pinFwd, io::IPin *pinRev) {
-      return new HBridge(name, pinFwd->digital(), pinRev->digital());
+      return new HBridge(name, pinFwd, pinRev);
     }
   }  // namespace dev
 }  // namespace esp32m
