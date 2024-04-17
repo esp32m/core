@@ -39,7 +39,8 @@ namespace esp32m {
         return ESP_OK;
       }
 
-      TwoPinSensor::TwoPinSensor(io::pin::IDigital *open, io::pin::IDigital *closed)
+      TwoPinSensor::TwoPinSensor(io::pin::IDigital *open,
+                                 io::pin::IDigital *closed)
           : _open(open), _closed(closed) {
         open->setDirection(true, false);
         closed->setDirection(true, false);
@@ -121,7 +122,7 @@ namespace esp32m {
                          DynamicJsonDocument **result) {
       esp_err_t err = ESP_OK;
       JsonVariantConst value = state["value"];
-      if (value.is<float>())
+      if (value.is<float>() && value.as<float>() >= 0)
         err = turn(value.as<float>());
       else {
         const char *action = state["state"];
@@ -222,7 +223,7 @@ namespace esp32m {
         default:
           break;
       }
-//      logD("state transition %d->%d", _state, state);
+      //      logD("state transition %d->%d", _state, state);
       _state = state;
     }
 
@@ -273,18 +274,22 @@ namespace esp32m {
 
     Valve *useValve(const char *name, valve::IWiring *wiring, io::IPin *isOpen,
                     io::IPin *isClosed) {
-      return new Valve(name, wiring, new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
+      return new Valve(
+          name, wiring,
+          new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
 
     Valve *useValve(const char *name, HBridge *hb, io::IPin *isOpen,
                     io::IPin *isClosed) {
-      return new Valve(name, new valve::HBridge(hb),
-                       new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
+      return new Valve(
+          name, new valve::HBridge(hb),
+          new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
     Valve *useValve(const char *name, Relay *power, Relay *direction,
                     io::IPin *isOpen, io::IPin *isClosed) {
-      return new Valve(name, new valve::TwoRelays(power, direction),
-                       new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
+      return new Valve(
+          name, new valve::TwoRelays(power, direction),
+          new valve::TwoPinSensor(isOpen->digital(), isClosed->digital()));
     }
 
   }  // namespace dev

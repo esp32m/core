@@ -25,6 +25,8 @@ export * from './em';
 export * from './ntc';
 export * from './ztsyux';
 export * from './rsecth';
+export * from './ptmb';
+export * from './lwgy';
 
 export * from './shared';
 export * from './types';

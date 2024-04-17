@@ -376,14 +376,9 @@ namespace esp32m {
       config.url = url;
       config.timeout_ms = 60 * 1000;
       config.skip_cert_common_name_check = true;
-      esp_https_ota_config_t ota_config = {
-          .http_config = &config,
-          .http_client_init_cb =
-              _http_client_init_cb,  // Register a callback to be invoked
-                                     // after esp_http_client is initialized
-          .bulk_flash_erase = false,
-          .partial_http_download = false,
-          .max_http_request_size = 0};
+      esp_https_ota_config_t ota_config = {};
+      ota_config.http_config = &config;
+      ota_config.http_client_init_cb = _http_client_init_cb;
       esp_https_ota_handle_t https_ota_handle = NULL;
       esp_err_t err = esp_https_ota_begin(&ota_config, &https_ota_handle);
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(err) == ESP_OK) {

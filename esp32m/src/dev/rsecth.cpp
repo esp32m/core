@@ -1,15 +1,20 @@
+#include "esp32m/dev/rsecth.hpp"
 #include "esp32m/base.hpp"
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/defs.hpp"
-#include "esp32m/dev/rsecth.hpp"
 
 #include "math.h"
 
 namespace esp32m {
   namespace dev {
     Rsecth::Rsecth(uint8_t addr, const char *name)
-        : _addr(addr), _moisture(this, "moisture"), _temperature(this, "temperature"), _conductivity(this, "conductivity"), _salinity(this, "salinity"), _tds(this, "tds") {
-      _name = name ? name : "RS-ECTH";
+        : _name(name ? name : "RS-ECTH"),
+          _addr(addr),
+          _moisture(this, "moisture"),
+          _temperature(this, "temperature"),
+          _conductivity(this, "conductivity"),
+          _salinity(this, "salinity"),
+          _tds(this, "tds") {
       Device::init(Flags::HasSensors);
       auto group = sensor::nextGroup();
       _moisture.group = group;
@@ -120,7 +125,7 @@ namespace esp32m {
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 0x00, 5, values));
       _stamp = millis();
-      bool changed=false;
+      bool changed = false;
       _moisture.set(values[0] / 10.0f, &changed);
       _temperature.set(values[1] / 10.0f, &changed);
       _conductivity.set(values[2], &changed);
