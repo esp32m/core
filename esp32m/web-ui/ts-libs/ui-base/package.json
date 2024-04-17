@@ -12,13 +12,13 @@
         }
     },
     "devDependencies": {
-        "@types/node": "^20.11.19",
-        "@types/react": "^18.2.56",
+        "@types/node": "^20.12.7",
+        "@types/react": "^18.2.79",
         "@types/react-router-dom": "^5.3.3",
-        "typescript": "^5.3.3"
+        "typescript": "^5.4.5"
     },
     "dependencies": {
-        "@mui/material": "^5.15.10",
+        "@mui/material": "^5.15.15",
         "@ts-libs/log": "*",
         "@ts-libs/redux": "*",
         "@ts-libs/tools": "*",

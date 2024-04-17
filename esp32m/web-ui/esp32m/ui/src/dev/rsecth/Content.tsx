@@ -63,6 +63,8 @@ export const Content = ({
           <FieldText name="ctc" label="Conductivity temperature coeff" grid />
           <FieldText name="sc" label="Salinity coeff" grid />
           <FieldText name="tdsc" label="TDS coeff" grid />
+        </Grid>
+        <Grid container spacing={3}>
           <FieldText name="tcv" label="Temperature calibration" grid />
           <FieldText name="mcc" label="Moisture calibration" grid />
           <FieldText name="ccv" label="Conductivity calibration" grid />
