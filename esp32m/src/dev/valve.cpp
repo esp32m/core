@@ -101,8 +101,13 @@ namespace esp32m {
     }
 
     esp_err_t Valve::turn(float value) {
-      _targetValue = value;
-      xTaskNotifyGive(_task);
+      logI("turn %f", value);
+      if (value < 0.5)
+        set(valve::Cmd::Close, false);
+      else
+        set(valve::Cmd::Open, false);
+      /*      _targetValue = value;
+            xTaskNotifyGive(_task);*/
       return ESP_OK;
     }
 
@@ -128,6 +133,7 @@ namespace esp32m {
         const char *action = state["state"];
         if (!action)
           return;
+        logI("set state %s", action);
         if (!strcmp(action, "open"))
           err = set(valve::Cmd::Open, false);
         else if (!strcmp(action, "close"))
@@ -148,8 +154,23 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *Valve::getConfig(RequestContext &ctx) {
-      if (_persistent)
-        return getState(ctx.request.data());
+      if (_persistent) {
+        auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+        JsonObject info = doc->to<JsonObject>();
+        switch (_state) {
+          case State::Opened:
+          case State::Opening:
+            info["state"] = "open";
+            break;
+          case State::Closed:
+          case State::Closing:
+            info["state"] = "close";
+            break;
+          default:
+            break;
+        }
+        return doc;
+      }
       return nullptr;
     }
 
@@ -225,6 +246,15 @@ namespace esp32m {
       }
       //      logD("state transition %d->%d", _state, state);
       _state = state;
+      if (isPersistent())
+        switch (state) {
+          case State::Opened:
+          case State::Closed:
+            config::Changed::publish(this);
+            break;
+          default:
+            break;
+        }
     }
 
     esp_err_t Valve::refreshState() {
