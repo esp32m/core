@@ -59,7 +59,7 @@ namespace esp32m {
           esp_timer_create_args_t args = {.callback = SoftPwm::timerCb,
                                           .arg = this,
                                           .dispatch_method = ESP_TIMER_TASK,
-                                          .name = "pwm",
+                                          .name = "PWM",
                                           .skip_unhandled_events = false};
           err = esp_timer_create(&args, &_timer);
         }

@@ -19,7 +19,7 @@ namespace esp32m {
     esp_err_t HBridge::run(Mode mode, float speed) {
       bool f, r;
       switch (mode) {
-        case Mode::Off:
+        case Mode::Brake:
           r = true;
           f = true;
           break;
@@ -31,7 +31,7 @@ namespace esp32m {
           r = false;
           f = true;
           break;
-        case Mode::Brake:
+        case Mode::Off:
           r = false;
           f = false;
           break;
@@ -48,27 +48,28 @@ namespace esp32m {
     }
 
     esp_err_t HBridge::refresh() {
-      bool f, r;
-      ESP_CHECK_RETURN(getPins(f, r));
-      if (f && r)
-        _mode = Mode::Off;
-      else if (!f && r)
-        _mode = Mode::Forward;
-      else if (f && !r)
-        _mode = Mode::Reverse;
-      else
-        _mode = Mode::Brake;
+      if (!isPwm()) {
+        bool f, r;
+        ESP_CHECK_RETURN(getPins(f, r));
+        _mode = f ? (r ? Mode::Brake : Mode::Reverse)
+                  : (r ? Mode::Forward : Mode::Off);
+      }
       return ESP_OK;
     }
 
     esp_err_t HBridge::setPins(bool fwd, bool rev) {
+      // logD("setPins %d %d PWM=%d", fwd, rev, isPwm());
       if (isPwm()) {
-        ESP_CHECK_RETURN(_fwd->pwm()->enable(fwd));
-        ESP_CHECK_RETURN(_rev->pwm()->enable(rev));
-      } else {
-        ESP_CHECK_RETURN(_fwd->digital()->write(fwd));
-        ESP_CHECK_RETURN(_rev->digital()->write(rev));
+        if (fwd && rev) {
+          ESP_CHECK_RETURN(_fwd->pwm()->enable(false));
+          ESP_CHECK_RETURN(_rev->pwm()->enable(false));
+        } else {
+          ESP_CHECK_RETURN(_fwd->pwm()->enable(fwd));
+          ESP_CHECK_RETURN(_rev->pwm()->enable(rev));
+        }
       }
+      ESP_CHECK_RETURN(_fwd->digital()->write(fwd));
+      ESP_CHECK_RETURN(_rev->digital()->write(rev));
       return ESP_OK;
     }
 
@@ -84,33 +85,38 @@ namespace esp32m {
     }
 
     DynamicJsonDocument *HBridge::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
       JsonObject info = doc->to<JsonObject>();
       info["mode"] = _mode;
-      info["speed"] = _speed;
       return doc;
     }
 
     void HBridge::setState(const JsonVariantConst state,
                            DynamicJsonDocument **result) {
-      json::from(state["mode"], _mode);
-      json::from(state["speed"], _speed);
-      json::checkSetResult(run(_mode, _speed), result);
+      bool changed = false;
+      json::from(state["mode"], _mode, &changed);
+      if (changed)
+        json::checkSetResult(run(_mode, _speed), result);
     }
 
     bool HBridge::setConfig(const JsonVariantConst cfg,
                             DynamicJsonDocument **result) {
-      if (_persistent) {
-        setState(cfg, result);
-        return true;
-      }
-      return false;
+      bool changed = false;
+      if (_persistent)
+        json::from(cfg["mode"], _mode, &changed);
+      json::from(cfg["speed"], _speed, &changed);
+      if (changed)
+        json::checkSetResult(run(_mode, _speed), result);
+      return changed;
     }
 
     DynamicJsonDocument *HBridge::getConfig(RequestContext &ctx) {
+      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+      JsonObject info = doc->to<JsonObject>();
       if (_persistent)
-        return getState(ctx.request.data());
-      return nullptr;
+        info["mode"] = _mode;
+      info["speed"] = _speed;
+      return doc;
     }
 
     HBridge *useHBridge(const char *name, io::IPin *pinFwd, io::IPin *pinRev) {

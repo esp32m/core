@@ -1,8 +1,8 @@
 import { IMultiProps } from './types';
-import Hbridge from './Hbridge';
+import { Hbridge } from './Hbridge';
 import { CardBox } from '@ts-libs/ui-app';
 
-export default ({ nameOrList, title }: IMultiProps) => {
+export const Content = ({ nameOrList, title }: IMultiProps) => {
   const list = [];
   if (typeof nameOrList === 'string')
     list.push(<Hbridge name={nameOrList} title={title} />);

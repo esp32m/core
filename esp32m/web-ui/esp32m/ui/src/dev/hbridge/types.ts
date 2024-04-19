@@ -12,10 +12,13 @@ export const enum Mode {
   Off,
   Forward,
   Reverse,
-  Break,
+  Brake,
 }
 
-export interface IState {
+export type TState = {
   mode: Mode;
+};
+
+export type TConfig = {
   speed: number;
-}
+};

@@ -9,7 +9,7 @@ namespace esp32m {
   namespace dev {
     class HBridge : public Device {
      public:
-      enum Mode { Brake, Forward, Reverse, Off };
+      enum Mode { Off, Forward, Reverse, Brake };
       const uint MaxFreq = 1000;
       HBridge(const char *name, io::IPin *fwd, io::IPin *rev)
           : _name(name), _fwd(fwd), _rev(rev) {
