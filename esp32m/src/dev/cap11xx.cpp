@@ -62,6 +62,10 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    esp_err_t Core::calibrationActivate(uint8_t bitmap) {
+      return write(Register::CalibrationActivate, bitmap);
+    }
+
     esp_err_t Core::setMultitouch(bool enable) {
       return write(Register::MultiTouch, enable ? 0x00 : 0x80);
     }

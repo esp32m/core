@@ -11,6 +11,7 @@ namespace esp32m {
     enum class Register {
       MainControl = 0x00,
       InputStatus = 0x03,
+      CalibrationActivate = 0x26,
       MultiTouch = 0x2a,
       StandbyConfig = 0x41,
       LedLinking = 0x72,
@@ -62,7 +63,6 @@ namespace esp32m {
         return _name;
       }
       esp_err_t reset();
-      esp_err_t resetInt();
       esp_err_t read(Register reg, uint8_t &value);
       esp_err_t write(Register reg, uint8_t value);
       esp_err_t setMultitouch(bool enable = false);
@@ -73,6 +73,8 @@ namespace esp32m {
           StandbySampeTime sampleTime = StandbySampeTime::Default,
           StandbyAvgSamples avgSamples = StandbyAvgSamples::Default,
           bool useSummation = false);
+      esp_err_t resetInt();
+      esp_err_t calibrationActivate(uint8_t bitmap);
       esp_err_t getTouchBitmap(uint8_t &bitmap);
       bool isTouched(int num);
 
