@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp32m/app.hpp"
+#include "esp32m/io/pins.hpp"
 
 namespace esp32m {
 

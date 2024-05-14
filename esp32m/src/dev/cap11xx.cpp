@@ -54,6 +54,14 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    esp_err_t Core::resetInt() {
+      uint8_t v;
+      ESP_CHECK_RETURN(read(Register::MainControl, v));
+      if ((v & 1) == 0)
+        ESP_CHECK_RETURN(write(Register::MainControl, (uint8_t)(v & ~1)));
+      return ESP_OK;
+    }
+
     esp_err_t Core::setMultitouch(bool enable) {
       return write(Register::MultiTouch, enable ? 0x00 : 0x80);
     }

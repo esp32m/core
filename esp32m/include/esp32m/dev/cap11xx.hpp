@@ -9,6 +9,7 @@ namespace esp32m {
   namespace cap11xx {
 
     enum class Register {
+      MainControl = 0x00,
       InputStatus = 0x03,
       MultiTouch = 0x2a,
       StandbyConfig = 0x41,
@@ -61,6 +62,7 @@ namespace esp32m {
         return _name;
       }
       esp_err_t reset();
+      esp_err_t resetInt();
       esp_err_t read(Register reg, uint8_t &value);
       esp_err_t write(Register reg, uint8_t value);
       esp_err_t setMultitouch(bool enable = false);
