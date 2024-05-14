@@ -57,7 +57,7 @@ namespace esp32m {
     esp_err_t Core::resetInt() {
       uint8_t v;
       ESP_CHECK_RETURN(read(Register::MainControl, v));
-      if ((v & 1) == 0)
+      if ((v & 1) == 1)
         ESP_CHECK_RETURN(write(Register::MainControl, (uint8_t)(v & ~1)));
       return ESP_OK;
     }
