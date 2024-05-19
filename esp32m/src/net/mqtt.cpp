@@ -306,6 +306,8 @@ namespace esp32m {
       bool changed = false;
       json::from(ca["enabled"], _enabled, &changed);
       json::from(ca["uri"], _uri, &changed);
+      if (_uri.size() && _uri.find("://") == std::string::npos)
+        _uri = "mqtt://" + _uri;
       json::from(ca["username"], _username, &changed);
       json::from(ca["password"], _password, &changed);
       json::from(ca["client"], _client, &changed);
