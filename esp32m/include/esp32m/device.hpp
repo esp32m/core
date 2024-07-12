@@ -53,7 +53,7 @@ namespace esp32m {
     const char *_sensor;
     const JsonObjectConst _props;
     const float _value;
-    constexpr static const char *Type= "sensor";
+    constexpr static const char *Type = "sensor";
     ;
   };
 
@@ -349,6 +349,9 @@ namespace esp32m {
     JsonObjectConst props() const {
       return _props ? _props->as<JsonObjectConst>()
                     : json::null<JsonObjectConst>();
+    }
+    void setProps(DynamicJsonDocument *props) {
+      _props.reset(props);
     }
 
    private:

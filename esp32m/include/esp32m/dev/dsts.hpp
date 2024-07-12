@@ -85,7 +85,7 @@ namespace esp32m {
 
      private:
       owb::ROMCode _code;
-      char _codestr[17];
+      char _codestr[17]={};
       bool _persistent;
       Resolution _resolution = Resolution::Unspecified;
       float _temperature = NAN;

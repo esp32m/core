@@ -44,7 +44,7 @@ namespace esp32m {
      private:
       std::unique_ptr<I2C> _i2c;
       pca95x5::Bits _bits;
-      uint16_t _port = 0xFFFF, _inputMap = 0xFFFF;
+      uint16_t _input = 0xFFFF, _output = 0x0, _config = 0xFFFF, _targetOutput=0;
       esp_err_t init();
     };
 

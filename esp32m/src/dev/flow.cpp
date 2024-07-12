@@ -17,7 +17,17 @@ namespace esp32m {
     }
 
     bool FlowSensor::initSensors() {
-      return _pin && _pin->pcnt();
+      if (!_pin)
+        return false;
+      auto pcnt = _pin->pcnt();
+      if (!pcnt)
+        return false;
+      ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setEdgeAction(
+          PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setFilter(12 * 1000));  // 12 us is as high as it can go
+      if (!pcnt->isEnabled())
+        ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->enable(true));
+      return pcnt->isEnabled();
     }
 
     DynamicJsonDocument *FlowSensor::getState(const JsonVariantConst args) {

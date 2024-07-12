@@ -27,6 +27,7 @@ export * from './ztsyux';
 export * from './rsecth';
 export * from './ptmb';
 export * from './lwgy';
+export * from './soil5';
 
 export * from './shared';
 export * from './types';

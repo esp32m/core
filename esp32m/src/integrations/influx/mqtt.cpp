@@ -57,12 +57,14 @@ namespace esp32m {
           auto devName = device->name();
           auto dpl = serializeProps(device->props(), &devProps);
           auto pl = serializeProps(sensor->props(), &props);
-          auto name = sensor->name ? sensor->name : sensor->id();
+          auto name = sensor->type();
           auto unl = strlen(unitName);
           auto dnl = strlen(devName);
+          auto snl = sensor->name ? strlen(sensor->name) : 0;
           auto dl = 12 /* "esp32m,unit=" */ + unl + 8 /* ",device=" */ + dnl +
                     (dpl ? (1 /* comma */ + dpl) : 0) +
-                    (pl ? (1 /* comma */ + pl) : 0) + 1 /*space*/ +
+                    (pl ? (1 /* comma */ + pl) : 0) +
+                    (snl ? (8 /* ",sensor=" */ + snl) : 0) + 1 /*space*/ +
                     strlen(name) + 1 /*=*/ + (16 + 1 /*value*/) + 1 /*null*/;
           char *s = (char *)malloc(dl);
           char *sp = s;
@@ -80,6 +82,11 @@ namespace esp32m {
             sp += l;
             dl -= l;
           }
+          if (snl && dl) {
+            l = snprintf(sp, dl, ",sensor=%s", sensor->name);
+            sp += l;
+            dl -= l;
+          }
           if (dl) {
             l = snprintf(sp, dl, " %s=%.16g", name, value.as<float>());
             sp += l;
@@ -94,5 +101,5 @@ namespace esp32m {
         }
       }
     }  // namespace influx
-  }    // namespace integrations
+  }  // namespace integrations
 }  // namespace esp32m

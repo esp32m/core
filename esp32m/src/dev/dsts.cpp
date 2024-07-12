@@ -331,25 +331,24 @@ namespace esp32m {
         sensor->group = _sensorGroup;
         if (probe.name)
           sensor->name = probe.name;
+        auto props = new DynamicJsonDocument(
+            JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(strlen(probe.codestr())));
+        auto root = props->to<JsonObject>();
+        root["code"] =
+            (char *)
+                probe.codestr();  // copy string in case sensor outlives probe
+        sensor->setProps(props);
       }
       return *sensor;
     }
 
     bool Dsts::pollSensors() {
-      StaticJsonDocument<JSON_OBJECT_SIZE(1)> props;
       bool changed = false;
       for (dsts::Probe &p : probes())
         if (!p.disabled()) {
-          props["code"] = p.codestr();
-/*          auto fc = p.failcount();
-          if (fc)
-            sensor("failures", fc, props.as<JsonObjectConst>());
-          sensor("success-rate", p.successRate(), props.as<JsonObjectConst>());*/
           if (getTemperature(p)) {
             float t = p.temperature();
             if (!isnan(t)) {
-              // sensor("temperature", t, props.as<JsonObjectConst>());
-
               auto &s = getSensor(p);
               s.set(t, &changed);
             }

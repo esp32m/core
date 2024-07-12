@@ -101,45 +101,54 @@ namespace esp32m {
       return toString(refreshState());
     }
 
-    Relay::State getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off,
-                                  bool levelOn, bool levelOff) {
+    esp_err_t getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off,
+                               bool levelOn, bool levelOff,
+                               Relay::State &state) {
       bool onLevel = false, offLevel = false;
       if (on)
-        if (on->read(onLevel) != ESP_OK)
-          return Relay::State::Unknown;
+        ESP_CHECK_RETURN(on->read(onLevel));
       if (off) {
         if (off == on)
           offLevel = onLevel;
-        else if (off->read(offLevel) != ESP_OK)
-          return Relay::State::Unknown;
+        else
+          ESP_CHECK_RETURN(off->read(offLevel));
       }
 
-      if (on == off || !off)
-        return onLevel == levelOn ? Relay::State::On : Relay::State::Off;
+      if (on == off || !off) {
+        state = onLevel == levelOn ? Relay::State::On : Relay::State::Off;
+        return ESP_OK;
+      }
       if (!on) {
         if (!off)
-          return Relay::State::Unknown;
-        return offLevel == levelOff ? Relay::State::Off : Relay::State::On;
+          state = Relay::State::Unknown;
+        else
+          state = offLevel == levelOff ? Relay::State::Off : Relay::State::On;
+        return ESP_OK;
       }
 
       bool isOn = onLevel == levelOn;
       bool isOff = offLevel == levelOff;
       if (isOn != isOff)
-        return isOn ? Relay::State::On : Relay::State::Off;
-      return Relay::State::Unknown;
+        state = isOn ? Relay::State::On : Relay::State::Off;
+      else
+        state = Relay::State::Unknown;
+      return ESP_OK;
     }
 
     Relay::State Relay::refreshState() {
-      State state;
+      State state = Relay::State::Unknown;
+      esp_err_t err = ESP_OK;
       if (_pinSenseOn || _pinSenseOff)
-        state = getStateFromPins(_pinSenseOn, _pinSenseOff,
-                                 getLevel(Pin::SenseOn, true),
-                                 getLevel(Pin::SenseOff, true));
+        err = getStateFromPins(_pinSenseOn, _pinSenseOff,
+                               getLevel(Pin::SenseOn, true),
+                               getLevel(Pin::SenseOff, true), state);
       else if (_pinOn == _pinOff)
-        state = getStateFromPins(_pinOn, _pinOff, getLevel(Pin::On, true),
-                                 getLevel(Pin::Off, true));
+        err = getStateFromPins(_pinOn, _pinOff, getLevel(Pin::On, true),
+                               getLevel(Pin::Off, true), state);
       else
         return _state;  // no sense pins
+      if (err != ESP_OK)
+        return _state;  // cannot sense
       setState(state);
       return _state;
     }

@@ -17,6 +17,7 @@ export const enum Mode {
 
 export type TState = {
   mode: Mode;
+  current?: number;
 };
 
 export type TConfig = {

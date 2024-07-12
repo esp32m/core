@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp32m/device.hpp"
+#include "esp32m/io/cs.hpp"
 #include "esp32m/io/pins.hpp"
 
 #include <hal/gpio_types.h>
@@ -53,6 +54,10 @@ namespace esp32m {
                                         : setPwm(0, 0);
       }
 
+      void setCurrentSensor(io::CurrentSensor *cs) {
+        _cs = cs;
+      }
+
      protected:
       const JsonVariantConst descriptor() const override {
         static StaticJsonDocument<JSON_ARRAY_SIZE(1)> doc;
@@ -76,7 +81,7 @@ namespace esp32m {
       uint _freq = 0;
       bool _persistent = true;
       Mode _mode = Off;
-      float _speed = 1;
+      io::CurrentSensor *_cs = nullptr;
       esp_err_t init();
       esp_err_t refresh();
       esp_err_t setPins(bool fwd, bool rev);

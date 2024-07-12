@@ -87,6 +87,7 @@ export const Hbridge = ({ name, title }: IProps) => {
           disabled={disabled}
         />
       </StyledButtons>
+      {state.current && state.current.toFixed(1)}
       <IconButton onClick={() => openSettings()}>
         <Settings />
       </IconButton>

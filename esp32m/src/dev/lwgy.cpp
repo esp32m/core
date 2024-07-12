@@ -24,6 +24,8 @@ namespace esp32m {
           _addr(addr),
           _flow(this, "volume_flow_rate"),
           _consumption(this, "water") {
+      _consumption.stateClass = sensor::StateClass::Total;
+      _consumption.unit = "m³";
       Device::init(Flags::HasSensors);
     }
 

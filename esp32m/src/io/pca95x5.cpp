@@ -91,8 +91,10 @@ namespace esp32m {
       IPins::init(_bits == pca95x5::Bits::Eight ? 8 : 16);
       _i2c->setErrSnooze(10000);
       _i2c->setEndianness(Endian::Little);
-      ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
-      ESP_CHECK_RETURN(read(pca95x5::Register::Config, _inputMap));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Input, _input));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Output, _output));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Config, _config));
+      _targetOutput = _output;
       return ESP_OK;
     }
 
@@ -101,56 +103,67 @@ namespace esp32m {
     }
 
     esp_err_t Pca95x5::readPin(int pin, bool &value) {
+      auto isOutput = (_config & (1 << pin)) == 0;
+      if (isOutput) {
+        value = _output & (1 << pin);
+        return ESP_OK;
+      }
+
       auto tx = pin::Tx::current();
       if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
                   !tx->getReadPerformed())) {
-        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
-        // logD("readPin %d reg_input=0x%04x", pin, _port);
+        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _input));
+        // logD("readPin %d reg_input=0x%04x", pin, _input);
         if (tx)
           tx->setReadPerformed();
       }
-      value = _port & (1 << pin);
+      value = _input & (1 << pin);
       return ESP_OK;
     }
     esp_err_t Pca95x5::writePin(int pin, bool value) {
+      // logD("writePin %d: %d", pin, value);
       auto tx = pin::Tx::current();
       if (tx && (tx->type() & pin::Tx::Type::Read) != 0 &&
           !tx->getReadPerformed()) {
-        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _port));
-        // logD("writePin (%d=%d) reg_input=0x%04x", pin, value, _port);
+        ESP_CHECK_RETURN(read(pca95x5::Register::Input, _input));
         tx->setReadPerformed();
       }
       if (value)
-        _port |= (1 << pin);
+        _targetOutput |= (1 << pin);
       else
-        _port &= ~(1 << pin);
+        _targetOutput &= ~(1 << pin);
+
       if (!tx || ((tx->type() & pin::Tx::Type::Write) == 0))
         return commit();
+
       if (!tx->getFinalizer())
         tx->setFinalizer(this);
       return ESP_OK;
     }
     esp_err_t Pca95x5::setPinMode(int pin, bool input) {
       if (input)
-        _inputMap |= (1 << pin);
+        _config |= (1 << pin);
       else
-        _inputMap &= ~(1 << pin);
-      ESP_CHECK_RETURN(write(pca95x5::Register::Config, _inputMap));
-      // logD("setPinMode (%d=%d) reg_config=0x%04x", pin, input, _inputMap);
+        _config &= ~(1 << pin);
+      ESP_CHECK_RETURN(write(pca95x5::Register::Config, _config));
+      // logD("setPinMode (%d=%d) reg_config=0x%04x", pin, input, _config);
       return ESP_OK;
     }
 
     esp_err_t Pca95x5::commit() {
-      ESP_CHECK_RETURN(write(pca95x5::Register::Config, _inputMap));
-      ESP_CHECK_RETURN(write(pca95x5::Register::Output, _port));
-
+      // ESP_CHECK_RETURN(write(pca95x5::Register::Config, _config));
+      if (_targetOutput != _output) {
+        ESP_CHECK_RETURN(write(pca95x5::Register::Output, _targetOutput));
+        _output = _targetOutput;
+        // logD("commit config=0x%04x output=0x%04x", _config, _output);
+      }
       /*uint16_t o, i, c, inv;
       ESP_CHECK_RETURN(_i2c->readSafe(RegOutput, o));
       ESP_CHECK_RETURN(_i2c->readSafe(RegInput, i));
       ESP_CHECK_RETURN(_i2c->readSafe(RegConfig, c));
       ESP_CHECK_RETURN(_i2c->readSafe(RegInversion, inv));
       logD("commit port=0x%04x, out=0x%04x, in=0x%04x, cfg=0x%04x, inv=0x%04x",
-           _port, o, i, c, inv);*/
+           _output, o, i, c, inv);*/
 
       return ESP_OK;
     }
