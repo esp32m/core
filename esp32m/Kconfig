@@ -145,4 +145,22 @@ menu "ESP32 Manager configuration"
         default 1 if ESP32M_UI_BUILD_ONCE
         default 2 if ESP32M_UI_BUILD_NEVER
         
+    menu "UI HTTP server basic authentication"
+
+        config ESP32M_UI_HTTPD_BASIC_AUTH
+            bool "Enable HTTP server basic authentication"
+            default n
+
+        config ESP32M_UI_HTTPD_BASIC_AUTH_USERNAME
+            string "Username"
+            default "admin"
+            depends on ESP32M_UI_HTTPD_BASIC_AUTH
+
+        config ESP32M_UI_HTTPD_BASIC_AUTH_PASSWORD
+            string "Password"
+            default "admin"
+            depends on ESP32M_UI_HTTPD_BASIC_AUTH
+
+    endmenu
+
 endmenu

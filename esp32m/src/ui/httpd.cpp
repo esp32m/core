@@ -7,9 +7,20 @@
 #include "esp32m/ui/asset.hpp"
 #include "esp32m/version.h"
 
+#include <esp_tls_crypto.h>
 #include <mdns.h>
 #include <algorithm>
 #include <vector>
+#include "sdkconfig.h"
+
+#ifdef CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH
+#  ifdef CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_USERNAME
+#    ifdef CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_PASSWORD
+#      define USE_BASIC_AUTH
+#      define HTTPD_401 "401 UNAUTHORIZED" /*!< HTTP Response 401 */
+#    endif
+#  endif
+#endif
 
 namespace esp32m {
   namespace ui {
@@ -67,7 +78,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    void freeNop(void *ctx){};
+    void freeNop(void *ctx) {};
 
     void closeFn(httpd_handle_t hd, int sockfd) {
       Httpd *httpd = (Httpd *)httpd_get_global_user_ctx(hd);
@@ -109,6 +120,37 @@ namespace esp32m {
       }
       return httpd->incomingReq(req);
     }
+
+#ifdef USE_BASIC_AUTH
+    static char *http_auth_basic(const char *username, const char *password) {
+      size_t out;
+      char *user_info = NULL;
+      char *digest = NULL;
+      size_t n = 0;
+      int rc = asprintf(&user_info, "%s:%s", username, password);
+      if (rc < 0)
+        return NULL;
+
+      if (!user_info)
+        return NULL;
+      esp_crypto_base64_encode(NULL, 0, &n, (const unsigned char *)user_info,
+                               strlen(user_info));
+
+      /* 6: The length of the "Basic " string
+       * n: Number of bytes for a base64 encode format
+       * 1: Number of bytes for a reserved which be used to fill zero
+       */
+      digest = (char *)calloc(1, 6 + n + 1);
+      if (digest) {
+        strcpy(digest, "Basic ");
+        esp_crypto_base64_encode((unsigned char *)digest + 6, n, &out,
+                                 (const unsigned char *)user_info,
+                                 strlen(user_info));
+      }
+      free(user_info);
+      return digest;
+    }
+#endif
 
     esp_err_t getHeader(httpd_req_t *req, const char *name,
                         std::string &value) {
@@ -171,6 +213,11 @@ namespace esp32m {
       if (!req)
         return ESP_OK;
 
+      bool accessGranted = false;
+      ESP_CHECK_RETURN(authenticate(req, accessGranted));
+      if (!accessGranted)
+        return ESP_OK;
+
       auto cp = false;
       if (!strcmp(req->uri, "/generate_204") ||
           !strcmp(req->uri, "/hotspot-detect.html")) {
@@ -197,7 +244,8 @@ namespace esp32m {
               httpd_resp_set_hdr(req, "Location", location));
           // httpd_resp_set_type(req, "text/plain");
           ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_resp_send(req, nullptr, 0));
-          // logI("redirecting to captive portal %s", location); // this line causes havoc on esp32c6, esp-idf 5.2.1
+          // logI("redirecting to captive portal %s", location); // this line
+          // causes havoc on esp32c6, esp-idf 5.2.1
           logI("redirecting to captive portal");
           return ESP_OK;
         } else
@@ -253,6 +301,10 @@ namespace esp32m {
 
     esp_err_t Httpd::incomingWs(httpd_req_t *req) {
       if (req->method == HTTP_GET) {
+        bool accessGranted = false;
+        ESP_CHECK_RETURN(authenticate(req, accessGranted));
+        if (!accessGranted)
+          return ESP_FAIL;
         return ESP_OK;
       }
       httpd_ws_frame_t ws_pkt;
@@ -275,6 +327,59 @@ namespace esp32m {
         }
       free(ws_pkt.payload);
       return ret;
+    }
+
+    esp_err_t Httpd::authenticate(httpd_req_t *req, bool &result) {
+#ifdef USE_BASIC_AUTH
+      result = false;
+      char *buf = NULL;
+      size_t buf_len = 0;
+      buf_len = httpd_req_get_hdr_value_len(req, "Authorization") + 1;
+      if (buf_len > 1) {
+        buf = (char *)calloc(1, buf_len);
+        if (!buf)
+          return ESP_ERR_NO_MEM;
+
+        if (httpd_req_get_hdr_value_str(req, "Authorization", buf, buf_len) ==
+            ESP_OK) {
+        } else {
+          logE("No auth value received");
+        }
+
+        char *auth_credentials =
+            http_auth_basic(CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_USERNAME,
+                            CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_PASSWORD);
+        if (!auth_credentials) {
+          logE("No enough memory for basic authorization credentials");
+          free(buf);
+          return ESP_ERR_NO_MEM;
+        }
+
+        if (strncmp(auth_credentials, buf, buf_len)) {
+          logE("Not authenticated");
+          httpd_resp_set_status(req, HTTPD_401);
+          httpd_resp_set_hdr(req, "Connection", "keep-alive");
+          httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"ESP32M\"");
+          httpd_resp_send(req, NULL, 0);
+        } else {
+          httpd_resp_set_status(req, HTTPD_200);
+          httpd_resp_set_hdr(req, "Connection", "keep-alive");
+        }
+        free(auth_credentials);
+        free(buf);
+        result = true;
+      } else {
+        logI("No auth header received");
+        httpd_resp_set_status(req, HTTPD_401);
+        httpd_resp_set_hdr(req, "Connection", "keep-alive");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"ESP32M\"");
+        httpd_resp_send(req, NULL, 0);
+      }
+#else
+      result = true;
+#endif
+
+      return ESP_OK;
     }
 
     esp_err_t Httpd::wsSend(uint32_t cid, const char *text) {
