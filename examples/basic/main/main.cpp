@@ -3,7 +3,7 @@
 #include <esp32m/net/wifi.hpp>
 #include <esp32m/net/sntp.hpp>
 #include <esp32m/net/interfaces.hpp>
-// #include <esp32m/net/mqtt.hpp>
+#include <esp32m/net/mqtt.hpp>
 
 #include <esp32m/dev/esp32.hpp>
 // #include <esp32m/dev/bme280.hpp>
@@ -41,5 +41,6 @@ extern "C" void app_main() {
   // dev::useBuzzer(GPIO_NUM_15);
   // dev::useRelay("fan", gpio::pin(GPIO_NUM_32));
   // Send sensor readings to MQTT server. By default it will try to connect to
-  // mqtt.lan. Pass different name/IP as you see fit. net::useMqtt();
+  // mqtt.lan. Pass different name/IP as you see fit. 
+  net::useMqtt();
 }
