@@ -8,13 +8,17 @@ export const FieldSwitch = (props: FieldProps<SwitchProps>) => {
   const { name, label, ...rest } = props;
   const controller = useFormikContext<FormValues>();
   const { t } = useTranslation();
-  const { values, handleChange: onChange, handleBlur: onBlur } = controller;
+  const {
+    values,
+    handleBlur: onBlur,
+    setFieldValue,
+  } = controller;
   let checked = name && getIn(values, name);
   if (checked === undefined) checked = false;
-  const p = {
+  const p: SwitchProps = {
     name,
     checked,
-    onChange,
+    onChange: (event) => setFieldValue(name, event.target.checked),
     onBlur,
     ...rest,
   };

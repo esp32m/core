@@ -18,7 +18,7 @@
         "typescript": "^5.7.2"
     },
     "dependencies": {
-        "@mui/material": "^6.2.1",
+        "@mui/material": "^6.3.0",
         "@ts-libs/log": "*",
         "@ts-libs/redux": "*",
         "@ts-libs/tools": "*",

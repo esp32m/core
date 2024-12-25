@@ -15,8 +15,8 @@
     "react-dom": "^18.2.0"
   },
   "dependencies": {
-    "@mui/icons-material": "^6.2.1",
-    "@mui/material": "^6.2.1",
+    "@mui/icons-material": "^6.3.0",
+    "@mui/material": "^6.3.0",
     "@reduxjs/toolkit": "^2.5.0",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",

@@ -17,6 +17,14 @@ namespace esp32m {
   namespace ui {
     class Req;
     class Transport;
+    struct Auth {
+      bool enabled = false;
+      std::string username;
+      std::string password;
+      bool empty() const {
+        return username.empty() && password.empty();
+      }
+    };
   }  // namespace ui
 
   class Ui : public virtual AppObject {
@@ -36,6 +44,10 @@ namespace esp32m {
     void addAsset(const char *uri, const char *contentType,
                   const uint8_t *start, const uint8_t *end,
                   const char *contentEncoding, const char *etag);
+    const ui::Auth &auth() const {
+      return _auth;
+    }
+
     static Ui &instance();
 
    protected:
@@ -43,9 +55,36 @@ namespace esp32m {
     void handleEvent(Event &ev) override;
     void wsSend(const char *text);
     esp_err_t wsSend(uint32_t cid, const char *text);
+    bool setConfig(const JsonVariantConst cfg,
+                   DynamicJsonDocument **result) override {
+      JsonObjectConst root = cfg.as<JsonObjectConst>();
+      auto auth = root["auth"];
+      bool changed = false;
+      if (auth) {
+        json::from(auth["enabled"], _auth.enabled, &changed);
+        json::from(auth["username"], _auth.username, &changed);
+        json::from(auth["password"], _auth.password, &changed);
+      }
+      return changed;
+    }
+    DynamicJsonDocument *getConfig(RequestContext &ctx) override {
+      size_t size = JSON_OBJECT_SIZE(4)  // auth: enabled, username, password
+                    + JSON_STRING_SIZE(_auth.username.size()) +
+                    JSON_STRING_SIZE(_auth.password.size());
+      auto doc = new DynamicJsonDocument(size);
+      auto root = doc->to<JsonObject>();
+      if (!_auth.empty()) {
+        auto auth = root.createNestedObject("auth");
+        json::to(auth, "enabled", _auth.enabled);
+        json::to(auth, "username", _auth.username);
+        json::to(auth, "password", _auth.password);
+      }
+      return doc;
+    }
 
    private:
     std::mutex _mutex, _sendMutex;
+    ui::Auth _auth;
     TaskHandle_t _task;
     ui::Transport *_transport;
     std::map<uint32_t, std::unique_ptr<ui::Client> > _clients;

@@ -31,3 +31,4 @@ export * from './memoize';
 export * from './tree';
 export * from './immediate';
 export * from './time';
+export * from './rate-limiter';

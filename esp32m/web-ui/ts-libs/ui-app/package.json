@@ -22,8 +22,8 @@
     "@emotion/styled": "^11.14.0",
     "@fingerprintjs/fingerprintjs": "^4.5.1",
     "@iconify/react": "^5.1.0",
-    "@mui/icons-material": "^6.2.1",
-    "@mui/material": "^6.2.1",
+    "@mui/icons-material": "^6.3.0",
+    "@mui/material": "^6.3.0",
     "@reduxjs/toolkit": "^2.5.0",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",
@@ -32,8 +32,8 @@
     "react-dom": "^19.0.0",
     "react-is": "^19.0.0",
     "react-redux": "^9.2.0",
-    "react-router": "^7.0.2",
-    "react-router-dom": "^7.0.2",
+    "react-router": "^7.1.1",
+    "react-router-dom": "^7.1.1",
     "tss-react": "^4.9.14",
     "yup": "^1.6.1"
   }

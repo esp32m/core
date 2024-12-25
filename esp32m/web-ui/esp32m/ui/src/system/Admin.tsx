@@ -6,6 +6,7 @@ import { useTranslation } from '@ts-libs/ui-i18n';
 import { OtaFeatures, TOtaConfig } from '../net/ota/types';
 import { useBackendApi, useModuleConfig } from '../backend';
 import { FirmwareUpdateButton, OtaCheck } from '../net/ota';
+import { UiAuthConfigButton } from './ui-auth';
 
 const Name = 'app';
 
@@ -46,6 +47,9 @@ export const Admin = () => {
             <FirmwareUpdateButton url={config?.url} />
           </Grid>
         )}
+        <Grid item>
+          <UiAuthConfigButton />
+        </Grid>
       </ButtonBar>
       <MessageBox {...messageBoxProps} />
     </CardBox>

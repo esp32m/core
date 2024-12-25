@@ -9,6 +9,7 @@
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
 #include <esp_adc/adc_oneshot.h>
+#include <esp_clk_tree.h>
 #include <esp_timer.h>
 #include <limits.h>
 #include <sdkconfig.h>
@@ -17,6 +18,12 @@
 #include <mutex>
 #if SOC_DAC_SUPPORTED
 #  include <soc/dac_channel.h>
+#endif
+
+#if SOC_CLK_RC_FAST_SUPPORT_CALIBRATION
+#  define LEDC_CLK_SRC_FREQ_PRECISION ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED
+#else
+#  define LEDC_CLK_SRC_FREQ_PRECISION ESP_CLK_TREE_SRC_FREQ_PRECISION_APPROX
 #endif
 
 #define DEFAULT_VREF \
@@ -567,33 +574,140 @@ namespace esp32m {
       if (timer >= 0 && timer < LEDC_TIMER_MAX && ledcTimers[timer])
         ledcTimers[timer]->ref--;
     }
-    int ledcTimerGet(ledc_mode_t speed_mode, ledc_timer_bit_t duty_resolution,
+    int ledcTimerGet(ledc_mode_t speed_mode, uint32_t &duty_resolution,
                      uint32_t freq_hz, ledc_clk_cfg_t clk_cfg) {
       LedcTimer t = {};
-      t.c.speed_mode = speed_mode;
-      t.c.duty_resolution = duty_resolution;
-      t.c.timer_num = LEDC_TIMER_MAX;
-      t.c.freq_hz = freq_hz;
-      t.c.clk_cfg = clk_cfg;
-      int freeSlot = -1;
-      for (int i = 0; i < LEDC_TIMER_MAX; i++)
-        if (ledcTimersEqual(&t, ledcTimers[i]))
-          return i;
-        else if (freeSlot == -1) {
-          if (ledcTimers[i] == nullptr)
-            freeSlot = i;
-          else if (!ledcTimers[i]->ref) {
-            delete ledcTimers[i];
-            ledcTimers[i] = nullptr;
-            freeSlot = i;
+      int freeSlot;
+      for (;;) {
+        t.c.speed_mode = speed_mode;
+        t.c.duty_resolution = (ledc_timer_bit_t)duty_resolution;
+        t.c.timer_num = LEDC_TIMER_MAX;
+        t.c.freq_hz = freq_hz;
+        t.c.clk_cfg = clk_cfg;
+        freeSlot = -1;
+        for (int i = 0; i < LEDC_TIMER_MAX; i++)
+          if (ledcTimersEqual(&t, ledcTimers[i]))
+            return i;
+          else if (freeSlot == -1) {
+            if (ledcTimers[i] == nullptr)
+              freeSlot = i;
+            else if (!ledcTimers[i]->ref) {
+              delete ledcTimers[i];
+              ledcTimers[i] = nullptr;
+              freeSlot = i;
+            }
           }
-        }
-      if (freeSlot != -1) {
+        if (freeSlot == -1)
+          break;
         t.c.timer_num = (ledc_timer_t)freeSlot;
-        ledcTimers[freeSlot] = new LedcTimer(t);
+        auto res = ledc_timer_config(&t.c);
+        if (res == ESP_OK) {
+          ledcTimers[freeSlot] = new LedcTimer(t);
+          break;
+        } else if (res == ESP_FAIL && duty_resolution > 1) {
+          duty_resolution--;
+        } else
+          return -1;
       }
       return freeSlot;
     }
+
+    class PWM : public pin::IPWM {
+     public:
+      ~PWM() override {
+        std::lock_guard lock(ledcTimersMutex);
+        _ledcChannels &= ~(1 << _channel);
+        ledcTimerUnref(_timer);
+      }
+      esp_err_t setDuty(float value) override {
+        _duty = value;
+        ESP_CHECK_RETURN(ensureChannel());
+        uint32_t duty = (uint32_t)(_duty * (1 << _dutyRes));
+        LOGI(_pin, "duty=%i", duty);
+        ESP_CHECK_RETURN(ledc_set_duty(LEDC_BEST_SPEED_MODE, _channel, duty));
+        ESP_CHECK_RETURN(ledc_update_duty(LEDC_BEST_SPEED_MODE, _channel));
+        _enabled = true;
+        return ESP_OK;
+      };
+      float getDuty() const override {
+        return _duty;
+      };
+      esp_err_t setFreq(uint32_t value) override {
+        if (_freq == value)
+          return ESP_OK;
+        if (_timer >= 0) { // TODO: this is bad idea if the timer is used by more than 1 channel
+          ESP_CHECK_RETURN(ledc_set_freq(LEDC_BEST_SPEED_MODE, (ledc_timer_t)_timer, value));
+        }
+        _freq = value;
+        return ensureChannel();
+      }
+      uint32_t getFreq() const override {
+        return _freq;
+      };
+      esp_err_t enable(bool on) override {
+        if (on)
+          ESP_CHECK_RETURN(ledc_update_duty(LEDC_BEST_SPEED_MODE, _channel));
+        else
+          ESP_CHECK_RETURN(ledc_stop(LEDC_BEST_SPEED_MODE, _channel, 0));
+        _enabled = on;
+        return ESP_OK;
+      }
+      bool isEnabled() const override {
+        return _enabled;
+      }
+
+      static esp_err_t create(Pin *pin, pin::Feature **feature) {
+        std::lock_guard lock(ledcTimersMutex);
+        for (auto i = 0; i < LEDC_CHANNEL_MAX; i++)
+          if ((_ledcChannels & (1 << i)) == 0) {
+            _ledcChannels |= (1 << i);
+            *feature = new PWM(pin, (ledc_channel_t)i);
+            return ESP_OK;
+          }
+        return ESP_FAIL;
+      }
+
+     private:
+      Pin *_pin;
+      ledc_channel_t _channel;
+      int _timer = -1;
+      uint32_t _freq = 0, _dutyRes = 0;
+      float _duty = 0;
+      bool _enabled = false;
+
+      PWM(Pin *pin, ledc_channel_t channel) : _pin(pin), _channel(channel) {}
+      esp_err_t ensureChannel() {
+        if (_timer >= 0)
+          return ESP_OK;
+        if (!_freq)
+          return ESP_FAIL;
+        _dutyRes = LEDC_TIMER_BIT_MAX - 1;
+        std::lock_guard lock(ledcTimersMutex);
+        ledcTimerUnref(_timer);
+        _timer =
+            ledcTimerGet(LEDC_BEST_SPEED_MODE, _dutyRes, _freq, LEDC_AUTO_CLK);
+        if (_timer == -1)
+          return ESP_FAIL;
+        ledcTimerRef(_timer);
+        ledc_channel_config_t ledc_conf = {
+            .gpio_num = _pin->num(),
+            .speed_mode = LEDC_BEST_SPEED_MODE,
+            .channel = (ledc_channel_t)_channel,
+            .intr_type = LEDC_INTR_DISABLE,
+            .timer_sel = (ledc_timer_t)_timer,
+            .duty = uint32_t(_duty * (1 << _dutyRes)),
+            .hpoint = 0,
+            .flags =
+                {
+                    .output_invert = 0,
+                },
+        };
+        LOGI(_pin, "PWM config: channel=%i, timer=%i, freq=%i, res=%d",
+             _channel, _timer, _freq, _dutyRes);
+        ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
+        return ESP_OK;
+      }
+    };
 
     class LEDC : public pin::ILEDC {
      public:
@@ -607,12 +721,12 @@ namespace esp32m {
                        ledc_clk_cfg_t clk_cfg) override {
         std::lock_guard lock(ledcTimersMutex);
         ledcTimerUnref(_timer);
-        _timer = ledcTimerGet(mode, duty_resolution, freq_hz, clk_cfg);
+        uint32_t dutyres = (uint32_t)duty_resolution;
+        _timer = ledcTimerGet(mode, dutyres, freq_hz, clk_cfg);
         if (_timer == -1)
           return ESP_FAIL;
         _speedMode = mode;
         ledcTimerRef(_timer);
-        ESP_CHECK_RETURN(ledc_timer_config(&ledcTimers[_timer]->c));
         ledc_channel_config_t ledc_conf = {
             .gpio_num = _pin->num(),
             .speed_mode = mode,
@@ -759,6 +873,12 @@ namespace esp32m {
           if ((_features & (pin::Flags::Input | pin::Flags::Output)) != 0) {
             *feature = new gpio::Digital(this);
             return ESP_OK;
+          }
+          break;
+        case pin::Type::PWM:
+          if ((flags() & pin::Flags::Output) != 0) {
+            if (gpio::PWM::create(this, feature) == ESP_OK)
+              return ESP_OK;
           }
           break;
         case pin::Type::ADC:

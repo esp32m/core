@@ -158,10 +158,10 @@ namespace esp32m {
         // logD("commit config=0x%04x output=0x%04x", _config, _output);
       }
       /*uint16_t o, i, c, inv;
-      ESP_CHECK_RETURN(_i2c->readSafe(RegOutput, o));
-      ESP_CHECK_RETURN(_i2c->readSafe(RegInput, i));
-      ESP_CHECK_RETURN(_i2c->readSafe(RegConfig, c));
-      ESP_CHECK_RETURN(_i2c->readSafe(RegInversion, inv));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Output, o));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Input, i));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Config, c));
+      ESP_CHECK_RETURN(read(pca95x5::Register::Inversion, inv));
       logD("commit port=0x%04x, out=0x%04x, in=0x%04x, cfg=0x%04x, inv=0x%04x",
            _output, o, i, c, inv);*/
 
