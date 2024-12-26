@@ -42,6 +42,11 @@ export const i18n = {
       'System settings': 'Systemeinstellungen',
       'System summary': 'Systemzusammenfassung',
       'Enable remote logging': 'Remoteprotokollierung aktivieren',
+      'Configure UI authentication': 'Passwortschutz konfigurieren',
+      'Enable authentication': 'Authentifizierung aktivieren',
+      'User name': 'Benutzername',
+      'user name must not be empty': ' Benutzername darf nicht leer sein',
+      'password must not be empty': 'Passwort darf nicht leer sein',
     },
     uk: {
       System: 'Система',

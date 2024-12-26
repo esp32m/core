@@ -9,10 +9,6 @@ import { Button, Grid } from '@mui/material';
 import { useTranslation } from '@ts-libs/ui-i18n';
 import * as Yup from 'yup';
 
-const validationSchema = Yup.object().shape({
-  username: Yup.string().required('user name must not be empty'),
-  password: Yup.string().required('password must not be empty'),
-});
 
 type TAuthConfig = {
   enabled: boolean;
@@ -28,8 +24,12 @@ export const UiAuthConfigButton = () => {
   const [config] = useModuleConfig<TUiConfig>(UiConfigName);
   const { t } = useTranslation();
   const api = useBackendApi();
-  const [hook, open] = useDialogForm({
-    initialValues: config?.auth as any,
+  const validationSchema = Yup.object().shape({
+    username: Yup.string().required(t('user name must not be empty')),
+    password: Yup.string().required(t('password must not be empty')),
+  });
+    const [hook, open] = useDialogForm({
+    initialValues: config?.auth || {},
     onSubmit: async (values) => {
       const { username, password } = values || {};
       if (!username || !password)
