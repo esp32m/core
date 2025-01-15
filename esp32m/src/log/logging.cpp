@@ -612,7 +612,8 @@ namespace esp32m {
       SerialHook(size_t bufsize) {
         _serialBuf = (char *)malloc(_serialBufLen = bufsize);
         serialHook = this;
-        ets_install_putc1(hook);
+//        ets_install_putc1(hook);
+        esp_rom_install_channel_putc(1, hook);
       }
       ~SerialHook() {
         ets_install_uart_printf();
@@ -629,7 +630,8 @@ namespace esp32m {
         if (!h)
           return;
         if (h->_recursion) {
-          ets_write_char_uart(c);
+//          ets_write_char_uart(c);
+          esp_rom_output_putc(c);
           return;
         }
         h->hookImpl(c);
