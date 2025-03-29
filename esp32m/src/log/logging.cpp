@@ -13,6 +13,7 @@
 #include <time.h>
 #include <mutex>
 #include <vector>
+#include <algorithm> // needed for std::remove() to work
 
 #include "sdkconfig.h"
 

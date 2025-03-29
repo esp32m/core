@@ -3,18 +3,22 @@
 //#include <driver/adc.h>
 #include <hal/gpio_types.h>
 #include <driver/dac_oneshot.h>
+/*
 #if SOC_TOUCH_SENSOR_SUPPORTED
 #include <driver/touch_sensor.h>
 #include <soc/touch_sensor_channel.h>
 #endif
+*/
 #include <math.h>
 #include <mutex>
 
 namespace esp32m {
   namespace io {
+/*
 #if SOC_TOUCH_SENSOR_SUPPORTED
     bool gpio2TouchPad(gpio_num_t pin, touch_pad_t &tp);
 #endif
+*/
 
     class Sampler {
      public:

@@ -1,0 +1,33 @@
+# the following two lines remove unnecessary blob of debug messages sent to UART0 during boot,
+# and reduce the size of the bootloader a little, too
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+ESP32M_LOG_LEVEL_DEBUG=y
+
+# comment out for default of 160MHz and less power consumption
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# the most popular ESP32 module has 4MB flash on board
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# must be enabled if web-ui is used
+CONFIG_HTTPD_WS_SUPPORT=y
+# modern browsers send too much stuff in headers
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+# the default of 10 sockets may not be enough for http server to handle incoming http/ws connections
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# this must be enabled if we want OTA to function over plain HTTP
+CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
+# use custom partition table with 2 OTA partitions
+CONFIG_PARTITION_TABLE_CUSTOM=y
+
+# this is needed only if debug/tasks module is used
+# CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+# enables per-task CPU time measurements, use together with CONFIG_FREERTOS_USE_TRACE_FACILITY
+# CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+
+# the below 2 lines were copied from esp32-arduino, may not ne necessary, I don't really know ;-)
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_RX_BA_WIN=16
+
+CONFIG_ETH_USE_ESP32_EMAC=n

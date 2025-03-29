@@ -8,18 +8,12 @@
 #include "esp32m/events/response.hpp"
 
 #include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/bus/scanner/i2c.hpp"
 
 namespace esp32m {
   namespace bus {
     namespace scanner {
-
-      StaticJsonDocument<JSON_ARRAY_SIZE(1)> _i2cScannerErrors;
-
-      I2C::I2C() {
-        _i2cScannerErrors.add("busy");
-        _i2cScannerErrors.add("init");
-      }
 
       DynamicJsonDocument *I2C::getState(const JsonVariantConst args) {
         DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(5));
@@ -38,7 +32,7 @@ namespace esp32m {
         if (req.is("i2c", "scan")) {
           auto data = req.data();
           if (_pendingResponse) {
-            req.respond("i2c", _i2cScannerErrors[0], true);
+            req.respond("i2c", ESP_ERR_NOT_FINISHED);
           } else {
             _pinSDA = data["sda"] | I2C_MASTER_SDA;
             _pinSCL = data["scl"] | I2C_MASTER_SCL;
@@ -79,17 +73,7 @@ namespace esp32m {
           esp_task_wdt_reset();
           if (_pendingResponse) {
             memset(&_ids, 0, sizeof(_ids));
-            esp32m::I2C i2c(0, I2C_NUM_0, (gpio_num_t)_pinSDA,
-                            (gpio_num_t)_pinSCL, _freq);
-            for (int i = _startId; i <= _endId; i++) {
-              i2c.setAddr(i);
-              esp_err_t err = i2c.write(nullptr, 0, nullptr, 0);
-              if (err == ESP_OK) {
-                logI("found i2c device at 0x%02x", i);
-                _ids[i >> 3] |= 1 << (i & 7);
-              }
-              esp_task_wdt_reset();
-            }
+            scan();
             DynamicJsonDocument *doc = new DynamicJsonDocument(
                 JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(sizeof(_ids)));
             auto ids = doc->createNestedArray("ids");
@@ -102,9 +86,50 @@ namespace esp32m {
           ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
         }
       }
+      /*
+            void I2C::scan() {
+              esp32m::I2C i2c(0, I2C_NUM_0, (gpio_num_t)_pinSDA,
+         (gpio_num_t)_pinSCL, _freq); for (int i = _startId; i <= _endId; i++) {
+                i2c.setAddr(i);
+                esp_err_t err = i2c.write(nullptr, 0, nullptr, 0);
+                if (err == ESP_OK) {
+                  logI("found i2c device at 0x%02x", i);
+                  _ids[i >> 3] |= 1 << (i & 7);
+                }
+                esp_task_wdt_reset();
+              }
+            }
+      */
+      void I2C::scan() {
+        i2c_master_bus_config_t busConfig = {.i2c_port = I2C_NUM_0,
+                                             .sda_io_num = (gpio_num_t)_pinSDA,
+                                             .scl_io_num = (gpio_num_t)_pinSCL,
+                                             .clk_source = I2C_CLK_SRC_DEFAULT,
+                                             .glitch_ignore_cnt = 7,
+                                             .intr_priority = 0,
+                                             .trans_queue_depth = 0,
+                                             .flags = {
+                                                 .enable_internal_pullup = true,
+                                                 .allow_pd = false,
+                                             }};
+        i2c::MasterBus *bus = nullptr;
+        if (i2c::MasterBus::New(busConfig, &bus) != ESP_OK)
+          return;
+
+        for (int i = _startId; i <= _endId; i++) {
+          esp_err_t err = bus->probe(i, 30);
+          if (err == ESP_OK) {
+            logI("found i2c device at 0x%02x", i);
+            _ids[i >> 3] |= 1 << (i & 7);
+          }
+          esp_task_wdt_reset();
+        }
+        delete bus;
+      }
+
       I2C *useI2C() {
         return &I2C::instance();
       }
     }  // namespace scanner
-  }    // namespace bus
+  }  // namespace bus
 }  // namespace esp32m

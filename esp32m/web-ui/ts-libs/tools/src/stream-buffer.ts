@@ -7,6 +7,7 @@ export enum Endianness {
 
 export type TStreamBufferInit = {
   capacity?: number;
+  position?: number;
   endianness?: Endianness;
   data?: Uint8Array;
   autoGrow?: boolean;
@@ -82,15 +83,17 @@ export type TReadStringOptions = {
   sizeBytes?: number;
   nullTerminated?: boolean;
   encoding?: Encoding;
+  position?: number;
 };
 
 class StreamBuffer implements IStreamBuffer {
   autoGrow = false;
   constructor(options: TStreamBufferInit) {
-    const { capacity, endianness, data, autoGrow } = options;
+    const { capacity, endianness, data, autoGrow, position } = options;
     if (data) {
       this._buffer = Buffer.from(data);
       this._length = this._buffer.length;
+      this._position = position || 0;
     } else this._buffer = Buffer.alloc(capacity || 64);
     if (endianness) this.endianness = endianness;
     else this._le = isLe();
@@ -328,7 +331,9 @@ class StreamBuffer implements IStreamBuffer {
       sizeBytes = remainingSize,
       nullTerminated,
       encoding = 'utf8',
+      position,
     } = options;
+    if (typeof position == 'number') this.position = position;
     let rbs = Math.min(sizeBytes, remainingSize);
     let rb = this._buffer.subarray(this._position, rbs + this._position);
     if (nullTerminated) {

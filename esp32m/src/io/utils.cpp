@@ -5,7 +5,7 @@
 
 namespace esp32m {
   namespace io {
-
+/*
 #if SOC_TOUCH_SENSOR_SUPPORTED
     bool gpio2TouchPad(gpio_num_t pin, touch_pad_t &tp) {
       switch (pin) {
@@ -89,7 +89,7 @@ namespace esp32m {
       }
     }
 #endif
-
+*/
     Sampler::Sampler(size_t capacity, uint8_t bytesPerSample)
         : _capacity(capacity), _bps(bytesPerSample) {
       _buf = calloc(capacity, bytesPerSample);

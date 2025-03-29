@@ -31,11 +31,12 @@ namespace esp32m {
         int _startId = 3, _endId = 120;
         uint8_t _ids[16];
         uint32_t _freq = 100000;
-        I2C();
+        I2C() {};
         void run();
+        void scan();
       };
 
       I2C *useI2C();
     }  // namespace scanner
-  }    // namespace bus
+  }  // namespace bus
 }  // namespace esp32m

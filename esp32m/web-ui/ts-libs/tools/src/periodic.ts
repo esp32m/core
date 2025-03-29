@@ -2,14 +2,15 @@ import { ILogger } from '@ts-libs/log';
 import { isNumber } from './is-type';
 import { TimeUnit, TimeValue } from './time';
 
-interface TPeriodicOptions {
+export type TPeriodicOptions = {
   logger?: ILogger;
   runOnStart?: boolean;
   maxRuns?: number;
   onerror?: (e: any) => void;
-}
+  enabled?: boolean;
+};
 
-export class Periodic implements TPeriodicOptions {
+export class Periodic {
   logger?: ILogger;
   runOnStart?: boolean;
   maxRuns?: number;
@@ -39,7 +40,7 @@ export class Periodic implements TPeriodicOptions {
   constructor(
     readonly runnable: () => unknown,
     interval?: number,
-    options?: TPeriodicOptions & { enabled?: boolean }
+    options?: TPeriodicOptions
   ) {
     const { enabled, ...rest } = options || {};
     Object.assign(this, rest);

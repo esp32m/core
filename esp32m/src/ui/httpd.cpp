@@ -21,7 +21,7 @@ namespace esp32m {
     std::vector<Httpd *> _httpdServers;
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define HTTPD_SCRATCH_BUF MAX(HTTPD_MAX_REQ_HDR_LEN, HTTPD_MAX_URI_LEN)
+#define HTTPD_SCRATCH_BUF MAX(CONFIG_HTTPD_MAX_REQ_HDR_LEN, CONFIG_HTTPD_MAX_URI_LEN)
     struct httpd_req_aux {
       struct sock_db *sd; /*!< Pointer to socket database */
       char scratch[HTTPD_SCRATCH_BUF +

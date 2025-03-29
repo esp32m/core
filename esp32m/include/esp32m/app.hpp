@@ -92,8 +92,8 @@ namespace esp32m {
       return name();
     };
 
-    /** Returns true if this object's configuration was either read and applied
-     * from config store or via UI */
+    /** Returns true if this object's configuration was read and applied
+     * either from config store or via UI */
     bool isConfigured() {
       return _configured;
     }

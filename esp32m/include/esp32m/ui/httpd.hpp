@@ -1,3 +1,5 @@
+#pragma once
+
 #include <esp_http_server.h>
 
 #include "esp32m/ui/transport.hpp"

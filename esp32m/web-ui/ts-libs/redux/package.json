@@ -10,7 +10,7 @@
         "cover": "jest --coverage"
     },
     "dependencies": {
-        "@reduxjs/toolkit": "^2.5.0",
+        "@reduxjs/toolkit": "^2.6.1",
         "@ts-libs/log": "*",
         "@ts-libs/plugins": "*",
         "@ts-libs/tools": "*",
@@ -18,7 +18,7 @@
         "node-localstorage": "^3.0.5",
         "redux": "^5.0.1",
         "redux-persist": "^6.0.0",
-        "rxjs": "^7.8.1"
+        "rxjs": "^7.8.2"
     },
     "devDependencies": {
         "@types/node-localstorage": "^1.3.3"

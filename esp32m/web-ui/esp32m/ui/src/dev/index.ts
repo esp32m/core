@@ -29,6 +29,7 @@ export * from './ptmb';
 export * from './lwgy';
 export * from './soil5';
 export * from './fan';
+export * from './ahtxx';
 
 export * from './shared';
 export * from './types';
