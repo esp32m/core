@@ -55,8 +55,8 @@ namespace esp32m {
       return false;
     }
 
-    DynamicJsonDocument *Lwgy::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(10));
+    JsonDocument *Lwgy::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(10) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -71,8 +71,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Lwgy::setConfig(const JsonVariantConst cfg,
-                         DynamicJsonDocument **result) {
+    bool Lwgy::setConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
@@ -84,6 +83,7 @@ namespace esp32m {
         return false;
       bool changed = false;
       auto v = regs[0];
+      auto cfg=ctx.data.as<JsonObjectConst>();
       if (json::from(cfg["um"], v, &changed))
         mb.request(_addr, modbus::Command::WriteRegister, 0x73, 1, &v);
       v = regs[1];
@@ -137,7 +137,7 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *Lwgy::getConfig(RequestContext &ctx) {
+    JsonDocument *Lwgy::getConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return nullptr;
@@ -147,7 +147,7 @@ namespace esp32m {
       if (res != ESP_OK)
         return nullptr;
 
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(11));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(11) */
       auto root = doc->to<JsonObject>();
       json::to(root, "um", regs[0]);
       json::to(root, "ud", regs[1]);

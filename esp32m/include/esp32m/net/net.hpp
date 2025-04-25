@@ -73,10 +73,10 @@ namespace esp32m {
     constexpr const char *ErrNoInternet = "ERR_NO_INTERNET";
 
     const int Ipv4MaxChars = 16;
-    const int IpInfoJsonSize =
+/*    const int IpInfoJsonSize =
         JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) + (Ipv4MaxChars * 3);
     const int DhcpsLeaseJsonSize =
-        JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) + (Ipv4MaxChars * 2);
+        JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) + (Ipv4MaxChars * 2);*/
     const int Ipv6MaxChars = 40;
     const int MacMaxChars = 18;
 

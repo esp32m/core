@@ -1,6 +1,6 @@
 import React from "react";
 import { Grid, ToggleButton, ToggleButtonGroup } from "@mui/material";
-import { IState, IProps, ValveState } from "./types";
+import { TState, TProps, ValveState } from "./types";
 import * as Backend from "../../backend";
 import { useModuleState } from "../..";
 import { styled } from "@mui/material/styles";
@@ -28,8 +28,8 @@ const Buttons = ({ state, onChange, disabled }: IButtonsProps) => {
   );
 };
 
-export default ({ name, title }: IProps) => {
-  const state = useModuleState<IState>(name);
+export default ({ name, title }: TProps) => {
+  const state = useModuleState<TState>(name);
   const [disabled, setDisabled] = React.useState(false);
   const api = Backend.useBackendApi();
   if (!state) return null;
@@ -37,8 +37,8 @@ export default ({ name, title }: IProps) => {
   return (
     <CardBox title={title || name}>
       <Grid container>
-        <Title item> {`State: ${state.state}`} </Title>
-        <StyledButtons item>
+        <Title> {`State: ${state.state}`} </Title>
+        <StyledButtons>
           <Buttons
             state={state.state}
             onChange={(state: ValveState) => {

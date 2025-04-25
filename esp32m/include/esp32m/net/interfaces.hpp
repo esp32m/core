@@ -65,9 +65,9 @@ namespace esp32m {
       std::map<esp_netif_dns_type_t, esp_netif_dns_info_t> _dns;
       dhcps_lease_t _dhcpsLease = {};
       void init(const char *key);
-      DynamicJsonDocument *getState(const JsonVariantConst args);
-      bool setConfig(const JsonVariantConst cfg, DynamicJsonDocument **result);
-      DynamicJsonDocument *getConfig();
+      JsonDocument *getState(RequestContext &ctx);
+      bool setConfig(RequestContext &ctx);
+      JsonDocument *getConfig();
 
      private:
       std::string _key;
@@ -88,10 +88,9 @@ namespace esp32m {
 
      protected:
       void handleEvent(Event &ev) override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
 
      private:
       bool _mapValid = false;

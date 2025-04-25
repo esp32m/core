@@ -2,6 +2,7 @@
 
 #include "esp32m/base.hpp"
 #include "esp32m/events.hpp"
+#include "esp32m/logging.hpp"
 
 namespace esp32m {
 
@@ -53,7 +54,7 @@ namespace esp32m {
     }
   }
 
-  const Subscription *EventManager::subscribe(Subscription::Callback cb) {
+  Subscription *EventManager::subscribe(Subscription::Callback cb) {
     const auto result = new Subscription(cb);
     std::lock_guard<std::mutex> guard(_mutex);
     for (auto it = _subscriptions.begin(); it != _subscriptions.end(); ++it)
@@ -71,9 +72,10 @@ namespace esp32m {
     std::lock_guard<std::mutex> guard(_mutex);
     while (sub->_refcnt) delay(1);
     for (auto it = _subscriptions.begin(); it != _subscriptions.end(); ++it)
-      if (*it == sub)
-        *it =
-            nullptr;  // we don't actually remove the element for thread safety
+      if (*it == sub) {
+        // we don't actually remove the element for thread safety
+        *it = nullptr;
+      }
   }
 
   EventManager &EventManager::instance() {

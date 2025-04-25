@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/io/pins.hpp"
 
 namespace esp32m {
@@ -11,7 +11,7 @@ namespace esp32m {
         PCF8574,
         PCF8575,
       };
-      Pcf857x(Flavor f, I2C *i2c);
+      Pcf857x(Flavor f, i2c::MasterDev *i2c);
       Pcf857x(const Pcf857x &) = delete;
       const char *name() const override {
         return "PCF857x";
@@ -32,7 +32,7 @@ namespace esp32m {
 
      private:
       Flavor _flavor;
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       uint16_t _port = 0xFFFF, _inputMap = 0xFFFF;
       esp_err_t init();
     };

@@ -38,8 +38,8 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Sm538x::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(4));
+    JsonDocument *Sm538x::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);

@@ -145,7 +145,7 @@ namespace esp32m {
      protected:
       bool pollSensors() override;
       bool initSensors() override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
 
      private:
       float _te = 0, _ee = 0, _ie = 0, _v = 0, _i = 0, _ap = 0, _rap = 0,

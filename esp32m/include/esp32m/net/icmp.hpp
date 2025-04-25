@@ -22,10 +22,9 @@ namespace esp32m {
       esp_err_t stop();
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
       bool handleRequest(Request &req) override;
 
      private:
@@ -106,10 +105,9 @@ namespace esp32m {
       esp_err_t stop();
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
       bool handleRequest(Request &req) override;
 
      private:

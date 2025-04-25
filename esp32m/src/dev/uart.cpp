@@ -63,7 +63,7 @@ namespace esp32m {
                   mbedtls_base64_encode(b64buf, olen, &olen, buf, slen));
               if (ret == 0) {
                 b64buf[olen] = 0;
-                DynamicJsonDocument *doc = new DynamicJsonDocument(olen + 1);
+                JsonDocument *doc = new JsonDocument(); /* olen + 1 */
                 doc->set(b64buf);
                 _pendingResponse->setData(doc);
                 _pendingResponse->publish();

@@ -147,8 +147,8 @@ namespace esp32m {
       Ahtxx(const Ahtxx &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+      JsonDocument *getState(RequestContext &ctx) override {
+        JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
         JsonArray arr = doc->to<JsonArray>();
         arr.add(millis() - _stamp);
         arr.add(_temperature.get());

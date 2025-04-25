@@ -33,17 +33,17 @@ const component = () => {
   );
   const { state } = useFeatureState<TADCState>() || {};
   return (
-    <Grid item container spacing={2}>
-      <Grid item xs={6}>
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 6 }}>
         <FieldSelect name="atten" label="Attenuation" fullWidth type="number">
           {attenOptions}
         </FieldSelect>
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldText name="width" type="number" label="Bit width" fullWidth />
       </Grid>
       {state && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           {`Signal level: ${(state.value * 100).toFixed(2)} %, ${state.mv} mv`}
         </Grid>
       )}

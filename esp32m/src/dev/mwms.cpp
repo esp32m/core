@@ -26,10 +26,10 @@ namespace esp32m {
       return _divisor != 0;
     }
 
-    DynamicJsonDocument *MicrowaveMotionSensor::getState(
-        const JsonVariantConst args) {
+    JsonDocument *MicrowaveMotionSensor::getState(
+        RequestContext &ctx) {
       std::lock_guard lock(_sampler->mutex());
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(4));
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(abs(0.5 - _sampler->avg() / _divisor) * 2);

@@ -20,7 +20,7 @@ namespace esp32m {
 
      protected:
       const JsonVariantConst descriptor() const override {
-        static StaticJsonDocument<JSON_ARRAY_SIZE(1)> doc;
+        static JsonDocument/*<JSON_ARRAY_SIZE(1)>*/ doc;
         if (doc.isNull()) {
           auto root = doc.to<JsonArray>();
           root.add("moisture");
@@ -29,7 +29,7 @@ namespace esp32m {
       };
       bool pollSensors() override;
       bool initSensors() override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
 
      private:
       const char *_name;

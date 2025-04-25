@@ -8,7 +8,8 @@ import {
 import { IBackendApi } from './types';
 import { useDispatch, useSelector } from 'react-redux';
 import { TSelector, TStateRoot } from '@ts-libs/redux';
-import { isNumber, noop } from '@ts-libs/tools';
+import { useSnackApi } from '@ts-libs/ui-snack';
+import { isNumber, noop, TJsonValue } from '@ts-libs/tools';
 import { Name, TBackendStateRoot } from './state';
 import { ActionCreator, UnknownAction } from 'redux';
 
@@ -86,9 +87,9 @@ export function useRequest<T = unknown>(
     let done = false;
     const run = isNumber(interval)
       ? async () => {
-          await doit();
-          if (!done) ti = setTimeout(run, interval);
-        }
+        await doit();
+        if (!done) ti = setTimeout(run, interval);
+      }
       : doit;
     if (isNumber(delay)) th = setTimeout(run, delay);
     else run();
@@ -129,7 +130,7 @@ type TGetStateOptions = TRequestOptions & {
   once?: boolean;
 };
 
-export const useModuleState = <T>(
+export const useModuleState = <T extends TJsonValue>(
   name: string,
   options?: TGetStateOptions
 ): T | undefined => {
@@ -138,21 +139,96 @@ export const useModuleState = <T>(
   const { condition, once, data } = options || {};
   useEffect(() => {
     if (once) api.getState(name, data);
-    else if (condition === undefined || condition) return device.useState(data);
+    else if (condition === undefined || condition)
+      return device.useState(data);
   }, [api, device, name, condition, once, data]);
   return useSelector((state: TBackendStateRoot) =>
     device.selectors.state(state)
-  );
+  ) as T;
+};
+
+export const useModuleApi = (
+  name: string) => {
+  const api = useBackendApi();
+  const snack = useSnackApi();
+  const [inProgress, setInProgress] = useState(0);
+  const getState = useCallback(async <T extends TJsonValue>(data?: T) => {
+    try {
+      setInProgress(inProgress + 1);
+      return await api.getState(name, data);
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      setInProgress(inProgress - 1);
+    }
+  }, [name, api, snack]);
+  const setState = useCallback(async <T extends TJsonValue>(data: T) => {
+    try {
+      setInProgress(inProgress + 1);
+      const response = await api.setState(name, data);
+      return response?.data
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      setInProgress(inProgress - 1);
+    }
+  }, [name, api, snack]);
+  const getConfig = useCallback(async <T extends TJsonValue>(data?: T) => {
+    try {
+      setInProgress(inProgress + 1);
+      const response = await api.getConfig(name, data);
+      return response?.data
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      setInProgress(inProgress - 1);
+    }
+  }, [name, api, snack]);
+  const setConfig = useCallback(async <T extends TJsonValue>(data: T) => {
+    try {
+      setInProgress(inProgress + 1);
+      const response = await api.setConfig(name, data);
+      return response?.data
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      setInProgress(inProgress - 1);
+    }
+  }, [name, api, snack]);
+  const getInfo = useCallback(async <T extends TJsonValue>(data?: T) => {
+    try {
+      setInProgress(inProgress + 1);
+      const response = await api.getInfo(name, data);
+      return response?.data
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      setInProgress(inProgress - 1);
+    }
+  }, [name, api, snack]);
+
+  return { getState, setState, getConfig, setConfig, getInfo, inProgress } as const;
 };
 
 export function useModuleConfig<T = unknown>(
   target: string,
   options?: TRequestOptions
 ) {
-  return useRequest<T>(target, 'config-get', options);
+  const api = useModuleApi(target);
+  const { setConfig, inProgress: settingConfig } = api;
+  const [config, refreshConfig] = useRequest<T>(target, 'config-get', options);
+  return { config, setConfig, refreshConfig, settingConfig } as const;
+  //  return useRequest<T>(target, 'config-get', options);
+}
+
+export function useModuleInfo<T = unknown>(
+  target: string,
+  options?: TRequestOptions
+) {
+  return useRequest<T>(target, 'info-get', options);
 }
 
 export const moduleStateSelector =
   <T>(name: string) =>
-  (state: TStateRoot) =>
-    state[Name].modules[name]?.state as T;
+    (state: TStateRoot) =>
+      state[Name].modules[name]?.state as T;

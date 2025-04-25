@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSelector, createSlice } from '@reduxjs/toolkit';
 import { actions, moduleStateSelector } from '../../backend';
 import { TStateRoot } from '@ts-libs/redux';
 import { TOtaState } from './types';
@@ -38,13 +38,11 @@ const slice = createSlice({
 
 export const { reducer } = slice;
 export const selectors = {
-  state: (state: TStateRoot) => {
-    const mss = moduleStateSelector<TOtaState>(Name)(state);
-    const ls = state[Name];
+  state: createSelector(moduleStateSelector<TOtaState>(Name), (s: TStateRoot) => s[Name], (mss, ls) => {
     return {
       stateLoaded: !!mss,
       isRunning: ls.running === true || !!mss?.total,
       isFinished: ls.running === false,
     };
-  },
+  }),
 };

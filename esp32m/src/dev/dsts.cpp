@@ -331,8 +331,8 @@ namespace esp32m {
         sensor->group = _sensorGroup;
         if (probe.name)
           sensor->name = probe.name;
-        auto props = new DynamicJsonDocument(
-            JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(strlen(probe.codestr())));
+        auto props = new JsonDocument(
+            /*JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(strlen(probe.codestr()))*/);
         auto root = props->to<JsonObject>();
         root["code"] =
             (char *)
@@ -359,13 +359,13 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Dsts::getState(const JsonVariantConst args) {
+    JsonDocument *Dsts::getState(RequestContext &ctx) {
       auto &pv = probes();
-      DynamicJsonDocument *doc = new DynamicJsonDocument(
-          JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(6) * pv.size());
+      JsonDocument *doc = new JsonDocument(
+          /*JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(6) * pv.size()*/);
       JsonArray root = doc->to<JsonArray>();
       for (auto &p : pv) {
-        auto entry = root.createNestedArray();
+        auto entry = root.add<JsonArray>();
         entry.add(p.codestr());
         entry.add(p.getResolution());
         entry.add(p.disabled());

@@ -27,7 +27,7 @@ namespace esp32m {
           return true;
         if (req.is("enum")) {
           auto providers = pins::getProviders();
-          size_t size = 0;
+          /*size_t size = 0;
           for (auto const &[name, pins] : providers) {
             size += JSON_OBJECT_SIZE(1);
             for (int i = 0; i < pins->count(); i++) {
@@ -35,11 +35,11 @@ namespace esp32m {
               if (pin)
                 size += JSON_ARRAY_SIZE(1);
             }
-          }
-          auto doc = new DynamicJsonDocument(size);
+          }*/
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           for (auto const &[name, pins] : providers) {
-            auto p = root.createNestedArray(pins->name());
+            auto p = root[pins->name()].to<JsonArray>();
             for (int i = 0; i < pins->count(); i++) {
               auto pin = pins->pin(i);
               if (pin)
@@ -62,8 +62,8 @@ namespace esp32m {
         }
         return false;
       }
-      void setState(const JsonVariantConst args,
-                    DynamicJsonDocument **result) override {
+      void setState(RequestContext& ctx) override {
+        auto args=ctx.data.as<JsonObjectConst>();
         auto pin = toPin(args["pin"]);
         auto type = toFeatureType(args["feature"]);
         auto state = args["state"].as<JsonObjectConst>();
@@ -145,13 +145,13 @@ namespace esp32m {
           }
         }
       }
-      DynamicJsonDocument *getState(const JsonVariantConst args) override {
-        auto pin = toPin(args["pin"]);
-        auto type = toFeatureType(args["feature"]);
+      JsonDocument *getState(RequestContext &ctx) override {
+        auto pin = toPin(ctx.data["pin"]);
+        auto type = toFeatureType(ctx.data["feature"]);
         if (!pin || (type != pin::Type::Invalid &&
                      pin->featureStatus(type) != pin::FeatureStatus::Enabled))
           type = pin::Type::Invalid;
-        size_t size = JSON_OBJECT_SIZE(2) +                 // features, flags
+        /*size_t size = JSON_OBJECT_SIZE(2) +                 // features, flags
                       JSON_ARRAY_SIZE((int)pin::Type::MAX)  // features
             ;
         if (type != pin::Type::Invalid) {
@@ -175,16 +175,16 @@ namespace esp32m {
             default:
               break;
           }
-        }
-        auto doc = new DynamicJsonDocument(size);
+        }*/
+        auto doc = new JsonDocument(); /* size */
         auto root = doc->to<JsonObject>();
         if (pin) {
           root["flags"] = (int)pin->flags();
-          auto features = root.createNestedArray("features");
+          auto features = root["features"].to<JsonArray>();
           for (int t = 0; t < (int)pin::Type::MAX; t++)
             features.add((int)pin->featureStatus((pin::Type)t));
           if (type != pin::Type::Invalid) {
-            auto state = root.createNestedObject("state");
+            auto state = root["state"].to<JsonObject>();
             switch (type) {
               case pin::Type::Digital: {
                 auto digital = pin->digital();

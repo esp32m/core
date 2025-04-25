@@ -294,8 +294,7 @@ namespace esp32m {
     sensor::StateClass stateClass = sensor::StateClass::Undefined;
     const char *unit = nullptr;
     const char *name = nullptr;
-    Sensor(Device *device, const char *type, const char *id = nullptr,
-           size_t size = 0);
+    Sensor(Device *device, const char *type, const char *id = nullptr);
     Sensor(const Sensor &) = delete;
     const char *type() const {
       return _type;
@@ -350,7 +349,7 @@ namespace esp32m {
       return _props ? _props->as<JsonObjectConst>()
                     : json::null<JsonObjectConst>();
     }
-    void setProps(DynamicJsonDocument *props) {
+    void setProps(JsonDocument *props) {
       _props.reset(props);
     }
 
@@ -358,8 +357,8 @@ namespace esp32m {
     Device *_device;
     const char *_type;
     std::string _id;
-    DynamicJsonDocument _value;
-    std::unique_ptr<DynamicJsonDocument> _props;
+    JsonDocument _value;
+    std::unique_ptr<JsonDocument> _props;
   };
 
 }  // namespace esp32m

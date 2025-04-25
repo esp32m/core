@@ -82,14 +82,27 @@ namespace esp32m {
     const char *_origin;
     bool _handled = false;
   };
+
   class RequestContext {
    public:
-    RequestContext(const Request &request, const JsonVariantConst data)
+    RequestContext(Request &request, const JsonVariantConst data)
         : request(request), data(data) {}
-    const Request &request;
+
+    Request &request;
     const JsonVariantConst data;
     ErrorList errors;
-    DynamicJsonDocument *result = nullptr;
+    std::unique_ptr<JsonDocument> result;
+
+   private:
+    void respond(const char *source) {
+      errors.toJson(result);
+      if (result) {
+        json::check(nullptr, result.get(), "RequestContext::respond()");
+        request.respond(source, *result);
+      } else
+        request.respond(source, json::null<JsonVariantConst>(), false);
+    }
+    friend class AppObject;
   };
 
 }  // namespace esp32m

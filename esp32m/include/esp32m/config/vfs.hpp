@@ -18,8 +18,8 @@ namespace esp32m {
       }
 
      protected:
-      void write(const DynamicJsonDocument& config) override;
-      DynamicJsonDocument* read() override;
+      void write(const JsonDocument& config) override;
+      JsonDocument* read() override;
       void reset() override;
 
      private:

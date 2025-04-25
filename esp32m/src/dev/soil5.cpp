@@ -45,8 +45,8 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    DynamicJsonDocument *Soil5::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(11));
+    JsonDocument *Soil5::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(11) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);

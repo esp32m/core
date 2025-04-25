@@ -781,12 +781,10 @@ namespace esp32m {
       void incomingFrameInvalid() override;
       void jobDone(opentherm::IMasterModel *job) override;
 
-      void setState(const JsonVariantConst cfg,
-                    DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      void setState(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
       bool pollSensors() override;
 
      private:
@@ -802,12 +800,10 @@ namespace esp32m {
       OpenthermSlave(const OpenthermSlave &) = delete;
 
      protected:
-      void setState(const JsonVariantConst cfg,
-                    DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      void setState(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
     };
 
     OpenthermMaster *useOpenthermMaster(

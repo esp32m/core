@@ -23,8 +23,8 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    DynamicJsonDocument *Ztsyux::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+    JsonDocument *Ztsyux::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -32,8 +32,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Ztsyux::setConfig(const JsonVariantConst cfg,
-                           DynamicJsonDocument **result) {
+    bool Ztsyux::setConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
@@ -41,6 +40,7 @@ namespace esp32m {
       auto res = mb.request(_addr, modbus::Command::ReadHolding, 0x31, 4, regs);
       if (res != ESP_OK)
         return false;
+      auto cfg=ctx.data.as<JsonObjectConst>();
       bool changed = false;
       auto hst = ((float)regs[0]) / 10;
       auto het = ((float)regs[1]) / 10;
@@ -59,7 +59,7 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *Ztsyux::getConfig(RequestContext &ctx) {
+    JsonDocument *Ztsyux::getConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return nullptr;
@@ -68,7 +68,7 @@ namespace esp32m {
       if (res != ESP_OK)
         return nullptr;
 
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(4));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
       json::to(root, "hst", ((float)regs[0]) / 10);
       json::to(root, "het", ((float)regs[1]) / 10);

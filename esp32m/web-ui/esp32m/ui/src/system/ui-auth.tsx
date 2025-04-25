@@ -21,14 +21,14 @@ type TUiConfig = {
 const UiConfigName = 'ui';
 
 export const UiAuthConfigButton = () => {
-  const [config] = useModuleConfig<TUiConfig>(UiConfigName);
+  const { config } = useModuleConfig<TUiConfig>(UiConfigName);
   const { t } = useTranslation();
   const api = useBackendApi();
   const validationSchema = Yup.object().shape({
     username: Yup.string().required(t('user name must not be empty')),
     password: Yup.string().required(t('password must not be empty')),
   });
-    const [hook, open] = useDialogForm({
+  const [hook, open] = useDialogForm({
     initialValues: config?.auth || {},
     onSubmit: async (values) => {
       const { username, password } = values || {};
@@ -42,14 +42,14 @@ export const UiAuthConfigButton = () => {
     <>
       <Button onClick={() => open()}>{t('Configure UI authentication')}</Button>
       <DialogForm title="Configure UI authentication" hook={hook}>
-        <Grid item xs>
+        <Grid size={{ xs: 'grow' }}>
           <FieldSwitch name="enabled" label="Enable authentication" />
         </Grid>
         <Grid container spacing={3}>
-          <Grid item xs>
+          <Grid size={{ xs: 'grow' }}>
             <FieldText name="username" label="User name" fullWidth />
           </Grid>
-          <Grid item xs>
+          <Grid size={{ xs: 'grow' }}>
             <FieldText name="password" label="Password" fullWidth />
           </Grid>
         </Grid>

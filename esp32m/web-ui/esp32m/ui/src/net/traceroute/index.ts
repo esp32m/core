@@ -1,25 +1,28 @@
 import { Content } from './Content';
 import { INettoolsPlugin, Nettools } from '..';
-import { ILocalState, Name, StartAction } from './types';
-import { AnyAction } from 'redux';
+import { TLocalState, Name, StartAction } from './types';
+import { actions } from '../../backend';
 import { TReduxPlugin } from '@ts-libs/redux';
+import { createReducer } from '@reduxjs/toolkit';
 
-const reducer = (
-  state: ILocalState = {},
-  { type, payload = {} }: AnyAction
-) => {
-  if (type == StartAction) {
-    return {};
-  } else if (payload.source == Name)
-    if (type == 'backend/response' && payload.data)
-      switch (payload.name) {
-        case 'start': {
-          const { results = [] } = state;
-          return { results: [...results, payload.data] };
+
+const reducer = createReducer({} as TLocalState, (builder) => {
+  builder
+    .addCase(StartAction, (state, action) => {
+      state = {};
+    })
+    .addCase(actions.requestResolved, (state, action) => {
+      const response=action.payload[1];
+      if (response.source == Name && response.data)
+        switch (response.name) {
+          case 'start': {
+            const results = state.results || (state.results = []);
+            results.push(response.data);
+            break;
+          }
         }
-      }
-  return state;
-};
+    })
+});
 
 export const Traceroute: INettoolsPlugin & TReduxPlugin = {
   name: Name,

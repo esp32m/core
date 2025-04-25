@@ -21,10 +21,9 @@ namespace esp32m {
       bool pollSensors() override;
       bool initSensors() override;
       bool handleRequest(Request &req) override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
 
      private:
       const char *_name;

@@ -155,7 +155,7 @@ namespace esp32m {
       Dsts(const Dsts &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool pollSensors() override;
       bool initSensors() override;
 

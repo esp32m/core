@@ -73,7 +73,7 @@ export function CardBox({
         <StyledCardHeader
           avatar={avatar || <Avatar>{title[0]}</Avatar>}
           title={t(title)}
-          titleTypographyProps={{ variant: 'h5' }}
+          slotProps={{title: { variant: 'h5' }}}
           action={action}
         />
         {pc}
@@ -81,7 +81,7 @@ export function CardBox({
     );
   }
   return (
-    <StyledGridItem item>
+    <StyledGridItem>
       <StyledCard {...cardProps}>
         {h}
         <CardContent>{children}</CardContent>

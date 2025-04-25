@@ -1,3 +1,5 @@
+import { TJsonObject } from "@ts-libs/tools";
+
 export const OtaCheckName = 'ota-check';
 
 export enum OtaStateFlags {
@@ -10,7 +12,7 @@ export enum OtaStateFlags {
 export type TOtaCheckState = {
   running?: boolean;
   newver?: string;
-  error?: unknown;
+  error?: TJsonObject;
   lastcheck?: number;
 };
 

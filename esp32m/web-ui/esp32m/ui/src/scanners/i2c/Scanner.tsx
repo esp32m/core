@@ -10,7 +10,7 @@ import { validators } from '../../validation';
 import { FieldText, MuiForm } from '@ts-libs/ui-forms';
 import { CardBox } from '@ts-libs/ui-app';
 
-interface IOptions {
+type TOptions = {
   scl?: number;
   sda?: number;
   freq?: number;
@@ -71,7 +71,7 @@ const ScanResults = ({
   state,
   scan,
 }: {
-  state: IOptions;
+  state: TOptions;
   scan: IScanResponse;
 }) => {
   const { from = 0, to = 127 } = state;
@@ -80,7 +80,7 @@ const ScanResults = ({
   for (let i = from; i <= to; i++)
     if (ids[i >> 3] & (1 << (i & 7)))
       buttons.push(
-        <Grid item xs={2} key={i}>
+        <Grid size={{ xs: 2 }} key={i}>
           <IdButton variant="contained" color="secondary">
             0x{i.toString(16)}
           </IdButton>
@@ -116,7 +116,7 @@ export const Scanner = () => {
     const resp = await api.request(Name, 'scan', values);
     setScan(resp.data);
   };
-  const state = useModuleState<IOptions>(Name, { once: true }) || {};
+  const state = useModuleState<TOptions>(Name, { once: true }) || {};
   const ncp = {
     type: 'number',
     placeholder: 'auto',
@@ -134,24 +134,14 @@ export const Scanner = () => {
         {(controller) => (
           <CardBox title="I2C bus scanner" progress={controller.isSubmitting}>
             <Grid container spacing={3}>
-              <Grid item xs>
-                <FieldText name="sda" label="SDA pin" {...ncp} />
-              </Grid>
-              <Grid item xs>
-                <FieldText name="scl" label="SCL pin" {...ncp} />
-              </Grid>
-              <Grid item xs>
-                <FieldText name="freq" label="Frequency, Hz" {...ncp} />
-              </Grid>
+              <FieldText name="sda" label="SDA pin" {...ncp} grid />
+              <FieldText name="scl" label="SCL pin" {...ncp} grid />
+              <FieldText name="freq" label="Frequency, Hz" {...ncp} grid />
             </Grid>
             <Grid container spacing={3}>
-              <Grid item xs>
-                <FieldText name="from" label="From ID" {...ncp} />
-              </Grid>
-              <Grid item xs>
-                <FieldText name="to" label="To ID" {...ncp} />
-              </Grid>
-              <Grid item xs>
+              <FieldText name="from" label="From ID" {...ncp} grid />
+              <FieldText name="to" label="To ID" {...ncp} grid />
+              <Grid size="grow">
                 <ScanButton />
               </Grid>
             </Grid>

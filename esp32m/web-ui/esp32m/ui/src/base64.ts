@@ -51,10 +51,9 @@ function decode(input: string, arrayBuffer: ArrayBuffer) {
   return uarray;
 }
 
-export function toBase64(arrayBuffer: ArrayBuffer): string {
+export function toBase64(bytes: Uint8Array): string {
   let base64 = '';
 
-  const bytes = new Uint8Array(arrayBuffer);
   const byteLength = bytes.byteLength;
   const byteRemainder = byteLength % 3;
   const mainLength = byteLength - byteRemainder;

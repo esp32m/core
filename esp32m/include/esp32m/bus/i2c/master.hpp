@@ -26,9 +26,12 @@ namespace esp32m {
           _handle = nullptr;
         }
       }
-      esp_err_t probe(uint16_t address, int xfer_timeout_ms = 100) {
+
+      esp_err_t probe(uint16_t address, int xfer_timeout_ms = 100) const {
         return i2c_master_probe(_handle, address, xfer_timeout_ms);
       }
+
+      esp_err_t find(uint16_t address, MasterDev** dev = nullptr);
 
       static MasterBus* getDefault() {
         std::lock_guard lock(_busesMutex);
@@ -75,16 +78,29 @@ namespace esp32m {
 
     class MasterDev : public log::Loggable {
      public:
-      ~MasterDev() {
+      virtual ~MasterDev() {
         if (_handle) {
           std::lock_guard lock(_bus->_devicesMutex);
           _bus->_devices.erase(_handle);
-          ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_bus_rm_device(_handle));
+//          logw("removing I2C device %x", _config.device_address);
+          int attempts = 5;
+          esp_err_t res;
+          while (attempts-- > 0) {
+            i2c_master_bus_wait_all_done(_bus->_handle, _timeout);
+            res = i2c_master_bus_rm_device(_handle);
+            if (res == ESP_OK)
+              break;
+            delay(10);
+          }
+          ESP_ERROR_CHECK_WITHOUT_ABORT(res);
           _handle = nullptr;
         }
       }
       const char* name() const override {
         return _name.c_str();
+      }
+      uint16_t address() const {
+        return _config.device_address;
       }
       int getTimeout() const {
         return _timeout;
@@ -98,34 +114,41 @@ namespace esp32m {
       void setEndianness(Endian endianness) {
         _endianness = endianness;
       }
+      bool isResponsive() const {
+        return _commFailCount < 5 ||
+               (millis() - _lastSuccessfulComm < _timeout * 100);
+      }
       esp_err_t read(const void* out_data, size_t out_size, void* in_data,
                      size_t in_size)
 
       {
+        esp_err_t res;
         if (out_data && out_size)
-          return i2c_master_transmit_receive(_handle, (const uint8_t*)out_data,
-                                             out_size, (uint8_t*)in_data,
-                                             in_size, _timeout);
-        return i2c_master_receive(_handle, (uint8_t*)in_data, in_size,
-                                  _timeout);
+          res = i2c_master_transmit_receive(_handle, (const uint8_t*)out_data,
+                                            out_size, (uint8_t*)in_data,
+                                            in_size, _timeout);
+        else
+          res =
+              i2c_master_receive(_handle, (uint8_t*)in_data, in_size, _timeout);
+        return checkComm(res);
       }
       esp_err_t write(const void* out_reg, size_t out_reg_size,
                       const void* out_data, size_t out_size) {
+        esp_err_t res = ESP_ERR_INVALID_ARG;
         if (out_reg && out_reg_size && out_data && out_size) {
           i2c_master_transmit_multi_buffer_info_t buf[2];
           buf[0].write_buffer = (uint8_t*)out_reg;
           buf[0].buffer_size = out_reg_size;
           buf[1].write_buffer = (uint8_t*)out_data;
           buf[1].buffer_size = out_size;
-          return i2c_master_multi_buffer_transmit(_handle, buf, 2, _timeout);
-        }
-        if (out_reg && out_reg_size)
-          return i2c_master_transmit(_handle, (const uint8_t*)out_reg,
-                                     out_reg_size, _timeout);
-        if (out_data && out_size)
-          return i2c_master_transmit(_handle, (const uint8_t*)out_data,
-                                     out_size, _timeout);
-        return ESP_ERR_INVALID_ARG;
+          res = i2c_master_multi_buffer_transmit(_handle, buf, 2, _timeout);
+        } else if (out_reg && out_reg_size)
+          res = i2c_master_transmit(_handle, (const uint8_t*)out_reg,
+                                    out_reg_size, _timeout);
+        else if (out_data && out_size)
+          res = i2c_master_transmit(_handle, (const uint8_t*)out_data, out_size,
+                                    _timeout);
+        return checkComm(res);
       }
       inline esp_err_t read(uint8_t reg, void* in_data, size_t in_size) {
         return read(&reg, 1, in_data, in_size);
@@ -165,7 +188,7 @@ namespace esp32m {
         *dev = new MasterDev(bus, config, handle);
         return ESP_OK;
       }
-      static MasterDev* create(uint16_t addr) {
+      static MasterDev* create(uint16_t addr, MasterBus* bus = nullptr) {
         i2c_device_config_t config = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
                                       .device_address = addr,
                                       .scl_speed_hz = 100000,
@@ -174,11 +197,19 @@ namespace esp32m {
                                           .disable_ack_check = 0,
                                       }};
         MasterDev* dev = nullptr;
-        New(config, MasterBus::getDefault(), &dev);
+        New(config, bus, &dev);
         return dev;
       }
 
      private:
+      MasterBus* _bus;
+      std::string _name;
+      int _timeout = 30;
+      Endian _endianness = Endian::Big;
+      const i2c_device_config_t _config;
+      i2c_master_dev_handle_t _handle;
+      unsigned long _lastCommAttempt = 0, _lastSuccessfulComm = 0;
+      int _commFailCount = 0;
       MasterDev(MasterBus* bus, const i2c_device_config_t& config,
                 i2c_master_dev_handle_t handle)
           : _bus(bus), _config(config), _handle(handle) {
@@ -187,12 +218,17 @@ namespace esp32m {
         _name = string_printf("I2C%d[0x%02" PRIx8 "]", _bus->_config.i2c_port,
                               _config.device_address);
       };
-      MasterBus* _bus;
-      std::string _name;
-      int _timeout = 30;
-      Endian _endianness = Endian::Big;
-      const i2c_device_config_t _config;
-      i2c_master_dev_handle_t _handle;
+
+      esp_err_t checkComm(esp_err_t res) {
+        auto now = millis();
+        _lastCommAttempt = now;
+        if (res == ESP_OK) {
+          _lastSuccessfulComm = now;
+          _commFailCount = 0;
+        } else
+          _commFailCount++;
+        return res;
+      }
     };
 
   }  // namespace i2c

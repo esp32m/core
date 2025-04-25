@@ -67,11 +67,11 @@ namespace esp32m {
       return (int)(difftime(rawtime, gmt) / 60);
     }
 
-    DynamicJsonDocument *Sntp::getState(const JsonVariantConst args) {
+    JsonDocument *Sntp::getState(RequestContext &ctx) {
       char buf[32];
       time2str(buf, sizeof(buf));
-      size_t size = JSON_OBJECT_SIZE(3) + JSON_STRING_SIZE(strlen(buf));
-      auto doc = new DynamicJsonDocument(size);
+      // size_t size = JSON_OBJECT_SIZE(3) + JSON_STRING_SIZE(strlen(buf));
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "status", (int)sntp_get_sync_status());
       if (_syncedAt)
@@ -80,12 +80,12 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Sntp::getConfig(RequestContext &ctx) {
-      size_t size =
-          JSON_OBJECT_SIZE(1 + 5 /*enabled, host, tzr, tze, interval*/) +
+    JsonDocument *Sntp::getConfig(RequestContext &ctx) {
+      /*size_t size =
+          JSON_OBJECT_SIZE(1 + 5 ) + // enabled, host, tzr, tze, interval
           JSON_STRING_SIZE(_host.size()) + JSON_STRING_SIZE(_tzr.size()) +
-          JSON_STRING_SIZE(_tze.size());
-      auto doc = new DynamicJsonDocument(size);
+          JSON_STRING_SIZE(_tze.size());*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "enabled", _enabled);
       if (_host.size())
@@ -98,9 +98,8 @@ namespace esp32m {
       return doc;
     }
 
-    bool Sntp::setConfig(const JsonVariantConst data,
-                         DynamicJsonDocument **result) {
-      JsonObjectConst obj = data.as<JsonObjectConst>();
+    bool Sntp::setConfig(RequestContext &ctx) {
+      JsonObjectConst obj = ctx.data.as<JsonObjectConst>();
       bool changed = false;
       json::from(obj["enabled"], _enabled, &changed);
       json::from(obj["host"], _host, &changed);

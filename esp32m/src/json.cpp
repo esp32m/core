@@ -8,26 +8,26 @@ namespace esp32m {
   namespace json {
 
     JsonDocument &empty() {
-      static StaticJsonDocument<0> doc;
+      static JsonDocument doc;
       return doc;
     }
 
     JsonArrayConst emptyArray() {
-      static StaticJsonDocument<0> doc;
+      static JsonDocument doc;
       if (doc.isNull())
         doc.to<JsonArray>();
       return doc.as<JsonArrayConst>();
     }
 
     JsonObjectConst emptyObject() {
-      static StaticJsonDocument<0> doc;
+      static JsonDocument doc;
       if (doc.isNull())
         doc.to<JsonObject>();
       return doc.as<JsonObjectConst>();
     }
 
-    DynamicJsonDocument *parse(const char *data, int len,
-                               DeserializationError *error) {
+    JsonDocument *parse(const char *data, int len,
+                        DeserializationError *error) {
       if (data && len < 0)
         len = strlen(data);
       if (!data || !len) {
@@ -35,43 +35,43 @@ namespace esp32m {
           *error = DeserializationError::EmptyInput;
         return nullptr;
       }
-      size_t ds = len * 3;
-      for (;;) {
-        DynamicJsonDocument *doc = nullptr;
-        if (ds + 4096 < heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL))
-          doc = new (std::nothrow) DynamicJsonDocument(ds);
-        if (!doc)
-          return nullptr;
-        auto r = deserializeJson(*doc, data, len);
-        if (r == DeserializationError::Ok) {
-          doc->shrinkToFit();
-          return doc;
-        }
-        delete doc;
-        if (error)
-          *error = r;
-        else if (r != DeserializationError::NoMemory) {
-          // we can't safely pass data as a parameter here, because it may not
-          // be null-terminated
-          char *str = strndup(data, len);
-          logw("JSON error %s when parsing %s", r.c_str(), str);
-          free(str);
-          return nullptr;
-        }
-        ds *= 4;
-        ds /= 3;
+      /*size_t ds = len * 3;
+      for (;;) {*/
+      /*JsonDocument *doc = nullptr;
+      if (ds + 4096 < heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL))
+        doc = new (std::nothrow) JsonDocument(ds);
+      if (!doc)
+        return nullptr;*/
+      auto doc = new JsonDocument();
+      auto r = deserializeJson(*doc, data, len);
+      if (r == DeserializationError::Ok) {
+        doc->shrinkToFit();
+        return doc;
       }
+      delete doc;
+      if (error)
+        *error = r;
+      else /*if (r != DeserializationError::NoMemory)*/ {
+        // we can't safely pass data as a parameter here, because it may not
+        // be null-terminated
+        char *str = strndup(data, len);
+        logw("JSON error %s when parsing %s", r.c_str(), str);
+        free(str);
+      }
+      /*ds *= 4;
+      ds /= 3;
+    }*/
+      return nullptr;
     }
-    DynamicJsonDocument *parse(const char *data,
-                                      DeserializationError *error) {
+    JsonDocument *parse(const char *data, DeserializationError *error) {
       return parse(data, -1, error);
     }
 
-    DynamicJsonDocument *parse(const char *data) {
+    JsonDocument *parse(const char *data) {
       return parse(data, -1, nullptr);
     }
 
-    char *allocSerialize(const JsonVariantConst v, size_t *length) {
+    /*char *allocSerialize(const JsonVariantConst v, size_t *length) {
       // measureJson() excludes null terminator
       size_t dl = measureJson(v) + 1;
       char *ds = (char *)malloc(dl);
@@ -97,20 +97,28 @@ namespace esp32m {
         free(buf);
       }
       return result;
-    }
+    }*/
 
     bool checkEqual(const JsonVariantConst a, const JsonVariantConst b) {
-      auto sa = allocSerialize(a);
+      std::string sa, sb;
+      serializeJson(a, sa);
+      serializeJson(b, sb);
+      bool result = sa == sb;
+      if (!result)
+        logw("expected JSON variants to be equal: %s != %s", sa, sb);
+
+      /*auto sa = allocSerialize(a);
       auto sb = allocSerialize(b);
       bool result = strcmp(sa, sb) == 0;
       if (!result)
         logw("expected JSON variants to be equal: %s != %s", sa, sb);
       free(sa);
       free(sb);
+      */
       return result;
     }
 
-    size_t measure(const JsonVariantConst v) {
+    /*size_t measure(const JsonVariantConst v) {
       size_t result = 0;
       if (v.is<JsonArray>() || v.is<JsonArrayConst>()) {
         JsonArrayConst a = v.as<JsonArrayConst>();
@@ -127,17 +135,17 @@ namespace esp32m {
         result += JSON_STRING_SIZE(strlen(c)) + 1;
       }
       return result;
-    }
+    }*/
 
-    void checkSetResult(esp_err_t err, DynamicJsonDocument **result) {
+    /*void checkSetResult(esp_err_t err, JsonDocument **result) {
       if (err == ESP_OK)
         return;
-      DynamicJsonDocument *doc = *result;
+      JsonDocument *doc = *result;
       if (!doc)
-        doc = *result = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+        doc = *result = new JsonDocument();
       JsonObject root = doc->to<JsonObject>();
       root["error"] = err;
-    }
+    }*/
 
     void to(JsonObject target, const char *key, const float value) {
       if (isnan(value))
@@ -191,22 +199,23 @@ namespace esp32m {
       return true;
     }
 
-    bool check(log::Loggable *l, DynamicJsonDocument *doc, const char *msg) {
-      if (!doc || !l)
+    bool check(log::Loggable *l, JsonDocument *doc, const char *msg) {
+      if (!doc)
         return false;
       if (!doc->overflowed())
         return true;
-      l->logger().logf(log::Level::Warning,
-                       "json document overflow: %s, capacity=%d, usage=%d", msg,
-                       doc->capacity(), doc->memoryUsage());
+      auto &logger = l ? l->logger() : log::system();
+      logger.logf(log::Level::Warning, "json document overflow: %s", msg);
       return false;
     }
 
     void dump(log::Loggable *l, JsonVariantConst v, const char *msg) {
-      char *data = allocSerialize(v);
-      l->logger().logf(log::Level::Debug, "%s: %s", msg, data);
-      if (data)
-        free(data);
+      // char *data = allocSerialize(v);
+      std::string data;
+      serializeJson(v, data);
+      l->logger().logf(log::Level::Debug, "%s: %s", msg, data.c_str());
+      /*if (data)
+        free(data);*/
     }
 
   }  // namespace json

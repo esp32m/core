@@ -20,8 +20,8 @@ namespace esp32m {
       return Littlefs::instance();
     }
 
-    DynamicJsonDocument *Littlefs::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(3));
+    JsonDocument *Littlefs::getState(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
       auto root = doc->to<JsonObject>();
       size_t total, used;
       root["label"] = _label;

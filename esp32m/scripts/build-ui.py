@@ -98,6 +98,10 @@ class PackageJson:
             "webpack-cli":"*",
             "webpack-dev-server":"*",
         }
+    def removeTypeModule(self):
+        self.ensureLoaded()
+        if self.json.get("type") == "module":
+            del self.json["type"]
     def dump(self):
         if not self.json:
             raise Exception("nothing to dump")
@@ -125,6 +129,7 @@ class Project:
             if not package.packageJson.exists() or buildMode==BuildMode.Full:
                 copyPackage(webUiDir, buildWebUiDir)
         package.packageJson.removeResolutions()
+        package.packageJson.removeTypeModule()
         package.packageJson.dump()
         self.package=package
         self.buildMode=buildMode

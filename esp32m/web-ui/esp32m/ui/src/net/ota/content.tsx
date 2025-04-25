@@ -48,11 +48,11 @@ export const FirmwareUpdateButton = ({ url }: { url?: string }) => {
       <Button onClick={() => open()}>{t('Update firmware from URL')}</Button>
       <DialogForm title="Update firmware from URL" hook={hook}>
         <Grid container spacing={3}>
-          <Grid item xs>
+          <Grid size={{ xs: 'grow' }}>
             <FieldText name="url" label="Firmware URL" fullWidth />
           </Grid>
         </Grid>
-        <Grid item xs>
+        <Grid size={{ xs: 'grow' }}>
           <FieldSwitch name="save" label="Remember this URL for future use" />
         </Grid>
         <Alert severity="warning">
@@ -74,7 +74,7 @@ export const FirmwareUpdateButton = ({ url }: { url?: string }) => {
 export const OtaCheck = () => {
   const api = useBackendApi();
   const state = useModuleState<TOtaCheckState>(OtaCheckName);
-  const [config, refreshConfig] =
+  const { config, refreshConfig } =
     useModuleConfig<TOtaCheckConfig>(OtaCheckName);
   const snackApi = useSnackApi();
   const [waitingResponse, setWaitingResponse] = useState<boolean>(false);
@@ -101,46 +101,46 @@ export const OtaCheck = () => {
   const alertProps: AlertProps | undefined = state?.lastcheck
     ? state.running
       ? {
-          severity: 'info',
-          children: <>{t('Checking for updates now...')}</>,
-        }
+        severity: 'info',
+        children: <>{t('Checking for updates now...')}</>,
+      }
       : hasNewVer
         ? {
-            severity: 'info',
-            action: (
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => open('update')}
-              >
-                {t('update now')}
-              </Button>
-            ),
-            children: (
-              <>{`${t(
-                'Firmware update is available, version'
-              )} ${state?.newver}`}</>
-            ),
-          }
+          severity: 'info',
+          action: (
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => open('update')}
+            >
+              {t('update now')}
+            </Button>
+          ),
+          children: (
+            <>{`${t(
+              'Firmware update is available, version'
+            )} ${state?.newver}`}</>
+          ),
+        }
         : state?.error
           ? {
-              severity: 'error',
-              children: (
-                <>{errorToString(deserializeEsp32mError(state.error))}</>
-              ),
-            }
+            severity: 'error',
+            children: (
+              <>{errorToString(deserializeEsp32mError(state.error))}</>
+            ),
+          }
           : {
-              severity: 'success',
-              children: <>{t('Firmware is up to date')}</>,
-            }
+            severity: 'success',
+            children: <>{t('Firmware is up to date')}</>,
+          }
     : undefined;
   return (
     <Expander title="Firmware updates" defaultExpanded>
       <Grid container spacing={1}>
-        <Grid item xs={12}>
+        <Grid size={{xs:12}}>
           {alertProps && <Alert {...alertProps} />}
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{xs:12}}>
           <FormControlLabel
             control={
               <Switch
@@ -164,7 +164,7 @@ export const OtaCheck = () => {
             label={t('Check automatically')}
           />
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={{xs:12}}>
           <FormControlLabel
             control={
               <Switch
@@ -188,7 +188,7 @@ export const OtaCheck = () => {
             label={t('Install automatically')}
           />
         </Grid>
-        <Grid item xs={12} container justifyContent={'flex-end'}>
+        <Grid size={{xs:12}} container justifyContent={'flex-end'}>
           <Button onClick={() => openConfig()} disabled={waitingResponse}>
             {t('configure')}
           </Button>
@@ -204,9 +204,8 @@ export const OtaCheck = () => {
                   });
                 else
                   snackApi.add({
-                    message: `${t('Firmware update is available, version')} ${
-                      response.data
-                    }`,
+                    message: `${t('Firmware update is available, version')} ${response.data
+                      }`,
                     severity: 'info',
                   });
                 await refreshConfig();
@@ -224,7 +223,7 @@ export const OtaCheck = () => {
         <MessageBox {...messageBoxProps} />
         <DialogForm title="Configure firmware updates" hook={configHook}>
           <Grid container spacing={3}>
-            <Grid item xs>
+            <Grid size={{ xs: 'grow' }}>
               <FieldText
                 name="checkinterval"
                 label="Check interval, minutes"

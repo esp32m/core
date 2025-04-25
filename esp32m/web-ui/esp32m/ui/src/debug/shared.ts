@@ -1,6 +1,6 @@
 import { BugReport } from '@mui/icons-material';
 
-import { content } from './Content';
+import { content } from './content';
 import { TContentPlugin } from '@ts-libs/ui-base';
 
 export const Debug: TContentPlugin = {

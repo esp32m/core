@@ -5,7 +5,7 @@ namespace esp32m {
   namespace integrations {
     namespace ha {
 
-      DynamicJsonDocument *describeSensor(Sensor *sensor);
+      JsonDocument *describeSensor(Sensor *sensor);
 
       class DescribeRequest : public Request {
        public:
@@ -19,10 +19,10 @@ namespace esp32m {
             return;
           std::string id = data["id"] | source;
           auto doc =
-              new DynamicJsonDocument(data.memoryUsage() + JSON_OBJECT_SIZE(1));
+              new JsonDocument(); /* data.memoryUsage() + JSON_OBJECT_SIZE(1) */
           doc->set(data);
           doc->as<JsonObject>()["name"] = source;
-          responses[id] = std::unique_ptr<DynamicJsonDocument>(doc);
+          responses[id] = std::unique_ptr<JsonDocument>(doc);
         }
 
         static void autoRespond(Request &req, Sensor &sensor) {
@@ -33,7 +33,7 @@ namespace esp32m {
 
         constexpr static const char *Name = "ha-describe";
 
-        std::map<std::string, std::unique_ptr<DynamicJsonDocument> > responses;
+        std::map<std::string, std::unique_ptr<JsonDocument> > responses;
       };
 
       class StateRequest : public Request {
@@ -45,26 +45,26 @@ namespace esp32m {
                          bool isError) override {
           if (data.isNull() || !data.size() || isError)
             return;
-          auto doc = new DynamicJsonDocument(data.memoryUsage());
+          auto doc = new JsonDocument(); /* data.memoryUsage() */
           doc->set(data);
-          response = std::unique_ptr<DynamicJsonDocument>(doc);
+          response = std::unique_ptr<JsonDocument>(doc);
         }
         static void autoRespond(Request &req, Sensor &sensor) {
           auto id = req.data()["id"].as<const char *>();
           if (!id || sensor.uid() != id)
             return;
           auto value = sensor.get();
-          DynamicJsonDocument *doc = new DynamicJsonDocument(
-              JSON_OBJECT_SIZE(2) + value.memoryUsage());
+          JsonDocument *doc = new JsonDocument(
+              /*JSON_OBJECT_SIZE(2) + value.memoryUsage()*/);
           auto root = doc->to<JsonObject>();
-          auto state = root.createNestedObject("state");
+          auto state = root["state"].to<JsonObject>();
           state[sensor.id()] = value;
           req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
           delete doc;
         }
         constexpr static const char *Name = "ha-state";
 
-        std::unique_ptr<DynamicJsonDocument> response;
+        std::unique_ptr<JsonDocument> response;
       };
 
       class CommandRequest : public Request {

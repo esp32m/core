@@ -9,7 +9,7 @@ namespace esp32m {
   }
 
   namespace json {
-    size_t size(const Url& url) {
+    /*size_t size(const Url& url) {
       size_t result = 0;
       auto s = url.scheme.size();
       if (s)
@@ -36,7 +36,7 @@ namespace esp32m {
       if (s)
         result += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(s);
       return result;
-    }
+    }*/
 
     void to(JsonObject target, const Url& url) {
       if (url.scheme.size())

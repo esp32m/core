@@ -85,7 +85,7 @@ namespace esp32m {
 
       void Sta::getInfo(JsonObject info) {
         if (isConnected()) {
-          auto infoSta = info.createNestedObject("sta");
+          auto infoSta = info["sta"].to<JsonObject>();
           wifi_ap_record_t info;
           if (!esp_wifi_sta_get_ap_info(&info)) {
             // char sbssid[18] = {0};
@@ -212,7 +212,7 @@ namespace esp32m {
       }
 
       void Ap::getInfo(JsonObject info) {
-        auto infoAp = info.createNestedObject("ap");
+        auto infoAp = info["ap"].to<JsonObject>();
         const char *hostname = NULL;
         if (!esp_netif_get_hostname(handle(), &hostname))
           infoAp["ssid"] = (char *)hostname;
@@ -427,11 +427,11 @@ namespace esp32m {
       return !memcmp(bssid(), other->bssid(), 6);
     }
 
-    size_t ApInfo::jsonSize(bool maskPassword) {
+    /*size_t ApInfo::jsonSize(bool maskPassword) {
       return JSON_ARRAY_SIZE(5 + (_bssidOfs ? 1 : 0)) + strlen(ssid()) + 1 +
              (maskPassword ? 0 : (strlen(password()) + 1)) +
              (_bssidOfs ? 19 : 0);
-    }
+    }*/
 
     bool ApInfo::toJson(JsonArray &target, bool maskPassword) {
       auto result = target.add(_id) && target.add((char *)ssid()) &&
@@ -720,6 +720,12 @@ namespace esp32m {
                          nullptr);  // this event is never sent by esp-idf, so
                                     // we do it in case someone wants it
       */
+      if (_delayedConfig) {
+        ConfigApply req(json::emptyObject());
+        RequestContext rc(req, _delayedConfig->as<JsonVariantConst>());
+        setConfig(rc);
+        _delayedConfig.reset();
+      }
 
       _sta.init(this, esp_netif_get_ifkey(ifsta));
 
@@ -815,8 +821,7 @@ namespace esp32m {
             break;
           }
           case WIFI_EVENT_STA_BSS_RSSI_LOW: {
-            int e = esp_rrm_send_neighbor_rep_request(neighbor_report_recv_cb,
-                                                      this);
+            int e = esp_rrm_send_neighbor_report_request();
             if (e < 0) {
               /* failed to send neighbor report request */
               logW("failed to send neighbor report request: %i", e);
@@ -929,15 +934,16 @@ namespace esp32m {
         xTaskNotifyGive(_task);
     }
 
-    DynamicJsonDocument *Wifi::getState(const JsonVariantConst filter) {
-      size_t size =
-          JSON_OBJECT_SIZE(4 + 3)  // mode, flags, ch, ch2  + nested: sta, ap
-          + JSON_OBJECT_SIZE(8) + 33 + net::MacMaxChars * 2 + 16 + 16 +
-          16  // sta: ssid(33), bssid(18), mac(18), ip(16),
-              // gw(16), mask(16), rssi
-          + JSON_OBJECT_SIZE(6) + net::MacMaxChars + 16 + 16 +
-          16;  // ap: mac(18), ip(16), gw(16), mask(16), cli
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Wifi::getState(RequestContext &ctx) {
+      /*      size_t size =
+                JSON_OBJECT_SIZE(4 + 3)  // mode, flags, ch, ch2  + nested: sta,
+         ap
+                + JSON_OBJECT_SIZE(8) + 33 + net::MacMaxChars * 2 + 16 + 16 +
+                16  // sta: ssid(33), bssid(18), mac(18), ip(16),
+                    // gw(16), mask(16), rssi
+                + JSON_OBJECT_SIZE(6) + net::MacMaxChars + 16 + 16 +
+                16;  // ap: mac(18), ip(16), gw(16), mask(16), cli*/
+      auto doc = new JsonDocument(); /* size */
       auto info = doc->to<JsonObject>();
       wifi_mode_t wfm = WIFI_MODE_NULL;
       if (esp_wifi_get_mode(&wfm) == ESP_OK) {
@@ -985,47 +991,52 @@ namespace esp32m {
 
     void setIfcfg(wifi_interface_t ifx, JsonObjectConst source) {}
 
-    DynamicJsonDocument *Wifi::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(2) +      // txp, channel
+    JsonDocument *Wifi::getConfig(RequestContext &ctx) {
+      /*size_t size = JSON_OBJECT_SIZE(2) +      // txp, channel
                     JSON_OBJECT_SIZE(1 + 3) +  // sta: proto, bw, inact
                     JSON_OBJECT_SIZE(1 + 3);   // ap:  proto, bw, inact,
-
+*/
       bool maskSensitive = !ctx.request.isInternal();
       size_t apsCount = _aps.size();
-      if (apsCount) {
-        size += JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(apsCount);
-        for (auto it = _aps.begin(); it != _aps.end(); it++)
-          size += (*it)->jsonSize(maskSensitive);
-      }
+      /*      if (apsCount) {
+              size += JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(apsCount);
+              for (auto it = _aps.begin(); it != _aps.end(); it++)
+                size += (*it)->jsonSize(maskSensitive);
+            }*/
 
-      auto doc = new DynamicJsonDocument(size);
+      auto doc = new JsonDocument(); /* size */
       auto cr = doc->to<JsonObject>();
       cr["txp"] = _txp;
       cr["channel"] = _channel;
-      auto sta = cr.createNestedObject("sta");
+      auto sta = cr["sta"].to<JsonObject>();
       getIfcfg(WIFI_IF_STA, sta);
-      auto ap = cr.createNestedObject("ap");
+      auto ap = cr["ap"].to<JsonObject>();
       getIfcfg(WIFI_IF_AP, ap);
       if (apsCount) {
-        auto aps = cr.createNestedArray("aps");
+        auto aps = cr["aps"].to<JsonArray>();
         for (auto it = _aps.begin(); it != _aps.end(); it++) {
-          JsonArray item = aps.createNestedArray();
+          JsonArray item = aps.add<JsonArray>();
           (*it)->toJson(item, maskSensitive);
         }
       }
       return doc;
     }
 
-    bool Wifi::setConfig(const JsonVariantConst data,
-                         DynamicJsonDocument **result) {
-      JsonObjectConst ca = data.as<JsonObjectConst>();
+    bool Wifi::setConfig(RequestContext &ctx) {
+      JsonObjectConst ca = ctx.data.as<JsonObjectConst>();
+      if (!isInitialized()) {
+        JsonDocument* doc = new JsonDocument();
+        doc->set(ca);
+        _delayedConfig.reset(doc);
+        return false;
+      }
+
       int8_t txp = ca["txp"];
       bool changed = false;
       esp_err_t err = ESP_OK;
       if (txp != _txp)
-        if (!isInitialized() || !txp ||
-            (err = ESP_ERROR_CHECK_WITHOUT_ABORT(
-                 esp_wifi_set_max_tx_power(txp))) == ESP_OK) {
+        if (!txp || (err = ESP_ERROR_CHECK_WITHOUT_ABORT(
+                         esp_wifi_set_max_tx_power(txp))) == ESP_OK) {
           _txp = txp;
           changed = true;
         }
@@ -1041,7 +1052,7 @@ namespace esp32m {
       JsonArrayConst aps = ca["aps"];
       if (aps)
         for (JsonArrayConst v : aps) addOrUpdateAp(v, changed);
-      json::checkSetResult(err, result);
+      ctx.errors.check(err);
       return changed;
     }
 
@@ -1327,11 +1338,11 @@ namespace esp32m {
         uint16_t sc = 0;
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_scan_get_ap_num(&sc));
 
-        DynamicJsonDocument *doc = nullptr;
+        JsonDocument *doc = nullptr;
         if (sc > 0) {
-          doc = new DynamicJsonDocument(
+          doc = new JsonDocument(/*
               JSON_ARRAY_SIZE(sc) +
-              (sc * (JSON_ARRAY_SIZE(5) + 33 + net::MacMaxChars)));
+              (sc * (JSON_ARRAY_SIZE(5) + 33 + net::MacMaxChars))*/);
           JsonArray arr = doc->to<JsonArray>();
           wifi_ap_record_t *scanResult =
               (wifi_ap_record_t *)calloc(sc, sizeof(wifi_ap_record_t));
@@ -1340,7 +1351,7 @@ namespace esp32m {
                   esp_wifi_scan_get_ap_records(&sc, scanResult)) == ESP_OK) {
             for (uint16_t i = 0; i < sc; i++) {
               wifi_ap_record_t *r = scanResult + i;
-              auto entry = arr.createNestedArray();
+              auto entry = arr.add<JsonArray>();
               if (entry) {
                 entry.add(r->ssid);
                 entry.add(r->authmode);
@@ -1381,7 +1392,6 @@ namespace esp32m {
       if (isConnected()) {
         wifi_ap_record_t info;
         if (!esp_wifi_sta_get_ap_info(&info)) {
-          // sensor("rssi", info.rssi);
           _rssi.set(info.rssi);
         }
       }
@@ -1398,5 +1408,5 @@ namespace esp32m {
         Wifi::instance().addFallback(ssid, password, bssid);
       }
     }  // namespace wifi
-  }    // namespace net
+  }  // namespace net
 }  // namespace esp32m

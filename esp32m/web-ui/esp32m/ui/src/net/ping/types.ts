@@ -1,7 +1,8 @@
-import { NetInterfaces } from '../types';
+import { createAction } from '@reduxjs/toolkit';
+import { TNetInterfaces } from '../types';
 
 export const Name = 'ping';
-export const StartAction = 'ping/start';
+export const StartAction = createAction('ping/start');
 
 export interface IConfig {
   target: string;
@@ -11,7 +12,7 @@ export interface IConfig {
   size: number;
   ttl: number;
   iface: number;
-  interfaces: NetInterfaces;
+  interfaces: TNetInterfaces;
 }
 
 export interface IResultSuccess {

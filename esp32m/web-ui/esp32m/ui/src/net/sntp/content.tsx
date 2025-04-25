@@ -8,7 +8,7 @@ import {
   TextFieldProps,
 } from '@mui/material';
 
-import { Name, IConfig, IState } from './types';
+import { Name, TConfig, TState } from './types';
 
 import { useEffect, useMemo, useState } from 'react';
 import { getIn, useField, useFormikContext } from 'formik';
@@ -75,8 +75,8 @@ const TzrSelect = () => {
     options,
   };
   return (
-    <Grid item container xs={12} spacing={1}>
-      <Grid item xs>
+    <Grid container size={{ xs: 12 }} spacing={1}>
+      <Grid size={{ xs: 'grow' }}>
         <Autocomplete
           disablePortal
           {...autocompleteProps}
@@ -85,7 +85,7 @@ const TzrSelect = () => {
           )}
         />
       </Grid>
-      <Grid item style={{ alignSelf: 'end' }}>
+      <Grid style={{ alignSelf: 'end' }}>
         <Button
           variant="outlined"
           onClick={() => {
@@ -135,7 +135,7 @@ const Config = () => {
   return (
     <Box sx={{ marginTop: 2 }}>
       <Grid container columnSpacing={2} rowSpacing={1}>
-        <Grid item xs>
+        <Grid size={{ xs: 'grow' }}>
           <FieldSwitch name="enabled" label="Enable time synchronization" />
         </Grid>
         {enabled && (
@@ -152,13 +152,13 @@ const Config = () => {
             <TzrSelect />
             <TzManual />
 
-            <Grid item xs={7}>
+            <Grid size={{ xs: 7 }}>
               <FieldText name="tze" label="Time zone setting" fullWidth />
             </Grid>
-            <Grid item xs={3}>
+            <Grid size={{ xs: 3 }}>
               <FieldText name="host" label="NTP hostname" fullWidth />
             </Grid>
-            <Grid item xs={2}>
+            <Grid size={{ xs: 2 }}>
               <FieldText name="interval" label="Interval, s" fullWidth />
             </Grid>
           </>
@@ -169,8 +169,8 @@ const Config = () => {
 };
 
 const Settings = () => {
-  const state = useModuleState<IState>(Name);
-  const [config, refresh] = useModuleConfig<IConfig>(Name);
+  const state = useModuleState<TState>(Name);
+  const { config, refreshConfig } = useModuleConfig<TConfig>(Name);
   const { elapsed } = useTimeTranslation();
   const { t } = useTranslation();
   if (!config || !state) return null;
@@ -185,7 +185,7 @@ const Settings = () => {
     <ConfigBox
       name={Name}
       initial={config}
-      onChange={refresh}
+      onChange={refreshConfig}
       title="SNTP Time Synchronization"
       validationSchema={ValidationSchema}
     >

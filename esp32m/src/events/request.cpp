@@ -67,7 +67,7 @@ namespace esp32m {
     if (error == ESP_OK)
       respond(source, json::null<JsonVariantConst>(), false);
     else {
-      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1));
+      JsonDocument doc; // JSON_OBJECT_SIZE(1)
       doc.set(error);
       respondImpl(source, doc, true);
       _handled = true;
@@ -78,7 +78,7 @@ namespace esp32m {
     if (!msg)
       respond(error);
     else {
-      DynamicJsonDocument doc(JSON_ARRAY_SIZE(2));
+      JsonDocument doc; //JSON_ARRAY_SIZE(2)
       auto root = doc.to<JsonArray>();
       root.add(error);
       root.add(msg);
@@ -88,7 +88,7 @@ namespace esp32m {
   }
 
   void Request::respondError(const char *code) {
-    DynamicJsonDocument doc(JSON_ARRAY_SIZE(1));
+    JsonDocument doc; //JSON_ARRAY_SIZE(1)
     auto root = doc.to<JsonArray>();
     root.add(code);
     respondImpl(target(), doc, true);
@@ -99,7 +99,7 @@ namespace esp32m {
     if (error == ESP_OK)
       respond();
     else {
-      DynamicJsonDocument doc(JSON_OBJECT_SIZE(1));
+      JsonDocument doc; // JSON_OBJECT_SIZE(1)
       auto root = doc.to<JsonArray>();
       root.add(error);
       respondImpl(target(), doc, true);
@@ -113,7 +113,7 @@ namespace esp32m {
   }
 
   void Request::publish() {
-    static StaticJsonDocument<JSON_ARRAY_SIZE(1)> errors;
+    static JsonDocument errors; // <JSON_ARRAY_SIZE(1)>
     if (!errors.size())
       errors.add("unhandled");
     Event::publish();

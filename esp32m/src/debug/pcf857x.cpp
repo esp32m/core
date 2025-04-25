@@ -7,8 +7,8 @@
 namespace esp32m {
   namespace debug {
 
-    DynamicJsonDocument *Pcf857x::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+    JsonDocument *Pcf857x::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       auto root = doc->to<JsonObject>();
       uint16_t port;
       ESP_ERROR_CHECK_WITHOUT_ABORT(_dev->read(port));
@@ -16,10 +16,9 @@ namespace esp32m {
       return doc;
     }
 
-    void Pcf857x::setState(const JsonVariantConst state,
-                           DynamicJsonDocument **result) {
-      esp32m::json::checkSetResult(
-          ESP_ERROR_CHECK_WITHOUT_ABORT(_dev->write(state["port"])), result);
+    void Pcf857x::setState(RequestContext &ctx) {
+      ctx.errors.check(
+          ESP_ERROR_CHECK_WITHOUT_ABORT(_dev->write(ctx.data["port"])));
     }
 
   }  // namespace debug

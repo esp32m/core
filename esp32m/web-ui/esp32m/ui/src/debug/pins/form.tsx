@@ -8,7 +8,7 @@ import { useFeature } from './hooks';
 const Buttons = () => {
   const { submitForm, resetForm, dirty, isSubmitting } = useFormikContext();
   return (
-    <Grid item xs>
+    <Grid size="grow">
       <Button
         disabled={!dirty && !isSubmitting}
         sx={{ float: 'right', clear: 'right' }}

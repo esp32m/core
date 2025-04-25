@@ -35,8 +35,8 @@ export default ({ name, title }: IProps) => {
 
   return (
     <Grid container>
-      <Title item> {title} </Title>
-      <StyledButtons item>
+      <Title> {title} </Title>
+      <StyledButtons>
         <Buttons
           state={state.state}
           onChange={(state: RelayState) => {

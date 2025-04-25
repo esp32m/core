@@ -16,7 +16,7 @@ namespace esp32m {
       static Littlefs &instance();
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool handleRequest(Request &req) override;
 
      private:

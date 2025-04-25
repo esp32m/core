@@ -13,13 +13,13 @@ export enum Status {
   MasterCH2 = 1 << 12,
 }
 
-export interface IBounds {
+export type TBounds = {
   dhw?: Array<number>;
   ch?: Array<number>;
   hcr?: Array<number>;
 }
 
-export interface IHvacState {
+export type THvacState = {
   status: number;
   ts: number;
   cfg?: number;
@@ -49,7 +49,7 @@ export interface IHvacState {
   tdhw2?: number;
   tex?: number;
   bfc?: number;
-  bounds?: IBounds;
+  bounds?: TBounds;
   tdhws?: number;
   maxts?: number;
   hcr?: number;
@@ -61,15 +61,15 @@ export interface IHvacState {
   vs?: number;
 }
 
-export interface IMasterState {
-  hvac: IHvacState;
+export type TMasterState = {
+  hvac: THvacState;
 }
 
-export interface ISlaveState {
-  hvac: IHvacState;
+export type TSlaveState = {
+  hvac: THvacState;
 }
 
-export interface IProps {
+export type TProps = {
   name: string;
   title?: string;
 }

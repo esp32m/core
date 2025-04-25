@@ -1,11 +1,11 @@
 export const Name = 'BME280';
 
-export interface IProps {
+export type TProps = {
   title?: string;
   addr?: number;
 }
 
-export interface IState {
+export type TState = {
   addr: number;
   temperature: number;
   pressure: number;

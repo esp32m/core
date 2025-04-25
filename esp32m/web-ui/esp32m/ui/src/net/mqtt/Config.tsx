@@ -18,7 +18,7 @@ const ValidationSchema = Yup.object().shape({
 const ButtonBar = styled(Grid)({ marginTop: 0 });
 
 export const Config = () => {
-  const [config, refresh] = useModuleConfig<TMqttConfig>(Name);
+  const { config, refreshConfig } = useModuleConfig<TMqttConfig>(Name);
   const api = useBackendApi();
   const { t } = useTranslation();
   const [requestInProgress, setRequestInProgress] = useState(false);
@@ -43,7 +43,7 @@ export const Config = () => {
     <ConfigBox
       name={Name}
       initial={config}
-      onChange={refresh}
+      onChange={refreshConfig}
       title="MQTT client settings"
       validationSchema={ValidationSchema}
     >
@@ -54,45 +54,33 @@ export const Config = () => {
             {controller.values.enabled && (
               <>
                 <Grid container spacing={3}>
-                  <Grid item xs>
-                    <FieldText name="uri" label="URL" fullWidth />
-                  </Grid>
-                  <Grid item xs>
-                    <FieldText name="client" label="Client name" fullWidth />
-                  </Grid>
+                  <FieldText name="uri" label="URL" fullWidth grid={{ size: { xs: 6 } }} />
+                  <FieldText name="client" label="Client name" fullWidth grid={{ size: { xs: 6 } }} />
                 </Grid>
                 <Grid container spacing={3}>
-                  <Grid item xs>
-                    <FieldText name="username" label="Username" fullWidth />
-                  </Grid>
-                  <Grid item xs>
-                    <FieldPassword name="password" label="Password" fullWidth />
-                  </Grid>
+                  <FieldText name="username" label="Username" fullWidth grid={{ size: { xs: 6 } }} />
+                  <FieldPassword name="password" label="Password" fullWidth grid={{ size: { xs: 6 } }} />
                 </Grid>
                 <Grid container spacing={3}>
-                  <Grid item xs>
-                    <FieldText
-                      name="keepalive"
-                      label="Keep alive period, s"
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid item xs>
-                    <FieldText
-                      name="timeout"
-                      label="Network timeout, s"
-                      fullWidth
-                    />
-                  </Grid>
+                  <FieldText
+                    name="keepalive"
+                    label="Keep alive period, s"
+                    fullWidth
+                    grid={{ size: { xs: 6 } }}
+                  />
+                  <FieldText
+                    name="timeout"
+                    label="Network timeout, s"
+                    fullWidth grid={{ size: { xs: 6 } }}
+                  />
                 </Grid>
                 <Grid container spacing={3}>
-                  <Grid item xs>
-                    <FieldText
-                      name="cert_url"
-                      label="SSL certificate URL"
-                      fullWidth
-                    />
-                  </Grid>
+                  <FieldText
+                    name="cert_url"
+                    label="SSL certificate URL"
+                    fullWidth
+                    grid
+                  />
                 </Grid>
               </>
             )}
@@ -100,7 +88,7 @@ export const Config = () => {
         )}
       </FormikConsumer>
       <ButtonBar container justifyContent="flex-end" spacing={2}>
-        <Grid item>
+        <Grid>
           <Button
             onClick={() => open('clearCache')}
             disabled={requestInProgress}

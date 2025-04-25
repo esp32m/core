@@ -1,7 +1,7 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { Name, IHardwareState, Models, Features, ResetReasons } from './types';
+import { Name, THardwareState, Models, Features, ResetReasons } from './types';
 import { flashMode } from './utils';
 import { NameValueList } from '../app';
 import { useTranslation } from '@ts-libs/ui-i18n';
@@ -15,7 +15,7 @@ function features(features: number) {
 
 export const HardwareSummary = () => {
   const { flash, heap, chip, spiffs, psram } =
-    useModuleState<IHardwareState>(Name) || {};
+    useModuleState<THardwareState>(Name) || {};
   const { t } = useTranslation();
   const list = [];
   if (chip) {

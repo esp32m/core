@@ -97,8 +97,8 @@ namespace esp32m {
     Mlx90614::Mlx90614(I2C *i2c)
         : mlx90614::Core(i2c) { Device::init(Flags::HasSensors); }
 
-    DynamicJsonDocument *Mlx90614::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(6));
+    JsonDocument *Mlx90614::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(6) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_i2c->addr());

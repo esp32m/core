@@ -81,13 +81,31 @@ namespace esp32m {
    private:
     EventDescribe() : Event(Type) {}
     std::map<std::string, JsonVariantConst> descriptors;
-    constexpr static const char *Type= "describe";;
+    constexpr static const char *Type = "describe";
+    friend class App;
+  };
+
+  /** This is fired from the APP task on irregular intervals around 1 sec to
+   * perform various periodic jobs */
+  class EventPeriodic : public Event {
+   public:
+    static bool is(Event &ev) {
+      return ev.is(Type);
+    }
+
+   private:
+    EventPeriodic() : Event(Type) {}
+    constexpr static const char *Type = "periodic";
     friend class App;
   };
 
   class AppObject : public virtual log::Loggable {
    public:
     AppObject(const AppObject &) = delete;
+    virtual ~AppObject() {
+      if (_subscription)
+        delete _subscription;
+    }
     virtual const char *interactiveName() const {
       return name();
     };
@@ -99,28 +117,37 @@ namespace esp32m {
     }
 
    protected:
-    static const char *KeyStateGet;
-    static const char *KeyStateSet;
+    static constexpr const char *KeyStateGet = "state-get";
+    static constexpr const char *KeyStateSet = "state-set";
+    static constexpr const char *KeyInfoGet = "info-get";
     AppObject();
     virtual bool handleRequest(Request &req);
-    virtual void handleEvent(Event &ev){};
+    virtual void handleEvent(Event &ev) {};
     virtual const JsonVariantConst descriptor() const {
       return json::emptyArray();
     };
 
-    virtual bool handleStateRequest(Request &req);
-    virtual void setState(const JsonVariantConst cfg,
-                          DynamicJsonDocument **result) {}
-    virtual DynamicJsonDocument *getState(const JsonVariantConst args) {
+    bool handleInfoRequest(Request &req);
+    virtual JsonDocument *getInfo(RequestContext &ctx) {
+      auto d = descriptor();
+      if (d.isUnbound() || d.isNull() || d.size() == 0)
+        return nullptr;
+      auto doc = new JsonDocument();
+      doc->set(d);
+      return doc;
+    }
+
+    bool handleStateRequest(Request &req);
+    virtual void setState(RequestContext &ctx) {}
+    virtual JsonDocument *getState(RequestContext &ctx) {
       return nullptr;
     }
 
-    virtual bool handleConfigRequest(Request &req);
-    virtual bool setConfig(const JsonVariantConst cfg,
-                           DynamicJsonDocument **result) {
+    bool handleConfigRequest(Request &req);
+    virtual bool setConfig(RequestContext &ctx) {
       return false;
     }
-    virtual DynamicJsonDocument *getConfig(RequestContext &ctx) {
+    virtual JsonDocument *getConfig(RequestContext &ctx) {
       return nullptr;
     }
 
@@ -129,6 +156,7 @@ namespace esp32m {
     // request, this flag, otherwise config manager will not
     // recognize config changes
     bool _configured = false;
+    Subscription *_subscription;
     friend class config::Changed;
   };
 
@@ -206,10 +234,9 @@ namespace esp32m {
     void resetHostname();
 
    protected:
-    DynamicJsonDocument *getState(const JsonVariantConst args) override;
-    bool setConfig(const JsonVariantConst cfg,
-                   DynamicJsonDocument **result) override;
-    DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+    JsonDocument *getState(RequestContext &ctx) override;
+    bool setConfig(RequestContext &ctx) override;
+    JsonDocument *getConfig(RequestContext &ctx) override;
     void handleEvent(Event &ev) override;
     bool handleRequest(Request &req) override;
 

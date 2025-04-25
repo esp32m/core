@@ -26,10 +26,10 @@ namespace esp32m {
         auto &mqtt = Mqtt::instance();
         if (mqtt.isReady()) {
           for (auto sensor : sensors) {
-            size_t docsize = JSON_OBJECT_SIZE(1) + sensor->get().memoryUsage();
-            if (sensor->precision >= 0)
-              docsize += JSON_STRING_SIZE(16);
-            auto doc = new DynamicJsonDocument(docsize);
+            /*size_t docsize = JSON_OBJECT_SIZE(1) +
+            sensor->get().memoryUsage(); if (sensor->precision >= 0) docsize +=
+            JSON_STRING_SIZE(16);*/
+            auto doc = new JsonDocument(); /* docsize */
             auto root = doc->to<JsonObject>();
             sensor->to(root);
             publish(sensor->device()->name(), root);
@@ -44,7 +44,9 @@ namespace esp32m {
         if (mqtt.isReady()) {
           auto topic = string_printf("esp32m/%s/%s/state",
                                      App::instance().hostname(), name);
-          auto payload = json::serialize(state);
+          std::string payload;
+          serializeJson(state, payload);
+          //          auto payload = json::serialize(state);
           return mqtt.publish(topic.c_str(), payload.c_str());
         }
         return ESP_OK;
@@ -141,16 +143,18 @@ namespace esp32m {
       } else if (isConnected()) {
         Broadcast *b = nullptr;
         if (Broadcast::is(ev, &b)) {
-          char *ds = json::allocSerialize(b->data());
+          // char *ds = json::allocSerialize(b->data());
+          std::string ds;
+          serializeJson(b->data(), ds);
           size_t tl = strlen(_broadcastTopic) + strlen(b->source()) + 1 +
                       strlen(b->name()) + 1;
           char *topic = (char *)malloc(tl);
           snprintf(topic, tl, "%s%s/%s", _broadcastTopic, b->source(),
                    b->name());
-          publish(topic, ds);
+          publish(topic, ds.c_str());
           free(topic);
-          if (ds)
-            free(ds);
+          /*if (ds)
+            free(ds);*/
         }
       }
     }
@@ -232,11 +236,11 @@ namespace esp32m {
       return _client.c_str();
     }
 
-    DynamicJsonDocument *Mqtt::getState(const JsonVariantConst args) {
+    JsonDocument *Mqtt::getState(RequestContext &ctx) {
       char *client = (char *)effectiveClient();
-      size_t size = JSON_OBJECT_SIZE(5 + 1) + JSON_STRING_SIZE(_uri.size()) +
-                    JSON_STRING_SIZE(strlen(client));
-      auto doc = new DynamicJsonDocument(size);
+      /*size_t size = JSON_OBJECT_SIZE(5 + 1) + JSON_STRING_SIZE(_uri.size()) +
+                    JSON_STRING_SIZE(strlen(client));*/
+      auto doc = new JsonDocument(); /* size */
       auto cr = doc->to<JsonObject>();
       bool ready = _status == Status::Ready;
       cr["ready"] = ready;
@@ -249,15 +253,16 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Mqtt::getConfig(RequestContext &ctx) {
-      size_t size =
+    JsonDocument *Mqtt::getConfig(RequestContext &ctx) {
+      /*size_t size =
           JSON_OBJECT_SIZE(1 + 8) +  // mqtt: enabled, uri, username, password,
                                      // client, cert_url, keepalive, timeout
           JSON_STRING_SIZE(_uri.size()) + JSON_STRING_SIZE(_username.size()) +
           JSON_STRING_SIZE(_password.size()) +
-          JSON_STRING_SIZE(_client.size()) + JSON_STRING_SIZE(_certurl.size());
+          JSON_STRING_SIZE(_client.size()) +
+         JSON_STRING_SIZE(_certurl.size());*/
 
-      auto doc = new DynamicJsonDocument(size);
+      auto doc = new JsonDocument(); /* size */
       auto cr = doc->to<JsonObject>();
       cr["enabled"] = _enabled;
       json::to(cr, "uri", _uri);
@@ -301,9 +306,9 @@ namespace esp32m {
         setBirth(topic.c_str(), "online");
     }
 
-    bool Mqtt::setConfig(const JsonVariantConst ca,
-                         DynamicJsonDocument **result) {
+    bool Mqtt::setConfig(RequestContext &ctx) {
       bool changed = false;
+      auto ca = ctx.data.as<JsonObjectConst>();
       json::from(ca["enabled"], _enabled, &changed);
       json::from(ca["uri"], _uri, &changed);
       if (_uri.size() && _uri.find("://") == std::string::npos)

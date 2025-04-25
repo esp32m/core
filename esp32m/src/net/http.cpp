@@ -86,24 +86,24 @@ namespace esp32m {
           }
           return ESP_OK;
         }
-        DynamicJsonDocument* headersToJson() {
+        JsonDocument* headersToJson() {
           auto count = headers.size();
           if (count == 0)
             return nullptr;
-          size_t size = JSON_OBJECT_SIZE(count);
+          // size_t size = JSON_OBJECT_SIZE(count);
           std::map<std::string, int> keycount;
           for (auto const& kv : headers) {
-            size += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(kv.first.size()) +
-                    JSON_STRING_SIZE(kv.second.size());
+            /*size += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(kv.first.size()) +
+                    JSON_STRING_SIZE(kv.second.size());*/
             keycount[kv.first]++;
           }
-          auto doc = new DynamicJsonDocument(size);
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           for (auto const& kv : headers) {
             if (keycount[kv.first] > 0) {
               auto array = root[kv.first].as<JsonArray>();
               if (!array)
-                array = root.createNestedArray(kv.first);
+                array = root[kv.first].to<JsonArray>();
               array.add(kv.second);
             } else
               root[kv.first] = kv.second;

@@ -11,14 +11,14 @@ namespace esp32m {
       return i;
     }
 
-    DynamicJsonDocument *Tasks::getState(const JsonVariantConst args) {
+    JsonDocument *Tasks::getState(RequestContext &ctx) {
       volatile UBaseType_t uxArraySize;
       uxArraySize = uxTaskGetNumberOfTasks();
-      DynamicJsonDocument *doc = new DynamicJsonDocument(
+      JsonDocument *doc = new JsonDocument(/*
           JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(uxArraySize) +
-          uxArraySize * (JSON_ARRAY_SIZE(7) + 16));
+          uxArraySize * (JSON_ARRAY_SIZE(7) + 16)*/);
       auto root = doc->to<JsonObject>();
-      auto tasks = root.createNestedArray("tasks");
+      auto tasks = root["tasks"].to<JsonArray>();
       TaskStatus_t *pxTaskStatusArray =
           (TaskStatus_t *)pvPortMalloc(uxArraySize * sizeof(TaskStatus_t));
       if (pxTaskStatusArray) {
@@ -28,7 +28,7 @@ namespace esp32m {
         root["rt"] = ulTotalRunTime;
         TaskStatus_t *tp = pxTaskStatusArray;
         for (int i = 0; i < uxArraySize; i++) {
-          auto ti = tasks.createNestedArray();
+          auto ti = tasks.add<JsonArray>();
           ti.add(tp->xTaskNumber);
           ti.add((char *)tp->pcTaskName);
           ti.add(tp->eCurrentState);

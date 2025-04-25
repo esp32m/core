@@ -151,7 +151,7 @@ namespace esp32m {
       Bme280(const Bme280 &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool initSensors() override;
       bool pollSensors() override;
 

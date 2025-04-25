@@ -81,13 +81,13 @@ namespace esp32m {
       }
     }  // namespace pcf857x
 
-    Pcf857x::Pcf857x(Flavor f, I2C *i2c) : _flavor(f), _i2c(i2c) {
+    Pcf857x::Pcf857x(Flavor f, i2c::MasterDev *i2c) : _flavor(f), _i2c(i2c) {
       init();
     }
 
     esp_err_t Pcf857x::init() {
       IPins::init(_flavor == Flavor::PCF8574 ? 8 : 16);
-      _i2c->setErrSnooze(10000);
+//      _i2c->setErrSnooze(10000);
       return ESP_OK;
     }
 
@@ -96,7 +96,7 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::read(uint16_t &port) {
-      std::lock_guard guard(_i2c->mutex());
+      // std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(
           _i2c->read(nullptr, 0, &port, _flavor == Flavor::PCF8574 ? 1 : 2));
       _port = port;
@@ -104,7 +104,7 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::write(uint16_t port) {
-      std::lock_guard guard(_i2c->mutex());
+      // std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(
           _i2c->write(nullptr, 0, &port, _flavor == Flavor::PCF8574 ? 1 : 2));
       _port = port;
@@ -154,10 +154,10 @@ namespace esp32m {
     }
 
     Pcf857x *usePcf8574(uint8_t addr) {
-      return new Pcf857x(Pcf857x::Flavor::PCF8574, new I2C(addr));
+      return new Pcf857x(Pcf857x::Flavor::PCF8574, i2c::MasterDev::create(addr));
     }
     Pcf857x *usePcf8575(uint8_t addr) {
-      return new Pcf857x(Pcf857x::Flavor::PCF8575, new I2C(addr));
+      return new Pcf857x(Pcf857x::Flavor::PCF8575, i2c::MasterDev::create(addr));
     }
 
   }  // namespace io

@@ -1,9 +1,10 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { IAppState } from './types';
+import { TAppState } from './types';
 import { NameValueList } from '../app';
 import { buildInfo } from '@ts-libs/tools';
+import muipkg from '@mui/material/package.json';
 
 const Name = 'app';
 
@@ -13,7 +14,7 @@ function sdkver(version: string | number) {
 }
 
 export const AppSummary = () => {
-  const state = useModuleState<IAppState>(Name);
+  const state = useModuleState<TAppState>(Name);
   const { name, built, version, sdk, size } = state || {};
   const list = [];
   if (name) list.push(['Application name', name]);
@@ -24,6 +25,8 @@ export const AppSummary = () => {
       'UI version / build time',
       `${buildInfo.version} / ${buildInfo.built}`,
     ]);
+  if (muipkg?.version)
+    list.push(["Material-UI version", muipkg.version]);
   if (sdk) list.push(['SDK version', sdkver(sdk)]);
   if (size) list.push(['Firmware size', formatBytes(size)]);
   if (!list.length) return null;

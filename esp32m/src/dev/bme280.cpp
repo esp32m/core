@@ -316,10 +316,6 @@ namespace esp32m {
     bool Bme280::pollSensors() {
       float t, p, h;
       ESP_CHECK_RETURN_BOOL(read(&t, &p, &h));
-/*      sensor("temperature", t);
-      sensor("pressure", p / 133.322F);
-      if (chipId() == bme280::ChipId::Bme280)
-        sensor("humidity", h);*/
 
       bool changed = false;
       _temperature.set(t, &changed);
@@ -331,11 +327,11 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Bme280::getState(const JsonVariantConst args) {
+    JsonDocument *Bme280::getState(RequestContext &ctx) {
       float t, p, h;
       if (read(&t, &p, &h) != ESP_OK)
         return nullptr;
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(4));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       JsonObject root = doc->to<JsonObject>();
       root["addr"] = _i2c->addr();
       root["temperature"] = t;

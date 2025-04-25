@@ -30,8 +30,8 @@ namespace esp32m {
       return pcnt->isEnabled();
     }
 
-    DynamicJsonDocument *FlowSensor::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+    JsonDocument *FlowSensor::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);
@@ -53,8 +53,6 @@ namespace esp32m {
         _stamp = ms;
         _sensorFlow.set(_value);
         _sensorConsumption.set(_consumption);
-        // sensor("flow", _value);
-        // sensor("consumption", _consumption);
         if (ms - _lastDump > 10000 &&
             abs(_consumption - _dumpedConsumption) >
                 std::numeric_limits<float>::epsilon()) {
@@ -66,15 +64,14 @@ namespace esp32m {
       return true;
     }
 
-    bool FlowSensor::setConfig(const JsonVariantConst cfg,
-                               DynamicJsonDocument **result) {
+    bool FlowSensor::setConfig(RequestContext &ctx) {
       bool changed = false;
-      json::from(cfg["consumption"], _consumption, &changed);
+      json::from(ctx.data["consumption"], _consumption, &changed);
       return changed;
     }
 
-    DynamicJsonDocument *FlowSensor::getConfig(RequestContext &ctx) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+    JsonDocument *FlowSensor::getConfig(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
       auto root = doc->to<JsonObject>();
       root["consumption"] = _consumption;
       return doc;

@@ -1,14 +1,14 @@
 import { Settings } from '@mui/icons-material';
 import { Grid, IconButton, MenuItem } from '@mui/material';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useModuleConfig, useModuleState } from '../..';
 import { netmask2cidr } from '../../utils';
 import {
-  Config,
-  IInterfaceConfig,
-  IInterfaceState,
+  TConfig,
+  TInterfaceConfig,
+  TInterfaceState,
   InterfaceRole,
   Name,
-  State,
+  TState,
 } from './types';
 import {
   DialogForm,
@@ -20,6 +20,7 @@ import { useYup } from '../../validation';
 import { CardBox } from '@ts-libs/ui-app';
 import { NameValueList } from '../../app';
 import { useTranslation } from '@ts-libs/ui-i18n';
+import { TJsonValue } from '@ts-libs/tools';
 
 const DhcpStatusNames = ['initial', 'started', 'stopped'];
 
@@ -38,32 +39,20 @@ const toMenuItem = (e: Array<any>, i: number) => (
 
 const Ipv4Fields = ({ prefix }: { prefix: string }) => {
   return (
-    <Grid item container spacing={3}>
-      <Grid item xs>
-        <FieldText name={`${prefix}.0`} label="IP address" />
-      </Grid>
-      <Grid item xs>
-        <FieldText name={`${prefix}.2`} label="Netmask" />
-      </Grid>
-      <Grid item xs>
-        <FieldText name={`${prefix}.1`} label="Gateway" />
-      </Grid>
+    <Grid container spacing={3}>
+      <FieldText name={`${prefix}.0`} label="IP address" grid />
+      <FieldText name={`${prefix}.2`} label="Netmask" grid />
+      <FieldText name={`${prefix}.1`} label="Gateway" grid />
     </Grid>
   );
 };
 
 const DnsFields = ({ prefix }: { prefix: string }) => {
   return (
-    <Grid item container spacing={3}>
-      <Grid item xs>
-        <FieldText name={`${prefix}.0`} label="Primary DNS" />
-      </Grid>
-      <Grid item xs>
-        <FieldText name={`${prefix}.1`} label="Secondary DNS" />
-      </Grid>
-      <Grid item xs>
-        <FieldText name={`${prefix}.2`} label="Fallback DNS" />
-      </Grid>
+    <Grid container spacing={3}>
+      <FieldText name={`${prefix}.0`} label="Primary DNS" grid />
+      <FieldText name={`${prefix}.1`} label="Secondary DNS" grid />
+      <FieldText name={`${prefix}.2`} label="Fallback DNS" grid />
     </Grid>
   );
 };
@@ -81,18 +70,20 @@ const Interface = ({
   state,
   config,
   refreshConfig,
+  setConfig,
 }: {
   name: string;
-  state: IInterfaceState;
-  config: IInterfaceConfig;
+  state: TInterfaceState;
+  config: TInterfaceConfig;
   refreshConfig: () => void;
+  setConfig: (v: TJsonValue) => Promise<void>;
 }) => {
-  const api = useBackendApi();
+  //  const api = useBackendApi();
   const [hook, openSettings] = useDialogForm({
     initialValues: config,
     onSubmit: async (values) => {
       console.log(values);
-      await api.setConfig(Name, { [name]: values });
+      await setConfig({ [name]: values });
     },
     validationSchema,
   });
@@ -139,14 +130,10 @@ const Interface = ({
       <NameValueList list={list} />
       <DialogForm title={`${t('Configure interface')} ${name}`} hook={hook}>
         <Grid container spacing={3}>
-          <Grid item xs>
-            <FieldSelect name="role" label="Interface role" fullWidth>
-              {InterfaceRoles.map(toMenuItem)}
-            </FieldSelect>
-          </Grid>
-          <Grid item xs>
-            <FieldText name="mac" label="MAC address" fullWidth />
-          </Grid>
+          <FieldSelect name="role" label="Interface role" fullWidth grid>
+            {InterfaceRoles.map(toMenuItem)}
+          </FieldSelect>
+          <FieldText name="mac" label="MAC address" fullWidth grid />
           <Ipv4Fields prefix="ip" />
           <DnsFields prefix="dns" />
         </Grid>
@@ -156,8 +143,8 @@ const Interface = ({
 };
 
 export const Interfaces = () => {
-  const state = useModuleState<State>(Name);
-  const [config, refresh] = useModuleConfig<Config>(Name);
+  const state = useModuleState<TState>(Name);
+  const { config, setConfig, refreshConfig } = useModuleConfig<TConfig>(Name);
   if (!state || !config) return null;
   return (
     <>
@@ -166,7 +153,8 @@ export const Interfaces = () => {
           name={key}
           state={state[key]}
           config={config[key]}
-          refreshConfig={refresh}
+          refreshConfig={refreshConfig}
+          setConfig={setConfig}
           key={key}
         />
       ))}

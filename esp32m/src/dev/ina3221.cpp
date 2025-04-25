@@ -239,7 +239,7 @@ namespace esp32m {
   }  // namespace ina3221
 
   namespace dev {
-    StaticJsonDocument<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>
+    JsonDocument/*<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>*/
         Ina3221::_channelProps;
 
     void Ina3221::staticInit() {
@@ -248,13 +248,13 @@ namespace esp32m {
         return;
       inited = true;
       JsonArray root = _channelProps.to<JsonArray>();
-      JsonObject o = root.createNestedObject();
+      JsonObject o = root.add<JsonObject>();
       o["channel"] = 1;
-      o = root.createNestedObject();
+      o = root.add<JsonObject>();
       o["channel"] = 2;
-      o = root.createNestedObject();
+      o = root.add<JsonObject>();
       o["channel"] = 3;
-      o = root.createNestedObject();
+      o = root.add<JsonObject>();
       o["channel"] = "sum";
     }
 
@@ -290,17 +290,17 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Ina3221::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(
-          JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(ina3221::Channel::Max + 1) +
-          (ina3221::Channel::Max + 1) * JSON_ARRAY_SIZE(3));
+    JsonDocument *Ina3221::getState(RequestContext &ctx) {
+      auto doc = new JsonDocument(
+          /*JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(ina3221::Channel::Max + 1) +
+          (ina3221::Channel::Max + 1) * JSON_ARRAY_SIZE(3)*/);
       JsonObject state = doc->to<JsonObject>();
       state["addr"] = _i2c->addr();
-      auto c = state.createNestedArray("channels");
+      auto c = state["channels"].to<JsonArray>();
       for (ina3221::Channel ch = ina3221::Channel::First;
            ch <= ina3221::Channel::Max; ch++)
         if (settings().isEnabled(ch)) {
-          auto a = c.createNestedArray();
+          auto a = c.add<JsonArray>();
           float value;
           if (readBus(ch, value) != ESP_OK)
             value = NAN;
@@ -316,13 +316,11 @@ namespace esp32m {
           c.add(nullptr);
       return doc;
     }
-    void Ina3221::setState(const JsonVariantConst cfg,
-                           DynamicJsonDocument **result) {}
-    bool Ina3221::setConfig(const JsonVariantConst cfg,
-                            DynamicJsonDocument **result) {
+    void Ina3221::setState(RequestContext &ctx) {}
+    bool Ina3221::setConfig(RequestContext &ctx) {
       return false;
     }
-    DynamicJsonDocument *Ina3221::getConfig(RequestContext &ctx) {
+    JsonDocument *Ina3221::getConfig(RequestContext &ctx) {
       return nullptr;
     }
 

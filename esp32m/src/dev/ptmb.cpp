@@ -23,8 +23,8 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    DynamicJsonDocument *Ptmb::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+    JsonDocument *Ptmb::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -32,8 +32,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Ptmb::setConfig(const JsonVariantConst cfg,
-                         DynamicJsonDocument **result) {
+    bool Ptmb::setConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
@@ -43,6 +42,7 @@ namespace esp32m {
         return false;
       bool changed = false;
       auto v = regs[0];
+      auto cfg=ctx.data.as<JsonObjectConst>();
       if (json::from(cfg["unit"], v, &changed))
         mb.request(_addr, modbus::Command::WriteRegister, 0x02, 1, &v);
       v = regs[1];
@@ -57,12 +57,12 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *Ptmb::getConfig(RequestContext &ctx) {
+    JsonDocument *Ptmb::getConfig(RequestContext &ctx) {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return nullptr;
       int16_t regs[3] = {};
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(4));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
       auto res = mb.request(_addr, modbus::Command::ReadHolding, 0x02, 3, regs);
       if (res == ESP_OK) {

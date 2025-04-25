@@ -54,7 +54,7 @@ namespace esp32m {
             _payloadAvailable, _payloadUnavailable;
         std::map<std::string, std::string> _deviceProps;
         bool _addUniqueId = false, _addName = false;
-        size_t _configPayloadSize = 0;
+        // size_t _configPayloadSize = 0;
         void inferUniqueId() {
           auto uniqueId = _descriptorConfig["unique_id"].as<const char*>();
           if (uniqueId)
@@ -62,8 +62,8 @@ namespace esp32m {
           if (_uniqueId.empty()) {
             _uniqueId = string_printf("%s_%s", App::instance().hostname(), _id);
             _addUniqueId = true;
-            _configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_uniqueId.size());
+           /* _configPayloadSize +=
+                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_uniqueId.size());*/
           }
         }
         void inferName() {
@@ -73,8 +73,8 @@ namespace esp32m {
           if (_name.empty()) {
             _name = _id;
             _addName = true;
-            _configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_name.size());
+            /*_configPayloadSize +=
+                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(_name.size());*/
           }
         }
         void inferDeviceProp(JsonObjectConst device, const char* name) {
@@ -82,34 +82,34 @@ namespace esp32m {
           auto prop = props.get(name);
           if (!device[name] && !prop.empty()) {
             _deviceProps[name] = prop;
-            _configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(prop.size());
+            /*_configPayloadSize +=
+                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(prop.size());*/
           }
         }
         void inferDeviceInfo() {
           JsonObjectConst device = _descriptorConfig["device"];
           if (!device) {
-            _configPayloadSize += JSON_OBJECT_SIZE(1);
+            //_configPayloadSize += JSON_OBJECT_SIZE(1);
           }
-          if (!device["connections"])
+/*          if (!device["connections"])
             _configPayloadSize += JSON_OBJECT_SIZE(1);
           _configPayloadSize +=
               JSON_ARRAY_SIZE(2 + 2 * 2) +
               JSON_STRING_SIZE(
-                  net::MacMaxChars);  // [["mac", mac],["hostname", hostname]]
+                  net::MacMaxChars);  // [["mac", mac],["hostname", hostname]]*/
 
           if (!device["name"]) {
             std::string name = App::instance().name();
             _deviceProps["name"] = name;
-            _configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(name.size());
+            /*_configPayloadSize +=
+                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(name.size());*/
           }
           if (!device["configuration_url"]) {
             auto url =
                 string_printf("http://%s.local/", App::instance().hostname());
             _deviceProps["configuration_url"] = url;
-            _configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(url.size());
+  /*          _configPayloadSize +=
+                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(url.size());*/
           }
           inferDeviceProp(device, "model");
           inferDeviceProp(device, "manufacturer");
@@ -142,9 +142,9 @@ namespace esp32m {
 
           if (_commandTopicNames.size()) {
             commandTopic = _descriptor["commandTopic"] | makeTopic(true);
-            _configPayloadSize += JSON_OBJECT_SIZE(_commandTopicNames.size()) +
+            /*_configPayloadSize += JSON_OBJECT_SIZE(_commandTopicNames.size()) +
                                   JSON_STRING_SIZE(commandTopic.size()) *
-                                      _commandTopicNames.size();
+                                      _commandTopicNames.size();*/
           }
         }
         void inferStateTopic() {
@@ -157,9 +157,9 @@ namespace esp32m {
               _stateTopicNames.push_back("state_topic");
           if (_stateTopicNames.size()) {
             stateTopic = _descriptor["stateTopic"] | makeTopic(false);
-            _configPayloadSize +=
+            /*_configPayloadSize +=
                 JSON_OBJECT_SIZE(_stateTopicNames.size()) +
-                JSON_STRING_SIZE(stateTopic.size()) * _stateTopicNames.size();
+                JSON_STRING_SIZE(stateTopic.size()) * _stateTopicNames.size();*/
           }
         }
         void inferAvailability() {
@@ -169,10 +169,10 @@ namespace esp32m {
           auto& lwt = mqtt.getLwt();
           auto& birth = mqtt.getBirth();
           if (lwt.valid() && birth.valid() && lwt.topic == birth.topic) {
-            _configPayloadSize += JSON_OBJECT_SIZE(3) +
+        /*    _configPayloadSize += JSON_OBJECT_SIZE(3) +
                                   JSON_STRING_SIZE(birth.topic.size()) +
                                   JSON_STRING_SIZE(birth.payload.size()) +
-                                  JSON_STRING_SIZE(lwt.payload.size());
+                                  JSON_STRING_SIZE(lwt.payload.size());*/
             _availabilityTopic = birth.topic;
             _payloadAvailable = birth.payload;
             _payloadUnavailable = lwt.payload;
@@ -184,8 +184,8 @@ namespace esp32m {
           char macbuf[net::MacMaxChars];
           sprintf(macbuf, MACSTR, MAC2STR(mac));
 
-          auto doc = new DynamicJsonDocument(_descriptorConfig.memoryUsage() +
-                                             _configPayloadSize);
+          auto doc = new JsonDocument(/*_descriptorConfig.memoryUsage() +
+                                             _configPayloadSize*/);
 
           doc->set(_descriptorConfig);
           auto root = doc->as<JsonObject>();
@@ -201,14 +201,14 @@ namespace esp32m {
             root["payload_not_available"] = _payloadUnavailable;
 
           JsonObject device =
-              root["device"] | root.createNestedObject("device");
+              root["device"] | root["device"].to<JsonObject>();
           JsonArray connections =
-              device["connections"] | device.createNestedArray("connections");
+              device["connections"] | device["connections"].to<JsonArray>();
 
-          JsonArray mc = connections.createNestedArray();
+          JsonArray mc = connections.add<JsonArray>();
           mc.add("mac");
           mc.add(macbuf);
-          mc = connections.createNestedArray();
+          mc = connections.add<JsonArray>();
           mc.add("hostname");
           mc.add(App::instance().hostname());
 
@@ -224,7 +224,8 @@ namespace esp32m {
               root[name] = commandTopic;
 
           json::check(this, doc, "HA config payload");
-          configPayload = json::serialize(root);
+//          configPayload = json::serialize(root);
+          serializeJson(root, configPayload);
           delete doc;
         }
       };

@@ -28,28 +28,28 @@ const FreqField = ({ name }: { name: string }) => (
 );
 
 export const Settings = () => {
-  const [config, refresh] = useModuleConfig<ISystemConfig>(Name);
+  const { config, refreshConfig } = useModuleConfig<ISystemConfig>(Name);
   if (!config || !config.pm) return null;
 
   return (
     <ConfigBox
       name={Name}
       initial={config}
-      onChange={refresh}
+      onChange={refreshConfig}
       title="System settings"
     >
       <Expander title="Power management" defaultExpanded>
-        <Grid item xs>
+        <Grid size={{ xs: 'grow' }}>
           <FieldSwitch
             name="pm.lse"
             label="Enable Dynamic Frequency Scaling (light sleep)"
           />
         </Grid>
         <Grid container spacing={3}>
-          <Grid item xs>
+          <Grid size={{ xs: 'grow' }}>
             <FreqField name="pm.fmin" />
           </Grid>
-          <Grid item xs>
+          <Grid size={{ xs: 'grow' }}>
             <FreqField name="pm.fmax" />
           </Grid>
         </Grid>

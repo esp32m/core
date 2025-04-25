@@ -1,3 +1,4 @@
+#include "ArduinoJson.h"
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/json.hpp"
 
@@ -23,18 +24,18 @@ namespace esp32m {
       uint32_t crc() {
         return _header.crc;
       }
-      DynamicJsonDocument *json() {
+      JsonDocument *json() {
         return _doc;
       }
       File(const char *path, Header &header, const char *data,
-           DynamicJsonDocument *doc)
+           JsonDocument *doc)
           : _path(path), _header(header), _data(data), _doc(doc) {}
 
      private:
       const char *_path;
       Header _header;
       std::string _data;
-      DynamicJsonDocument *_doc;
+      JsonDocument *_doc;
     };
 
     class Loader : public log::Loggable {
@@ -115,7 +116,7 @@ namespace esp32m {
         fclose(file);
         File *result = nullptr;
         if (data) {
-          auto doc = new DynamicJsonDocument(header.jsonSize);
+          auto doc = new JsonDocument(); /* header.jsonSize */
           auto status = deserializeJson(*doc, data);
           if (status != DeserializationError::Ok) {
             logW("%s when parsing '%s', size=%d, mu=%u", status.c_str(), data,
@@ -135,14 +136,14 @@ namespace esp32m {
       std::string _name;
     };
 
-    DynamicJsonDocument *Vfs::read() {
+    JsonDocument *Vfs::read() {
       auto loader = std::unique_ptr<Loader>(new Loader(_path.c_str()));
       auto file = std::unique_ptr<File>(loader->load());
       if (!file && !_backup.empty()) {
         loader.reset(new Loader(_backup.c_str()));
         file.reset(loader->load());
       }
-      DynamicJsonDocument *result = nullptr;
+      JsonDocument *result = nullptr;
       if (file) {
         result = file->json();
         _crc = file->crc();
@@ -158,7 +159,7 @@ namespace esp32m {
       return false;
     }
 
-    void Vfs::write(const DynamicJsonDocument &config) {
+    void Vfs::write(const JsonDocument &config) {
       size_t dl =
           measureJson(config) + 1;  // measureJson() excludes null terminator
       char *buf = (char *)malloc(sizeof(Header) + dl);
@@ -172,7 +173,7 @@ namespace esp32m {
       if (dataSize != dl)
         logW("size of serialized JSON is different from expected: %d!=%d",
              dataSize, dl);
-      size_t mu = json::measure(config.as<JsonVariantConst>());
+      size_t mu = dl; // json::measure(config.as<JsonVariantConst>());
       uint32_t crc = esp_rom_crc32_le(mu, (const uint8_t *)data, dataSize);
 
       if (crc != _crc) {
@@ -208,12 +209,15 @@ namespace esp32m {
     void Vfs::dump() {
       auto doc = read();
       if (doc) {
-        size_t ss;
+        std::string str;
+        serializeJson(*doc, str);
+        logD("raw config: %s", str.c_str());
+        /*size_t ss;
         char *buf = json::allocSerialize(*doc, &ss);
         if (buf) {
           logD("raw config: %s", buf);
           free(buf);
-        }
+        }*/
       }
       /*      char *buf;
             size_t mu;

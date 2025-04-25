@@ -10,10 +10,10 @@ namespace esp32m {
         return;
       /*std::string str((const char *)data, len);
       logd("%d: incoming %s", cid, str.c_str());*/
-      DynamicJsonDocument *dp = json::parse((const char *)data, len);
+      JsonDocument *dp = json::parse((const char *)data, len);
       _ui->incoming(cid, dp);
     }
-    void Transport::incoming(uint32_t cid, DynamicJsonDocument *json) {
+    void Transport::incoming(uint32_t cid, JsonDocument *json) {
       _ui->incoming(cid, json);
     }
 

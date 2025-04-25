@@ -55,7 +55,7 @@ function LinkRouter(props: LinkRouterProps) {
 function Crumbs() {
   const np = useNavPath();
   return (
-    <Grid item xs>
+    <Grid size="grow">
       <Breadcrumbs separator="›">
         <LinkRouter underline="hover" color="inherit" to="/">
           Home

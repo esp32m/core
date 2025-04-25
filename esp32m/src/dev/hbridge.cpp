@@ -84,8 +84,8 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    DynamicJsonDocument *HBridge::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+    JsonDocument *HBridge::getState(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject info = doc->to<JsonObject>();
       info["mode"] = _mode;
       float current;
@@ -94,29 +94,27 @@ namespace esp32m {
       return doc;
     }
 
-    void HBridge::setState(const JsonVariantConst state,
-                           DynamicJsonDocument **result) {
+    void HBridge::setState(RequestContext &ctx) {
       bool changed = false;
       auto mode = _mode;
-      json::from(state["mode"], mode, &changed);
+      json::from(ctx.data["mode"], mode, &changed);
       if (changed)
-        json::checkSetResult(run(mode, _duty), result);
+        ctx.errors.check(run(mode, _duty));
     }
 
-    bool HBridge::setConfig(const JsonVariantConst cfg,
-                            DynamicJsonDocument **result) {
+    bool HBridge::setConfig(RequestContext &ctx) {
       bool changed = false;
       auto mode = _mode;
       if (_persistent)
-        json::from(cfg["mode"], mode, &changed);
-      json::from(cfg["speed"], _duty, &changed);
+        json::from(ctx.data["mode"], mode, &changed);
+      json::from(ctx.data["speed"], _duty, &changed);
       if (changed)
-        json::checkSetResult(run(mode, _duty), result);
+        ctx.errors.check(run(mode, _duty));
       return changed;
     }
 
-    DynamicJsonDocument *HBridge::getConfig(RequestContext &ctx) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+    JsonDocument *HBridge::getConfig(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject info = doc->to<JsonObject>();
       if (_persistent)
         info["mode"] = _mode;

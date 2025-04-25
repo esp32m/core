@@ -172,7 +172,7 @@ namespace esp32m {
       }
     }
 
-    DynamicJsonDocument *Interface::getState(const JsonVariantConst args) {
+    JsonDocument *Interface::getState(RequestContext &ctx) {
       if (_handle) {
         uint8_t mac[6];
         bool hasMac = esp_netif_get_mac(_handle, mac) == ESP_OK;
@@ -193,9 +193,9 @@ namespace esp32m {
               dns[(esp_netif_dns_type_t)i] = dnsItem;
 
         auto dnsCount = dns.size();
-        auto size =
+        /*auto size =
             IpInfoJsonSize +
-            JSON_OBJECT_SIZE(2 /*up, prio*/ + (desc ? 1 : 0) +
+            JSON_OBJECT_SIZE(2 + (desc ? 1 : 0) +
                              (hostname ? 1 : 0) + (hasDhcpc ? 1 : 0) +
                              (hasDhcps ? 1 : 0)) +
             (hasMac ? (JSON_OBJECT_SIZE(1) + MacMaxChars) : 0) +
@@ -204,9 +204,9 @@ namespace esp32m {
                       : 0) +
             (dnsCount ? (JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) +
                          (dnsCount * Ipv6MaxChars))
-                      : 0);
+                      : 0);*/
 
-        auto doc = new DynamicJsonDocument(size);
+        auto doc = new JsonDocument(); /* size */
         auto root = doc->to<JsonObject>();
         root["up"] = isUp();
         if (desc)
@@ -231,38 +231,35 @@ namespace esp32m {
       }
       return nullptr;
     }
-    bool Interface::setConfig(const JsonVariantConst cfg,
-                              DynamicJsonDocument **result) {
-      ErrorList el;
+    bool Interface::setConfig(RequestContext &ctx) {
       bool changed = false;
       //      json::dump(this, cfg, "setConfig");
-      JsonObjectConst root = cfg.as<JsonObjectConst>();
+      JsonObjectConst root = ctx.data.as<JsonObjectConst>();
       if (json::fromIntCastable(root["role"], _role, &changed))
-        apply(ConfigItem::Role, el);
+        apply(ConfigItem::Role, ctx.errors);
       if (json::macFrom(root["mac"], _mac, &changed))
-        apply(ConfigItem::Mac, el);
+        apply(ConfigItem::Mac, ctx.errors);
       if (json::from(root, _ip, &changed))
-        apply(ConfigItem::Ip, el);
+        apply(ConfigItem::Ip, ctx.errors);
       if (json::from(root, _ipv6, &changed))
-        apply(ConfigItem::Ipv6, el);
+        apply(ConfigItem::Ipv6, ctx.errors);
       if (json::from(root, _dns, &changed))
-        apply(ConfigItem::Dns, el);
+        apply(ConfigItem::Dns, ctx.errors);
       auto dhcps = root["dhcps"].as<JsonObjectConst>();
       if (dhcps)
         if (json::from(dhcps, _dhcpsLease, &changed))
-          apply(ConfigItem::DhcpsLease, el);
-      el.toJson(result);
+          apply(ConfigItem::DhcpsLease, ctx.errors);
       _configLoaded = true;
       return changed;
     }
-    DynamicJsonDocument *Interface::getConfig() {
+    JsonDocument *Interface::getConfig() {
       auto hasIp = _ip.ip.addr || _ip.gw.addr || _ip.netmask.addr;
       auto hasMac = !isEmptyMac(_mac);
       auto ip6count = _ipv6.size();
       auto dnsCount = _dns.size();
       auto hasLease = _dhcpsLease.start_ip.addr || _dhcpsLease.end_ip.addr;
       auto hasDhcps = hasLease;
-      auto size = JSON_OBJECT_SIZE(1 /*role*/ + (hasDhcps ? 1 : 0)) +
+      /*auto size = JSON_OBJECT_SIZE(1  + (hasDhcps ? 1 : 0)) +
                   (hasIp ? IpInfoJsonSize : 0) +
                   (hasMac ? (JSON_OBJECT_SIZE(1) + MacMaxChars) : 0) +
                   (ip6count ? (JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(ip6count) +
@@ -271,8 +268,8 @@ namespace esp32m {
                   (dnsCount ? (JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(3) +
                                (dnsCount * Ipv6MaxChars))
                             : 0) +
-                  (hasLease ? DhcpsLeaseJsonSize : 0);
-      auto doc = new DynamicJsonDocument(size);
+                  (hasLease ? DhcpsLeaseJsonSize : 0);*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       root["role"] = (int)_role;
       if (hasMac)
@@ -284,7 +281,7 @@ namespace esp32m {
       if (dnsCount)
         json::to(root, _dns);
       if (hasDhcps) {
-        auto dhcps = root.createNestedObject("dhcps");
+        auto dhcps = root["dhcps"].to<JsonObject>();
         if (hasLease)
           json::to(dhcps, _dhcpsLease);
       }
@@ -345,11 +342,11 @@ namespace esp32m {
           }
       }
     }
-    DynamicJsonDocument *Interfaces::getState(const JsonVariantConst args) {
+    JsonDocument *Interfaces::getState(RequestContext &ctx) {
       syncMap();
       json::ConcatToObject c;
       for (const auto &i : _map) {
-        auto state = i.second->getState(args);
+        auto state = i.second->getState(ctx);
         if (state) {
           json::check(this, state, "getState()");
           c.add(i.first.c_str(), state);
@@ -357,18 +354,18 @@ namespace esp32m {
       }
       return c.concat();
     }
-    bool Interfaces::setConfig(const JsonVariantConst cfg,
-                               DynamicJsonDocument **result) {
+    bool Interfaces::setConfig(RequestContext &ctx) {
       bool changed = false;
-      JsonObjectConst map = cfg.as<JsonObjectConst>();
+      JsonObjectConst map = ctx.data.as<JsonObjectConst>();
       for (JsonPairConst kv : map) {
         // logi("setConfig for %s", kv.key().c_str());
-        if (getOrAddInterface(kv.key().c_str())->setConfig(kv.value(), result))
+        RequestContext ic(ctx.request, kv.value());
+        if (getOrAddInterface(kv.key().c_str())->setConfig(ic))
           changed = true;
       }
       return changed;
     }
-    DynamicJsonDocument *Interfaces::getConfig(RequestContext &ctx) {
+    JsonDocument *Interfaces::getConfig(RequestContext &ctx) {
       json::ConcatToObject c;
       for (const auto &i : _map) {
         auto config = i.second->getConfig();
@@ -393,7 +390,7 @@ namespace esp32m {
           if (i.second->handle())
             c++;
       }
-      ErrorList el;
+      // ErrorList el;
       if (!_mapValid || esp_netif_get_nr_of_ifs() != c) {
         std::vector<esp_netif_t *> netifs;
         netifEnum(netifs);
@@ -434,6 +431,22 @@ namespace esp32m {
       return result;
     }
 
+    class DummyReq : public Request {
+     public:
+     DummyReq(const JsonVariantConst data)
+          : Request("dummy", 0, nullptr, data, "dummy") {}
+
+     protected:
+      void respondImpl(const char *source, const JsonVariantConst data,
+                       bool error) override {}
+
+      Response *makeResponseImpl() override {
+        return nullptr;
+      }
+
+     private:
+    };
+
     void Interfaces::reg(Interface *i) {
       auto key = i->key();
       // logD("register interface %s, handle=%i", key.c_str(), i->_handle);
@@ -446,7 +459,9 @@ namespace esp32m {
         // that is being added now
         if (old->second->_configLoaded && i->_handle) {
           auto doc = old->second->getConfig();
-          i->setConfig(*doc, nullptr);
+          DummyReq rq(*doc);
+          RequestContext ctx(rq, *doc);
+          i->setConfig(ctx);
           delete doc;
         }
         if (!old->second->_handle)

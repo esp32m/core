@@ -8,7 +8,7 @@ const NeighRow = ({
   index,
   style,
 }: ListChildComponentProps<ReadonlyArray<TNeigh>>) => {
-  const [ifname, lladdr, nexthop, state, isrouter, counter, rit, rflags] =
+  const [ifname, lladdr, nexthop, state/*, isrouter, counter, rit, rflags*/] =
     data[index];
 
   return (
@@ -89,6 +89,7 @@ const Prefixes = ({ prefixes }: { prefixes: ReadonlyArray<TPrefix> }) => {
     </CardBox>
   );
 };
+
 
 export const content = () => {
   const state = useModuleState<TNd6State>(Name);

@@ -98,23 +98,23 @@ namespace esp32m {
       _rr = esp_reset_reason();
     }
 
-    DynamicJsonDocument *Esp32::getState(const JsonVariantConst args) {
+    JsonDocument *Esp32::getState(RequestContext &ctx) {
       size_t spiffsTotal = 0, spiffsUsed = 0;
       if (esp_spiffs_mounted(NULL))
         esp_spiffs_info(NULL, &spiffsTotal, &spiffsUsed);
 
-      auto doc = new DynamicJsonDocument(
-          JSON_OBJECT_SIZE(1 + 4)    // heap: size, free, min, max
+      auto doc = new JsonDocument(
+       /*   JSON_OBJECT_SIZE(1 + 4)    // heap: size, free, min, max
           + JSON_OBJECT_SIZE(1 + 9)  // chip: model, rev, cores, features, freq,
                                      // efreq, mac, temperature, rr
           + JSON_OBJECT_SIZE(1 + 3)  // flash: size, speed, mode
           + (_psramSize ? JSON_OBJECT_SIZE(1 + 4)
                         : 0)  // psram: size, free, min, max
-          + (spiffsTotal ? JSON_OBJECT_SIZE(1 + 2) : 0)  // spiffs: size, free
+          + (spiffsTotal ? JSON_OBJECT_SIZE(1 + 2) : 0)  // spiffs: size, free*/
       );
       JsonObject info = doc->to<JsonObject>();
 
-      auto infoHeap = info.createNestedObject("heap");
+      auto infoHeap = info["heap"].to<JsonObject>();
       multi_heap_info_t heap;
       heap_caps_get_info(&heap, MALLOC_CAP_INTERNAL);
 
@@ -123,10 +123,10 @@ namespace esp32m {
       infoHeap["min"] = heap.minimum_free_bytes;
       infoHeap["max"] = heap.largest_free_block;
 
-      auto infoChip = info.createNestedObject("chip");
-      auto infoFlash = info.createNestedObject("flash");
+      auto infoChip = info["chip"].to<JsonObject>();
+      auto infoFlash = info["flash"].to<JsonObject>();
       if (_psramSize) {
-        auto infoPsram = info.createNestedObject("psram");
+        auto infoPsram = info["psram"].to<JsonObject>();
         multi_heap_info_t psram;
         heap_caps_get_info(&psram, MALLOC_CAP_SPIRAM);
         infoPsram["size"] = _psramSize;
@@ -135,7 +135,7 @@ namespace esp32m {
         infoPsram["max"] = psram.largest_free_block;
       }
       if (spiffsTotal) {
-        auto spiffs = info.createNestedObject("spiffs");
+        auto spiffs = info["spiffs"].to<JsonObject>();
         spiffs["size"] = spiffsTotal;
         spiffs["free"] = spiffsTotal - spiffsUsed;
       }
@@ -168,8 +168,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Esp32::setConfig(const JsonVariantConst cfg,
-                          DynamicJsonDocument **result) {
+    bool Esp32::setConfig(RequestContext &ctx) {
       bool changed = false;
 #ifdef CONFIG_PM_ENABLE
       auto pm = cfg["pm"];
@@ -180,18 +179,17 @@ namespace esp32m {
         json::from(pm["lse"], _pm.light_sleep_enable, &changed);
 #  endif
         if (changed)
-          json::checkSetResult(
-              ESP_ERROR_CHECK_WITHOUT_ABORT(esp_pm_configure(&_pm)), result);
+        ctx.errors.check(ESP_ERROR_CHECK_WITHOUT_ABORT(esp_pm_configure(&_pm)));
       }
 #endif
       return changed;
     }
 
-    DynamicJsonDocument *Esp32::getConfig(RequestContext &ctx) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1 + 3));
+    JsonDocument *Esp32::getConfig(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1 + 3) */
 #ifdef CONFIG_PM_ENABLE
       auto root = doc->to<JsonObject>();
-      auto pm = root.createNestedObject("pm");
+      auto pm = root.add<JsonObject>("pm");
       json::to(pm, "fmin", _pm.min_freq_mhz);
       json::to(pm, "fmax", _pm.max_freq_mhz);
 #  ifdef CONFIG_FREERTOS_USE_TICKLESS_IDLE

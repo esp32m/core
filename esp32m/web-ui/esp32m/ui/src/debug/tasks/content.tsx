@@ -1,7 +1,7 @@
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { Divider } from '@mui/material';
 
-import { ITasksState, Name } from './types';
+import { TTasksState, Name } from './types';
 import { styled } from '@mui/material/styles';
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../../backend';
@@ -49,7 +49,7 @@ const Row = ({ data, index, style }: ListChildComponentProps) => {
 };
 
 export const content = () => {
-  const state = useModuleState<ITasksState>(Name);
+  const state = useModuleState<TTasksState>(Name);
   const { rt, tasks } = state || {};
   if (!tasks) return null;
   const data: Array<[number, string, number, number]> = tasks.map((i) => [

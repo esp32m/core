@@ -174,8 +174,8 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Sht3x::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+    JsonDocument *Sht3x::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       float t, h;

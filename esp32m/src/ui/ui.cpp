@@ -9,12 +9,13 @@
 
 namespace esp32m {
   namespace ui {
-    StaticJsonDocument<JSON_ARRAY_SIZE(1)> _errors;
+    JsonDocument /*<JSON_ARRAY_SIZE(1)>*/ _errors;
 
-    char *makeResponse(const char *name, const char *source, int seq,
+    std::string makeResponse(const char *name, const char *source, int seq,
                        JsonVariantConst data, bool error, bool partial) {
-      size_t mu = data.memoryUsage();
-      DynamicJsonDocument msg(mu + JSON_OBJECT_SIZE(6));
+      /*size_t mu = data.memoryUsage();*/
+      JsonDocument doc /*(mu + JSON_OBJECT_SIZE(6))*/;
+      auto msg = doc.to<JsonObject>();
       msg["type"] = "response";
       if (name)
         msg["name"] = name;
@@ -25,7 +26,10 @@ namespace esp32m {
       if (seq)
         msg["seq"] = seq;
       msg[error ? "error" : "data"] = data;
-      return json::allocSerialize(msg);
+      std::string result;
+      serializeJson(doc, result);
+      return result;
+      // return json::allocSerialize(doc);
     }
 
     class Rb : public Response {
@@ -55,10 +59,10 @@ namespace esp32m {
      protected:
       void respondImpl(const char *source, const JsonVariantConst data,
                        bool error) override {
-        char *text =
+        std::string text =
             ui::makeResponse(name(), source, seq(), data, error, false);
-        _ui->wsSend(_clientId, text);
-        free(text);
+        _ui->wsSend(_clientId, text.c_str());
+        // free(text);
       }
 
       Response *makeResponseImpl() override {
@@ -104,36 +108,38 @@ namespace esp32m {
       if (!ui::_errors.size())
         ui::_errors.add("busy");
       _transport->init(this);
-      xTaskCreate([](void *self) { ((Ui *)self)->run(); }, "m/ui", 4096, this,
-                  tskIDLE_PRIORITY, &_task);
+      xTaskCreate([](void *self) { ((Ui *)self)->run(); }, "m/ui", 1024 * 6,
+                  this, tskIDLE_PRIORITY, &_task);
       return;
     }
     Broadcast *b;
     if (Broadcast::is(ev, &b)) {
       auto data = b->data();
-      size_t mu = data.memoryUsage();
-      DynamicJsonDocument msg(mu + JSON_OBJECT_SIZE(4));
+      // size_t mu = data.memoryUsage();
+      JsonDocument msg /*(mu + JSON_OBJECT_SIZE(4))*/;
       msg["type"] = b->type();
       msg["source"] = b->source();
       msg["name"] = b->name();
       if (data)
         msg["data"] = data;
-      char *text = json::allocSerialize(msg);
-      wsSend(text);
-      free(text);
+      std::string text;
+      serializeJson(msg, text);
+      //char *text = json::allocSerialize(msg);
+      wsSend(text.c_str());
+      //free(text);
       return;
     }
     Response *r;
     if (Response::is(ev, _transport->name(), &r)) {
       ui::Rb *resp = (ui::Rb *)r;
       // logI("resp: [%s] [%s] [%d]", r->name(), r->source(),  r->seq());
-      DynamicJsonDocument *doc = r->data();
+      JsonDocument *doc = r->data();
       JsonVariantConst data =
           doc ? doc->as<JsonVariantConst>() : json::null<JsonVariantConst>();
-      char *response = ui::makeResponse(r->name(), r->source(), r->seq(), data,
+      std::string response = ui::makeResponse(r->name(), r->source(), r->seq(), data,
                                         r->isError(), r->isPartial());
-      wsSend(resp->clientId, response);
-      free(response);
+      wsSend(resp->clientId, response.c_str());
+      // free(response);
     }
   }
 
@@ -146,7 +152,7 @@ namespace esp32m {
     }
   }
 
-  void Ui::incoming(uint32_t cid, DynamicJsonDocument *json) {
+  void Ui::incoming(uint32_t cid, JsonDocument *json) {
     if (!json || json->isNull())
       return;
     std::lock_guard<std::mutex> guard(_mutex);
@@ -163,10 +169,10 @@ namespace esp32m {
       int seq = req["seq"];
       const char *type = req["type"];
       if (seq && type) {
-        char *text = ui::makeResponse(req["name"], type, seq, ui::_errors[0],
+        std::string text = ui::makeResponse(req["name"], type, seq, ui::_errors[0],
                                       true, false);
-        wsSend(cid, text);
-        free(text);
+        wsSend(cid, text.c_str());
+        // free(text);
       }
       delete json;
     } else
@@ -188,7 +194,7 @@ namespace esp32m {
     esp_task_wdt_add(NULL);
     for (;;) {
       esp_task_wdt_reset();
-      DynamicJsonDocument *req = nullptr;
+      JsonDocument *req = nullptr;
       uint32_t cid = 0;
       {
         std::lock_guard<std::mutex> guard(_mutex);

@@ -7,13 +7,13 @@ export enum ValveState {
   Closing = 'closing',
 }
 
-export interface IState {
+export type TState = {
   state: ValveState;
   value: number;
   target: number;
 }
 
-export interface IProps {
+export type TProps = {
   name: string;
   title?: string;
 }

@@ -18,7 +18,7 @@ namespace esp32m {
      protected:
       Ui *_ui = nullptr;
       void incoming(uint32_t cid, void *data, size_t len);
-      void incoming(uint32_t cid, DynamicJsonDocument *json);
+      void incoming(uint32_t cid, JsonDocument *json);
       void sessionClosed(uint32_t cid);
       virtual void init(Ui *ui) {
         _ui = ui;

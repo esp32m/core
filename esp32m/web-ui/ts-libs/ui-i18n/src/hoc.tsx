@@ -11,7 +11,6 @@ import i18n, {
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 import { getBundles, getLanguages } from './utils';
-import { isDevelopment } from '@ts-libs/tools';
 
 class Loader implements BackendModule {
   readonly type = 'backend';
@@ -39,7 +38,7 @@ function init() {
       fallbackLng,
       partialBundledLanguages: true,
       missingKeyNoValueFallbackToKey: true,
-      debug: isDevelopment(),
+      debug: false, // isDevelopment(),
       resources: {},
       interpolation: {
         escapeValue: false, // not needed for react!!

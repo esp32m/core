@@ -1,3 +1,5 @@
+import { TJsonArray } from "@ts-libs/tools";
+
 export const Name = 'lwip-nd6';
 
 export enum NeighState {
@@ -9,7 +11,7 @@ export enum NeighState {
   Probe = 5,
 }
 
-export type TNeigh = [
+export type TNeigh = TJsonArray & [
   ifname: string,
   lladdr: string,
   nexthop: string,

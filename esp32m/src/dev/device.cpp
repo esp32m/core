@@ -245,8 +245,8 @@ namespace esp32m {
 
   }  // namespace sensor
 
-  Sensor::Sensor(Device *device, const char *type, const char *id, size_t size)
-      : _device(device), _type(type), _value(size) {
+  Sensor::Sensor(Device *device, const char *type, const char *id)
+      : _device(device), _type(type) {
     std::lock_guard lock(sensor::_sensorsMutex);
     if (id)
       _id = id;

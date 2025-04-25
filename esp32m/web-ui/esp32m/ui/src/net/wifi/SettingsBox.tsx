@@ -91,7 +91,7 @@ function SavedAps({
 const ValidationSchema = Yup.object().shape({});
 
 export const SettingsBox = () => {
-  const [config, refreshConfig] = useModuleConfig<TWifiConfig>(Name);
+  const { config, refreshConfig } = useModuleConfig<TWifiConfig>(Name);
   if (!config) return null;
   const [txpHidden, channelHidden] = getDefines([
     'wifi.txp.hidden',
@@ -108,7 +108,7 @@ export const SettingsBox = () => {
       {(!txpHidden || !channelHidden) && (
         <Grid container spacing={3}>
           {!txpHidden && (
-            <Grid item xs>
+            <Grid size="grow">
               <FieldSelect fullWidth name="txp" label="TX power">
                 {PowerOptions.map((o) => (
                   <MenuItem key={o[0] || '_'} value={o[0]}>
@@ -119,7 +119,7 @@ export const SettingsBox = () => {
             </Grid>
           )}
           {!channelHidden && (
-            <Grid item xs>
+            <Grid size="grow">
               <FieldSelect fullWidth name="channel" label="Channel">
                 {ChannelOptions.map((o) => (
                   <MenuItem key={o[0] || '_'} value={o[0]}>

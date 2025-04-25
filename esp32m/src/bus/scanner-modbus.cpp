@@ -17,9 +17,8 @@ namespace esp32m {
     namespace scanner {
       Modbus::Modbus() {}
 
-      DynamicJsonDocument *Modbus::getConfig(RequestContext &ctx) {
-        DynamicJsonDocument *doc =
-            new DynamicJsonDocument(JSON_OBJECT_SIZE(10));
+      JsonDocument *Modbus::getConfig(RequestContext &ctx) {
+        JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(10) */
         auto root = doc->to<JsonObject>();
         root["mode"] = (_ascii ? "ascii" : "rtu");
         root["from"] = _startAddr;
@@ -37,14 +36,14 @@ namespace esp32m {
         return doc;
       }
 
-      bool Modbus::setConfig(const JsonVariantConst data,
-                             DynamicJsonDocument **result) {
+      bool Modbus::setConfig(RequestContext &ctx) {
         bool changed = false;
-        bool ascii = data["mode"] == "ascii";
+        bool ascii = ctx.data["mode"] == "ascii";
         if (_ascii != ascii) {
           _ascii = ascii;
           changed = true;
         }
+        auto data=ctx.data.as<JsonObjectConst>();
         json::from(data["from"], _startAddr, &changed);
         json::from(data["to"], _endAddr, &changed);
         json::from(data["addr"], _addr, &changed);
@@ -89,7 +88,8 @@ namespace esp32m {
           if (_pendingResponse)
             req.respond(ESP_ERR_INVALID_STATE);
           else {
-            setConfig(data, nullptr);
+            RequestContext ctx(req, data);
+            setConfig(ctx);
             _pendingResponse = req.makeResponse();
             config::Changed::publish(this, true);
             xTaskNotifyGive(_task);
@@ -138,8 +138,8 @@ namespace esp32m {
                   }
                   if (millis() - t > 1000) {
                     t = millis();
-                    DynamicJsonDocument *progressDoc =
-                        new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+                    JsonDocument *progressDoc =
+                        new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
                     progressDoc->to<JsonObject>()["progress"] =
                         (i - _startAddr) * 100 / (_endAddr - _startAddr);
                     _pendingResponse->setPartial(true);
@@ -148,9 +148,10 @@ namespace esp32m {
                   }
                   esp_task_wdt_reset();
                 }
-                DynamicJsonDocument *doc = new DynamicJsonDocument(
-                    JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(sizeof(_addrs)));
-                auto addrs = doc->createNestedArray("addrs");
+                JsonDocument *doc = new JsonDocument(
+                    /*JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(sizeof(_addrs))*/);
+                auto root = doc->to<JsonObject>();
+                auto addrs = root["addrs"].to<JsonArray>();
                 for (auto i = 0; i < sizeof(_addrs); i++) addrs.add(_addrs[i]);
                 _pendingResponse->setPartial(false);
                 _pendingResponse->setData(doc);
@@ -158,10 +159,11 @@ namespace esp32m {
               } else if (_pendingResponse->is("request") && _cmd && _regc) {
                 void *buf = malloc(_regc * 2);
                 err = mb.request(_addr, _cmd, _regs, _regc, buf);
-                DynamicJsonDocument *doc = new DynamicJsonDocument(
-                    JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(_regc));
+                JsonDocument *doc = new JsonDocument(
+                    /*JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(_regc)*/);
+                auto root = doc->to<JsonObject>();
                 if (err == ESP_OK) {
-                  auto regs = doc->createNestedArray("regs");
+                  auto regs = root["regs"].to<JsonArray>();
                   for (auto i = 0; i < _regc; i++)
                     regs.add(((uint16_t *)buf)[i]);
                   _pendingResponse->setData(doc);
@@ -188,5 +190,5 @@ namespace esp32m {
       }
 
     }  // namespace scanner
-  }    // namespace bus
+  }  // namespace bus
 }  // namespace esp32m

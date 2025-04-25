@@ -59,7 +59,9 @@ namespace esp32m {
 
     class Digital : public pin::IDigital {
      public:
-      Digital(Pin *pin) : _pin(pin) {}
+      Digital(Pin *pin) : _pin(pin) {
+        gpio_reset_pin(_pin->num());
+      }
       ~Digital() override {
         detach();
         ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_reset_pin(_pin->num()));
@@ -689,19 +691,13 @@ namespace esp32m {
         if (_timer == -1)
           return ESP_FAIL;
         ledcTimerRef(_timer);
-        ledc_channel_config_t ledc_conf = {
-            .gpio_num = _pin->num(),
-            .speed_mode = LEDC_BEST_SPEED_MODE,
-            .channel = (ledc_channel_t)_channel,
-            .intr_type = LEDC_INTR_DISABLE,
-            .timer_sel = (ledc_timer_t)_timer,
-            .duty = uint32_t(_duty * (1 << _dutyRes)),
-            .hpoint = 0,
-            .flags =
-                {
-                    .output_invert = 0,
-                },
-        };
+        ledc_channel_config_t ledc_conf = {};
+        ledc_conf.gpio_num = _pin->num();
+        ledc_conf.speed_mode = LEDC_BEST_SPEED_MODE;
+        ledc_conf.channel = (ledc_channel_t)_channel;
+        ledc_conf.intr_type = LEDC_INTR_DISABLE;
+        ledc_conf.timer_sel = (ledc_timer_t)_timer;
+        ledc_conf.duty = uint32_t(_duty * (1 << _dutyRes));
         LOGI(_pin, "PWM config: channel=%i, timer=%i, freq=%i, res=%d",
              _channel, _timer, _freq, _dutyRes);
         ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
@@ -727,19 +723,12 @@ namespace esp32m {
           return ESP_FAIL;
         _speedMode = mode;
         ledcTimerRef(_timer);
-        ledc_channel_config_t ledc_conf = {
-            .gpio_num = _pin->num(),
-            .speed_mode = mode,
-            .channel = (ledc_channel_t)_channel,
-            .intr_type = LEDC_INTR_DISABLE,
-            .timer_sel = (ledc_timer_t)_timer,
-            .duty = 0x0,
-            .hpoint = 0,
-            .flags =
-                {
-                    .output_invert = 0,
-                },
-        };
+        ledc_channel_config_t ledc_conf = {};
+        ledc_conf.gpio_num = _pin->num();
+        ledc_conf.speed_mode = mode;
+        ledc_conf.channel = (ledc_channel_t)_channel;
+        ledc_conf.intr_type = LEDC_INTR_DISABLE;
+        ledc_conf.timer_sel = (ledc_timer_t)_timer;
         ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
         /*LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i,
            duty_res=%i", _channel, _timer, freq_hz, duty_resolution);*/

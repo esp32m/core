@@ -63,7 +63,7 @@ namespace esp32m {
       Mlx90614(const Mlx90614 &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool pollSensors() override;
       bool initSensors() override;
 

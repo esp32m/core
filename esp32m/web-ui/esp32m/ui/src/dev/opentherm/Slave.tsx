@@ -1,12 +1,12 @@
 import React from "react";
-import { ISlaveState, IProps } from "./types";
+import { TSlaveState, TProps } from "./types";
 import * as Backend from "../../backend";
 import {  useModuleState } from "../..";
 import { Slider, Grid } from "@mui/material";
 import { CardBox } from "@ts-libs/ui-app";
 
-export default ({ name, title }: IProps) => {
-  const state = useModuleState<ISlaveState>(name);
+export default ({ name, title }: TProps) => {
+  const state = useModuleState<TSlaveState>(name);
   const [disabled, setDisabled] = React.useState(false);
   const api = Backend.useBackendApi();
   if (!state) return null;
@@ -14,7 +14,7 @@ export default ({ name, title }: IProps) => {
   return (
     <CardBox title={title || name}>
       <Grid container>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Slider
             min={state.hvac.bounds?.ch?.[0] || 0}
             max={state.hvac.bounds?.ch?.[1] || 100}

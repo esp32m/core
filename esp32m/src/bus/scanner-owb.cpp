@@ -14,8 +14,8 @@ namespace esp32m {
   namespace bus {
     namespace scanner {
 
-      DynamicJsonDocument *Owb::getState(const JsonVariantConst args) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+      JsonDocument *Owb::getState(RequestContext &ctx) {
+        JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
         auto root = doc->to<JsonObject>();
         root["pin"] = _pin;
         root["max"] = _maxDevices;
@@ -59,11 +59,11 @@ namespace esp32m {
         for (;;) {
           esp_task_wdt_reset();
           if (_pendingResponse) {
-            DynamicJsonDocument *doc = new DynamicJsonDocument(
-                JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(_maxDevices) +
-                _maxDevices * 17);
+            JsonDocument *doc = new JsonDocument(
+                /*JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(_maxDevices) +
+                _maxDevices * 17*/);
             auto root = doc->to<JsonObject>();
-            auto codes = root.createNestedArray("codes");
+            auto codes = root["codes"].to<JsonArray>();
             esp32m::Owb owb((gpio_num_t)_pin);
             int num_devices = 0;
             std::lock_guard guard(owb.mutex());

@@ -27,19 +27,19 @@ namespace esp32m {
         json::from(reqdata["dir"], dir, "/");
         DIR *dp = opendir(dir);
         if (dp) {
-          size_t docsize = 0;
+          //size_t docsize = 0;
           struct dirent *ep;
-          while ((ep = readdir(dp)))
+          /*while ((ep = readdir(dp)))
             docsize += JSON_ARRAY_SIZE(1) + JSON_ARRAY_SIZE(3) +
-                       JSON_STRING_SIZE(strlen(ep->d_name));
-          if (docsize) {
+                       JSON_STRING_SIZE(strlen(ep->d_name));*/
+          //if (docsize) {
             seekdir(dp, 0);
             char *path = nullptr;
             size_t pathBufSuze = 0;
-            auto doc = new DynamicJsonDocument(docsize);
+            auto doc = new JsonDocument(); /* docsize */
             auto root = doc->to<JsonArray>();
             while ((ep = readdir(dp))) {
-              auto a = root.createNestedArray();
+              auto a = root.add<JsonArray>();
               a.add(ep->d_type);
               a.add(ep->d_name);
               auto ps = strlen(dir) + 1 + strlen(ep->d_name) + 1;
@@ -58,7 +58,7 @@ namespace esp32m {
                 if (!stat(path, &st))
                   a.add(st.st_size);
               }
-            }
+            // }
             if (path)
               free(path);
             req.respond(doc->as<JsonVariantConst>(), false);
@@ -102,7 +102,7 @@ namespace esp32m {
                     tr += r;
                   }
                   buf[tr] = 0;
-                  auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+                  auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
                   doc->set((const char *)buf);
                   req.respond(doc->as<JsonVariantConst>(), false);
                   delete doc;

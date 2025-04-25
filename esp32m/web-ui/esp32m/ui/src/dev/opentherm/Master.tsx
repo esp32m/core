@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { IBounds, IMasterState, IProps, Status } from './types';
+import { TBounds, TMasterState, TProps, Status } from './types';
 import * as Backend from '../../backend';
 import { useModuleState } from '../..';
 import {
@@ -18,7 +18,7 @@ import { DialogForm, FieldText, useDialogForm } from '@ts-libs/ui-forms';
 import { CardBox } from '@ts-libs/ui-app';
 import { NameValueList } from '../../app';
 
-const useValidationSchema = (bounds?: IBounds) => {
+const useValidationSchema = (bounds?: TBounds) => {
   const { dhw = [], ch = [], hcr = [] } = bounds || {};
   const hash = [...dhw, ...ch, ...hcr].reduce((pv, cv) => pv * 31 + cv, 17);
   return useMemo(() => {
@@ -58,14 +58,14 @@ const FieldStatus = () => {
   };
   return (
     <Grid container spacing={3}>
-      <Grid item xs>
+      <Grid size="grow">
         <FormControlLabel
           control={<Switch {...pCh} />}
           label="Central heating"
           labelPlacement="start"
         />
       </Grid>
-      <Grid item xs>
+      <Grid size="grow">
         <FormControlLabel
           control={<Switch {...pTw} />}
           label="Tap water"
@@ -75,8 +75,8 @@ const FieldStatus = () => {
     </Grid>
   );
 };
-export default ({ name, title }: IProps) => {
-  const state = useModuleState<IMasterState>(name);
+export default ({ name, title }: TProps) => {
+  const state = useModuleState<TMasterState>(name);
   const validationSchema = useValidationSchema(state?.hvac?.bounds);
   const api=Backend.useBackendApi();
   const [hook, openSettings] = useDialogForm({

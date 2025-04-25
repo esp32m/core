@@ -9,8 +9,8 @@ const validationSchema = Yup.object().shape({
 
 const component = () => {
   return (
-    <Grid item container spacing={2}>
-      <Grid item xs={6}>
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 6 }}>
         <FieldText name="value" label="Value" fullWidth type="number" />
       </Grid>
     </Grid>

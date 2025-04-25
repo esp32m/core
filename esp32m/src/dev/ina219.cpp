@@ -197,8 +197,8 @@ namespace esp32m {
       return true;
     }
 
-    DynamicJsonDocument *Ina219::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(5));
+    JsonDocument *Ina219::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(5) */
       JsonObject root = doc->to<JsonObject>();
       float value;
       root["addr"] = _i2c->addr();

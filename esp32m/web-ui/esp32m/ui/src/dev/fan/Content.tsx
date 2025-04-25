@@ -39,17 +39,17 @@ export default ({ name, title }: TProps) => {
           label="Enabled"
         />
         {isNumber(rpm) && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <NameValueList
               list={[['Actual speed', `${(rpm || 0).toFixed(1)} RPM`]]}
             />
           </Grid>
         )}
-        <Grid item xs={12} container style={{ marginTop: 15 }}>
-          <Grid item xs={3}>
+        <Grid size={{ xs: 12 }} container style={{ marginTop: 15 }}>
+          <Grid size={{ xs: 3 }}>
             <Typography>Set fan speed</Typography>
           </Grid>
-          <Grid item xs={9}>
+          <Grid size={{ xs: 9 }}>
             <Slider
               min={0}
               max={100}

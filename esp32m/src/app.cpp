@@ -27,16 +27,13 @@ namespace esp32m {
 
   App *_appInstance = nullptr;
 
-  const char *AppObject::KeyStateSet = "state-set";
-  const char *AppObject::KeyStateGet = "state-get";
-
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
     EventManager::instance().publishBackwards(ev);
   }
 
   AppObject::AppObject() {
-    EventManager::instance().subscribe([this](Event &ev) {
+    _subscription = EventManager::instance().subscribe([this](Event &ev) {
       Request *req;
       EventDescribe *ed;
       if (Request::is(ev, interactiveName(), &req))
@@ -49,6 +46,8 @@ namespace esp32m {
   };
 
   bool AppObject::handleRequest(Request &req) {
+    if (handleInfoRequest(req))
+      return true;
     if (handleConfigRequest(req))
       return true;
     if (handleStateRequest(req))
@@ -56,11 +55,28 @@ namespace esp32m {
     return false;
   };
 
+  bool AppObject::handleInfoRequest(Request &req) {
+    const char *name = req.name();
+    const char *iname = interactiveName();
+    if (!strcmp(name, KeyInfoGet)) {
+      RequestContext ctx(req, req.data());
+      JsonDocument *info = getInfo(ctx);
+      if (info) {
+        json::check(this, info, "getInfo()");
+        req.respond(iname, *info, false);
+        delete info;
+      }
+      return true;
+    }
+    return false;
+  }
+
   bool AppObject::handleStateRequest(Request &req) {
     const char *name = req.name();
     const char *iname = interactiveName();
     if (!strcmp(name, KeyStateGet)) {
-      DynamicJsonDocument *state = getState(req.data());
+      RequestContext ctx(req, req.data());
+      JsonDocument *state = getState(ctx);
       if (state) {
         json::check(this, state, "getState()");
         req.respond(iname, *state, false);
@@ -68,18 +84,15 @@ namespace esp32m {
       }
       return true;
     } else if (!strcmp(name, KeyStateSet)) {
-      DynamicJsonDocument *result = nullptr;
       JsonVariantConst data =
           req.isBroadcast() ? req.data()[iname] : req.data();
       if (data.isUnbound())
         return true;
-      setState(data, &result);
-      if (result) {
-        json::check(this, result, "setState()");
-        req.respond(iname, *result);
-        delete result;
-      } else
-        req.respond(iname, json::null<JsonVariantConst>(), false);
+      RequestContext ctx(req, data);
+      setState(ctx);
+      if (!ctx.result && ctx.errors.empty())
+        ctx.result.reset(getState(ctx));
+      ctx.respond(iname);
       return true;
     }
     return false;
@@ -96,7 +109,7 @@ namespace esp32m {
       if (internalRequest && !_configured)
         return true;
       RequestContext ctx(req, reqData);
-      DynamicJsonDocument *config = getConfig(ctx);
+      JsonDocument *config = getConfig(ctx);
       if (config) {
         json::check(this, config, "getConfig()");
         req.respond(cname, *config, false);
@@ -108,17 +121,13 @@ namespace esp32m {
       if (data.isUnbound())
         return true;
       RequestContext ctx(req, data);
-      DynamicJsonDocument *result = nullptr;
-      if (setConfig(data, &result)) {
+      if (setConfig(ctx)) {
         config::Changed::publish(this);
         Broadcast::publish(cname, "config-changed");
+        if (!ctx.result && ctx.errors.empty())
+          ctx.result.reset(getConfig(ctx));
       }
-      if (result) {
-        json::check(this, result, "setConfig()");
-        req.respond(cname, *result);
-        delete result;
-      } else
-        req.respond(cname, json::null<JsonVariantConst>(), false);
+      ctx.respond(cname);
       return true;
     }
     return false;
@@ -325,12 +334,12 @@ namespace esp32m {
     } else if (req.is("describe")) {
       EventDescribe ev;
       EventManager::instance().publish(ev);
-      size_t size = JSON_OBJECT_SIZE(ev.descriptors.size());
-      if (size) {
-        for (auto &e : ev.descriptors) {
+      // size_t size = JSON_OBJECT_SIZE(ev.descriptors.size());
+      if (ev.descriptors.size()) {
+        /*for (auto &e : ev.descriptors) {
           size += JSON_STRING_SIZE(e.first.size()) + json::measure(e.second);
-        }
-        auto doc = new DynamicJsonDocument(size);
+        }*/
+        auto doc = new JsonDocument(); /* size */
         auto root = doc->to<JsonObject>();
         for (auto &e : ev.descriptors) {
           root[e.first] = e.second;
@@ -346,6 +355,7 @@ namespace esp32m {
 
   void App::run() {
     esp_task_wdt_add(NULL);
+    EventPeriodic evp;
     for (;;) {
       esp_task_wdt_reset();
       if (_configDirty && (millis() - _configDirty > 1000)) {
@@ -353,13 +363,15 @@ namespace esp32m {
         _config->save();
       }
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+      esp_task_wdt_reset();
+      evp.publish();
     }
   }
 
-  DynamicJsonDocument *App::getState(const JsonVariantConst args) {
-    size_t size = JSON_OBJECT_SIZE(
-        1 + 8);  // root: name, time, uptime, version, built, sdk, size, space
-    auto doc = new DynamicJsonDocument(size);
+  JsonDocument *App::getState(RequestContext &ctx) {
+    /*size_t size = JSON_OBJECT_SIZE(
+        1 + 8);  // root: name, time, uptime, version, built, sdk, size, space*/
+    auto doc = new JsonDocument(); /* size */
     JsonObject info = doc->to<JsonObject>();
 
     info["name"] = _name;
@@ -375,16 +387,16 @@ namespace esp32m {
     return doc;
   }
 
-  DynamicJsonDocument *App::getConfig(RequestContext &ctx) {
-    size_t size = JSON_OBJECT_SIZE(4)  // hostname, udplog: enabled, host
+  JsonDocument *App::getConfig(RequestContext &ctx) {
+    /*size_t size = JSON_OBJECT_SIZE(4)  // hostname, udplog: enabled, host
                   + JSON_STRING_SIZE(_hostname.size());
     if (_udpLogger)
-      size += JSON_STRING_SIZE(_udpLogger->getHost().size());
+      size += JSON_STRING_SIZE(_udpLogger->getHost().size());*/
 
-    auto doc = new DynamicJsonDocument(size);
+    auto doc = new JsonDocument(); /* size */
     auto root = doc->to<JsonObject>();
     json::to(root, "hostname", _hostname);
-    auto udplog = root.createNestedObject("udplog");
+    auto udplog = root["udplog"].to<JsonObject>();
     if (_udpLogger) {
       json::to(udplog, "enabled", _udpLogger->isEnabled());
       json::to(udplog, "host", _udpLogger->getHost());
@@ -394,9 +406,8 @@ namespace esp32m {
     return doc;
   }
 
-  bool App::setConfig(const JsonVariantConst data,
-                      DynamicJsonDocument **result) {
-    JsonObjectConst root = data.as<JsonObjectConst>();
+  bool App::setConfig(RequestContext &ctx) {
+    JsonObjectConst root = ctx.data.as<JsonObjectConst>();
     std::string next = _hostname;
     bool changed = false;
     json::from(root["hostname"], next, &changed);

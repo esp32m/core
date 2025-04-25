@@ -93,7 +93,7 @@ const ScanResults = ({ state, resp }: IProps) => {
   for (let i = from; i <= to; i++)
     if (addrs[i >> 3] & (1 << (i & 7)))
       buttons.push(
-        <Grid item xs={2} key={i}>
+        <Grid size={{ xs: 2 }} key={i}>
           <IdButton variant="contained" color="secondary">
             0x{i.toString(16)}
           </IdButton>
@@ -140,12 +140,12 @@ const ValidationSchema = Yup.object().shape({
 export default () => {
   const [tab, setTab] = useState(0);
   const { check, alertProps } = useAlert();
-  const [state = {}, refreshConfig] = useModuleConfig<IOptions>(Name);
-  const api=useBackendApi();
+  const { config = {}, refreshConfig } = useModuleConfig<IOptions>(Name);
+  const api = useBackendApi();
   const reqScan = (req?: IOptions) => api.request(Name, 'scan', req);
   const reqRequest = (req?: IOptions) => api.request(Name, 'request', req);
 
-    const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any) => {
     switch (tab) {
       case 0:
         check(await reqScan(values));
@@ -163,11 +163,11 @@ export default () => {
     InputLabelProps: { shrink: true },
     fullWidth: true,
   };
-  const resp = useSelector<any, IModbusResponse>((state) => state.modbus) || {};
+  const resp = useSelector<any, IModbusResponse>((config) => config.modbus) || {};
   const { scan } = resp;
   return (
     <MuiForm
-      initial={state}
+      initial={config}
       onSubmit={handleSubmit}
       validationSchema={ValidationSchema}
     >
@@ -179,40 +179,33 @@ export default () => {
               progress={scan?.progress || controller.isSubmitting || false}
             >
               <Grid container spacing={3}>
-                <Grid item xs>
-                  <FieldSelect name="mode" label="RS485 mode" {...ncp}>
-                    <MenuItem value="rtu">RTU</MenuItem>
-                    <MenuItem value="ascii">ASCII</MenuItem>
-                  </FieldSelect>
-                </Grid>
-                <Grid item xs>
-                  <FieldSelect name="uart" label="UART number" {...ncp}>
-                    <MenuItem value={0}>UART 0</MenuItem>
-                    <MenuItem value={1}>UART 1</MenuItem>
-                    <MenuItem value={2}>UART 2</MenuItem>
-                  </FieldSelect>
-                </Grid>
-                <Grid item xs>
-                  <FieldAutocomplete
-                    name="baud"
-                    label="Baud rate"
-                    {...ncp}
-                    autocompleteProps={{
-                      freeSolo: true,
-                      options: [
-                        2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200,
-                      ],
-                      getOptionLabel: (o: any) => o.toString(),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs>
-                  <FieldSelect name="parity" label="Parity" {...ncp}>
-                    <MenuItem value={0}>Disable</MenuItem>
-                    <MenuItem value={2}>Even</MenuItem>
-                    <MenuItem value={3}>Odd</MenuItem>
-                  </FieldSelect>
-                </Grid>
+                <FieldSelect name="mode" label="RS485 mode" {...ncp} grid>
+                  <MenuItem value="rtu">RTU</MenuItem>
+                  <MenuItem value="ascii">ASCII</MenuItem>
+                </FieldSelect>
+                <FieldSelect name="uart" label="UART number" {...ncp} grid>
+                  <MenuItem value={0}>UART 0</MenuItem>
+                  <MenuItem value={1}>UART 1</MenuItem>
+                  <MenuItem value={2}>UART 2</MenuItem>
+                </FieldSelect>
+                <FieldAutocomplete
+                  name="baud"
+                  label="Baud rate"
+                  {...ncp}
+                  autocompleteProps={{
+                    freeSolo: true,
+                    options: [
+                      2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200,
+                    ],
+                    getOptionLabel: (o: any) => o.toString(),
+                  }}
+                  grid
+                />
+                <FieldSelect name="parity" label="Parity" {...ncp} grid>
+                  <MenuItem value={0}>Disable</MenuItem>
+                  <MenuItem value={2}>Even</MenuItem>
+                  <MenuItem value={3}>Odd</MenuItem>
+                </FieldSelect>
               </Grid>
               <div style={{ marginTop: 20 }} />
               <Paper square>
@@ -227,54 +220,40 @@ export default () => {
                 </Tabs>
                 <TabPanel value={tab} index={0}>
                   <Grid container spacing={3}>
-                    <Grid item xs>
-                      <FieldText name="from" label="From ID" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
-                      <FieldText name="to" label="To ID" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
-                      <SubmitButton label="Scan MODBUS" />
+                    <FieldText name="from" label="From ID" {...ncp} grid />
+                    <FieldText name="to" label="To ID" {...ncp} grid />
+                    <Grid size="grow">
+                    <SubmitButton label="Scan MODBUS" />
                     </Grid>
                   </Grid>
                   <Alert {...alertProps} />
-                  {!!scan?.addrs && <ScanResults state={state} resp={resp} />}
+                  {!!scan?.addrs && <ScanResults state={config} resp={resp} />}
                 </TabPanel>
                 <TabPanel value={tab} index={1}>
                   <Grid container spacing={3}>
-                    <Grid item xs>
-                      <FieldText name="addr" label="Address" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
-                      <FieldSelect name="cmd" label="Command" {...ncp}>
-                        <MenuItem value={1}>Read Coils</MenuItem>
-                        <MenuItem value={2}>Read DiscreteInputs</MenuItem>
-                        <MenuItem value={3}>Read Holding Registers</MenuItem>
-                        <MenuItem value={4}>Read Input Registers</MenuItem>
-                        <MenuItem value={5}>Write Coil</MenuItem>
-                        <MenuItem value={6}>Write Holding Register</MenuItem>
-                        <MenuItem value={7}>Read Exception Status</MenuItem>
-                        <MenuItem value={8}>Diagnostic</MenuItem>
-                        <MenuItem value={11}>Get Com Event Counter</MenuItem>
-                        <MenuItem value={12}>Get Com Event Log</MenuItem>
-                        <MenuItem value={15}>Write Multiple Coils</MenuItem>
-                        <MenuItem value={15}>
-                          Write Multiple Holding Registers
-                        </MenuItem>
-                      </FieldSelect>
-                    </Grid>
+                    <FieldText name="addr" label="Address" {...ncp} grid />
+                    <FieldSelect name="cmd" label="Command" {...ncp} grid>
+                      <MenuItem value={1}>Read Coils</MenuItem>
+                      <MenuItem value={2}>Read DiscreteInputs</MenuItem>
+                      <MenuItem value={3}>Read Holding Registers</MenuItem>
+                      <MenuItem value={4}>Read Input Registers</MenuItem>
+                      <MenuItem value={5}>Write Coil</MenuItem>
+                      <MenuItem value={6}>Write Holding Register</MenuItem>
+                      <MenuItem value={7}>Read Exception Status</MenuItem>
+                      <MenuItem value={8}>Diagnostic</MenuItem>
+                      <MenuItem value={11}>Get Com Event Counter</MenuItem>
+                      <MenuItem value={12}>Get Com Event Log</MenuItem>
+                      <MenuItem value={15}>Write Multiple Coils</MenuItem>
+                      <MenuItem value={15}>
+                        Write Multiple Holding Registers
+                      </MenuItem>
+                    </FieldSelect>
                   </Grid>
                   <Grid container spacing={3}>
-                    <Grid item xs>
-                      <FieldText name="regs" label="Start reg" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
-                      <FieldText name="regc" label="Reg count" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
-                      <FieldText name="v" label="Value" {...ncp} />
-                    </Grid>
-                    <Grid item xs>
+                    <FieldText name="regs" label="Start reg" {...ncp} grid />
+                    <FieldText name="regc" label="Reg count" {...ncp} grid />
+                    <FieldText name="v" label="Value" {...ncp} grid />
+                    <Grid size="grow" >
                       <SubmitButton label="Run request" />
                     </Grid>
                   </Grid>
@@ -285,6 +264,6 @@ export default () => {
           );
         }}
       </FormikConsumer>
-    </MuiForm>
+    </MuiForm >
   );
 };

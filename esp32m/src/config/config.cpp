@@ -27,26 +27,18 @@ namespace esp32m {
                      bool isError) override {
       if (data.isNull() || !data.size())
         return;
-      auto doc = new DynamicJsonDocument(data.memoryUsage());
+      auto doc = new JsonDocument(); /* data.memoryUsage() */
       doc->set(data);
       _responses.add(source, doc);
       json::checkEqual(data, doc->as<JsonVariantConst>());
     }
 
-    DynamicJsonDocument *merge() {
+    JsonDocument *merge() {
       return _responses.concat();
     }
 
    private:
     json::ConcatToObject _responses;
-  };
-
-  class ConfigApply : public Request {
-   public:
-    ConfigApply(const JsonVariantConst data)
-        : Request(Config::KeyConfigSet, 0, nullptr, data, nullptr) {}
-    void respondImpl(const char *source, const JsonVariantConst data,
-                     bool isError) override {}
   };
 
   void Config::save() {
@@ -58,7 +50,8 @@ namespace esp32m {
     if (doc) {
       json::check(this, doc, "save()");
       std::lock_guard<std::mutex> guard(_mutex);
-      _store->write(doc->as<JsonVariantConst>());
+      // _store->write(doc->as<JsonVariantConst>());
+      _store->write(*doc);
       delete doc;
     }
   }
@@ -66,7 +59,7 @@ namespace esp32m {
   void Config::load() {
     if (!_store)
       return;
-    DynamicJsonDocument *doc;
+    JsonDocument *doc;
     {
       std::lock_guard<std::mutex> guard(_mutex);
       doc = _store->read();
@@ -79,10 +72,10 @@ namespace esp32m {
     delete doc;
   }
 
-  DynamicJsonDocument *Config::read() {
+  JsonDocument *Config::read() {
     if (!_store)
       return nullptr;
-    DynamicJsonDocument *doc;
+    JsonDocument *doc;
     {
       std::lock_guard<std::mutex> guard(_mutex);
       doc = _store->read();

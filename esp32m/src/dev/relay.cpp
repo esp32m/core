@@ -57,7 +57,7 @@ namespace esp32m {
         return;
       logI("state changed: %s -> %s", toString(_state), toString(state));
       _state = state;
-      StaticJsonDocument<0> doc;
+      JsonDocument doc;
       doc.set(serialized(toString(state)));
       EventStateChanged::publish(this, doc);
       if (isPersistent())
@@ -153,17 +153,17 @@ namespace esp32m {
       return _state;
     }
 
-    void Relay::setState(const JsonVariantConst state,
-                         DynamicJsonDocument **result) {
+    void Relay::setState(RequestContext &ctx) {
+      auto state = ctx.data;
       JsonVariantConst v = state["state"];
       if (!v)
         v = state;
       if (v.is<const char *>())
-        json::checkSetResult(turn(v.as<const char *>()), result);
+        ctx.errors.check(turn(v.as<const char *>()));
     }
 
-    DynamicJsonDocument *Relay::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+    JsonDocument *Relay::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
       JsonObject info = doc->to<JsonObject>();
       info["state"] = toString(refreshState());
       return doc;
@@ -178,18 +178,17 @@ namespace esp32m {
       return ESP_FAIL;
     }
 
-    bool Relay::setConfig(const JsonVariantConst cfg,
-                          DynamicJsonDocument **result) {
+    bool Relay::setConfig(RequestContext &ctx) {
       if (isPersistent()) {
-        setState(cfg, result);
+        setState(ctx);
         return true;
       }
       return false;
     }
 
-    DynamicJsonDocument *Relay::getConfig(RequestContext &ctx) {
+    JsonDocument *Relay::getConfig(RequestContext &ctx) {
       if (isPersistent())
-        return getState(ctx.request.data());
+        return getState(ctx);
       return nullptr;
     }
 
@@ -197,10 +196,10 @@ namespace esp32m {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is(integrations::ha::DescribeRequest::Name)) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(6));
+        JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(6) */
         auto root = doc->to<JsonObject>();
         root["component"] = "switch";
-        auto config = root.createNestedObject("config");
+        auto config = root["config"].to<JsonObject>();
         config["payload_on"] = "on";
         config["payload_off"] = "off";
         config["state_on"] = "on";

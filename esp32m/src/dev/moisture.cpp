@@ -22,8 +22,8 @@ namespace esp32m {
       return _divisor != 0;
     }
 
-    DynamicJsonDocument *MoistureSensor::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(3));
+    JsonDocument *MoistureSensor::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);

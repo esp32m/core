@@ -78,7 +78,7 @@ const Inner = ({ updateConfig }: { updateConfig: VoidFunction }) => {
   return (
     <>
       <Grid container spacing={3}>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <FieldText
             name="hostname"
             label="Host name"
@@ -96,7 +96,7 @@ const Inner = ({ updateConfig }: { updateConfig: VoidFunction }) => {
           />
         </Grid>
         {udplog && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <FormControlLabel
               control={
                 <Switch
@@ -126,18 +126,18 @@ const Inner = ({ updateConfig }: { updateConfig: VoidFunction }) => {
 };
 
 export const AppSettings = () => {
-  const [config, updateConfig] = useModuleConfig<ISystemConfig>(Name);
+  const { config, refreshConfig } = useModuleConfig<ISystemConfig>(Name);
   if (!config) return null;
 
   return (
     <ConfigBox
       name={'app'}
       initial={config}
-      onChange={updateConfig}
+      onChange={refreshConfig}
       title="Application settings"
       validationSchema={ValidationSchema}
     >
-      <Inner updateConfig={updateConfig} />
+      <Inner updateConfig={refreshConfig} />
     </ConfigBox>
   );
 };

@@ -12,7 +12,7 @@ import { validators } from '../../validation';
 import { FieldText, MuiForm } from '@ts-libs/ui-forms';
 import { CardBox } from '@ts-libs/ui-app';
 
-interface IOptions {
+type TOptions = {
   pin?: number;
   max?: number;
 }
@@ -67,12 +67,12 @@ const ScanButton = () => {
   );
 };
 
-const ScanResults = ({ scan }: {scan:IScanResponse}) => {
+const ScanResults = ({ scan }: { scan: IScanResponse }) => {
   const { codes = [] } = scan;
   const buttons = [];
   for (const c of codes)
     buttons.push(
-      <Grid item xs={2} key={c}>
+      <Grid size={{ xs: 2 }} key={c}>
         <IdButton variant="contained" color="secondary">
           {c}
         </IdButton>
@@ -99,21 +99,22 @@ const ValidationSchema = Yup.object().shape({
 });
 
 export default () => {
-  const api=useBackendApi()
-  const owbScan = (req?: IOptions) => api.request(Name, 'scan', req);
+  const api = useBackendApi()
+  const owbScan = (req?: TOptions) => api.request(Name, 'scan', req);
   const handleSubmit = async (values: any) => {
     await owbScan(values);
   };
   React.useEffect(() => {
     api.getState(Name);
   }, []);
-  const state = useModuleState<IOptions>(Name, { once: true }) || {};
+  const state = useModuleState<TOptions>(Name, { once: true }) || {};
   const scan =
     useSelector<any, IScanResponse>((state) => state.owb?.scan) || {};
   const ncp = {
     type: 'number',
     placeholder: 'auto',
     InputLabelProps: { shrink: true },
+    grid: true
   };
   const haveResults = !!scan.codes;
 
@@ -130,13 +131,9 @@ export default () => {
             progress={controller.isSubmitting}
           >
             <Grid container spacing={3}>
-              <Grid item xs>
-                <FieldText name="pin" label="Pin" {...ncp} />
-              </Grid>
-              <Grid item xs>
-                <FieldText name="max" label="Max devices" {...ncp} />
-              </Grid>
-              <Grid item xs>
+              <FieldText name="pin" label="Pin" {...ncp} />
+              <FieldText name="max" label="Max devices" {...ncp} />
+              <Grid size="grow">
                 <ScanButton />
               </Grid>
             </Grid>

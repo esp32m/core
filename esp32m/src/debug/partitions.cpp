@@ -13,7 +13,7 @@ namespace esp32m {
       return i;
     }
 
-    DynamicJsonDocument *Partitions::getState(const JsonVariantConst args) {
+    JsonDocument *Partitions::getState(RequestContext &ctx) {
       const uint32_t *ptr;
       spi_flash_mmap_handle_t handle;
       esp_err_t err = ESP_ERROR_CHECK_WITHOUT_ABORT(spi_flash_mmap(
@@ -33,16 +33,16 @@ namespace esp32m {
           break;
         else
           pc++;
-      DynamicJsonDocument *doc =
-          new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(pc) +
-                                  pc * (16 + JSON_ARRAY_SIZE(6)));
+      JsonDocument *doc =
+          new JsonDocument(/*JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(pc) +
+                                  pc * (16 + JSON_ARRAY_SIZE(6))*/);
       auto root = doc->to<JsonObject>();
-      auto partitions = root.createNestedArray("partitions");
+      auto partitions = root["partitions"].to<JsonArray>();
       for (const esp_partition_info_t *it = start; it != end; ++it)
         if (it->magic != ESP_PARTITION_MAGIC)
           break;
         else {
-          auto e = partitions.createNestedArray();
+          auto e = partitions.add<JsonArray>();
           e.add((char *)it->label);
           e.add(it->type);
           e.add(it->subtype);

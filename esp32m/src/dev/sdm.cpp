@@ -83,12 +83,12 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    DynamicJsonDocument *Sdm::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(
-          JSON_ARRAY_SIZE(3) + JSON_OBJECT_SIZE(1) + _data.jsonSize());
+    JsonDocument *Sdm::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(
+          /*JSON_ARRAY_SIZE(3) + JSON_OBJECT_SIZE(1) + _data.jsonSize()*/);
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
-      auto obj = arr.createNestedObject();
+      auto obj = arr.add<JsonObject>();
       _data.toJson(obj);
       return doc;
     }

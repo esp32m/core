@@ -1,17 +1,19 @@
-import { NetInterfaces } from "../types";
+import { TNetInterfaces } from "../types";
+import { createAction } from '@reduxjs/toolkit';
 
 export const Name = 'traceroute';
-export const StartAction = 'traceroute/start';
 
-export interface IConfig {
+export const StartAction = createAction('traceroute/start');
+
+export type TConfig = {
   target: string;
   timeout: number;
   proto: number;
   iface: number;
-  interfaces: NetInterfaces;
+  interfaces: TNetInterfaces;
 }
 
-export interface IResult {
+export type TResult = {
   ip: string;
   seq: number;
   row?: number;
@@ -21,6 +23,6 @@ export interface IResult {
   icmpc?: number;
 }
 
-export interface ILocalState {
-  results?: Array<IResult>;
+export type TLocalState = {
+  results?: Array<TResult>;
 }

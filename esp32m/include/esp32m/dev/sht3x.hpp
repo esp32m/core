@@ -69,7 +69,7 @@ namespace esp32m {
       Sht3x(const Sht3x &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool initSensors() override;
       bool pollSensors() override;
 

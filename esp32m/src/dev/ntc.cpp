@@ -15,8 +15,8 @@ namespace esp32m {
       Device::init(Flags::HasSensors);
     }
 
-    DynamicJsonDocument *Ntc::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(2));
+    JsonDocument *Ntc::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_temperature.get());

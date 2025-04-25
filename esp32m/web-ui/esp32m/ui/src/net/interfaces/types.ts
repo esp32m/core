@@ -13,7 +13,7 @@ export const enum InterfaceRole {
   DhcpServer,
 }
 
-export interface IInterfaceState {
+export type TInterfaceState = {
   up: boolean;
   desc: string;
   hostname: string;
@@ -26,9 +26,9 @@ export interface IInterfaceState {
   prio: number;
 }
 
-export type State = Record<string, IInterfaceState>;
+export type TState = Record<string, TInterfaceState>;
 
-export interface IInterfaceConfig {
+export type TInterfaceConfig = {
   role: InterfaceRole;
   mac: string;
   ip: [string, string, string];
@@ -36,4 +36,4 @@ export interface IInterfaceConfig {
   dns: Array<string>;
 }
 
-export type Config = Record<string, IInterfaceConfig>;
+export type TConfig = Record<string, TInterfaceConfig>;

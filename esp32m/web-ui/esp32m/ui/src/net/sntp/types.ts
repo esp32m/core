@@ -1,6 +1,6 @@
 export const Name = 'sntp';
 
-export interface IConfig {
+export type TConfig = {
   enabled: boolean;
   host: string;
   tz: number;
@@ -13,7 +13,7 @@ export const enum Status {
   InProgress,
 }
 
-export interface IState {
+export type TState = {
   status: Status;
   synced: number;
   time: string;

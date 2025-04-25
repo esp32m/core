@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Grid, MenuItem } from '@mui/material';
-import { INettoolsPlugin, NetInterface, NetInterfaces } from './types';
+import { INettoolsPlugin, TNetInterface, TNetInterfaces } from './types';
 import { getPlugins } from '@ts-libs/plugins';
 import { FieldSelect } from '@ts-libs/ui-forms';
 
@@ -21,7 +21,7 @@ export default () => {
   return <Grid container>{widgets}</Grid>;
 };
 
-const toMenuItem = (e: NetInterface, i: number) => (
+const toMenuItem = (e: TNetInterface, i: number) => (
   <MenuItem key={i} value={e[2]}>
     {`${e[0]} (${e[1]})`}
   </MenuItem>
@@ -30,7 +30,7 @@ const toMenuItem = (e: NetInterface, i: number) => (
 export const InterfacesSelect = ({
   interfaces,
 }: {
-  interfaces: NetInterfaces;
+  interfaces: TNetInterfaces;
 }) => {
   return (
     <FieldSelect name="iface" label="Interface" fullWidth>

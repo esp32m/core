@@ -1,10 +1,10 @@
-import { Name, IState, IProps } from './types';
+import { Name, TState, TProps } from './types';
 import { useModuleState } from '../..';
 import { CardBox } from '@ts-libs/ui-app';
 import { NameValueList } from '../../app';
 
-export default ({ title, addr }: IProps) => {
-  const state = useModuleState<IState>(Name);
+export default ({ title, addr }: TProps) => {
+  const state = useModuleState<TState>(Name);
   if (!state) return null;
   const { addr: a, temperature, pressure, humidity } = state;
   if (addr && addr != a) return null;

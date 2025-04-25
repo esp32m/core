@@ -4,9 +4,12 @@
 #include "esp32m/json.hpp"
 #include "esp32m/logging.hpp"
 
+#define ESP_ERR_ESP32M_BASE 0x6000
+#define ESP_ERR_ESP32M_END (ESP_ERR_ESP32M_BASE + 0x1000)
+
 namespace esp32m {
 
-  constexpr const char * ErrBusy = "ERR_BUSY";
+  constexpr const char *ErrBusy = "ERR_BUSY";
 
   class ErrorItem {
    public:
@@ -57,7 +60,7 @@ namespace esp32m {
       va_end(args);
       return result;
     };
-    size_t jsonSize() {
+    /*size_t jsonSize() {
       auto ls = _list.size();
       if (!ls)
         return 0;
@@ -70,15 +73,15 @@ namespace esp32m {
           size += JSON_ARRAY_SIZE(1) + JSON_STRING_SIZE(item.message.size());
       }
       return size;
-    }
-    void toJson(JsonVariant target) {
+    }*/
+    void toJson(JsonVariant target) const {
       JsonArray arr;
       if (target.is<JsonObject>())
-        arr = target.createNestedArray("error");
+        arr = target["error"].to<JsonArray>();
       else
         arr = target.as<JsonArray>();
       for (auto &item : _list) {
-        auto i = arr.createNestedArray();
+        auto i = arr.add<JsonArray>();
         if (item.name.size())
           i.add(item.name);
         else {
@@ -92,11 +95,8 @@ namespace esp32m {
           i.add(item.message);
       }
     }
-    DynamicJsonDocument *toJson(DynamicJsonDocument **result) {
-      size_t size = jsonSize();
-      if (!size)
-        return nullptr;
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) + size);
+    /*JsonDocument *toJson(JsonDocument **result) const {
+      auto doc = new JsonDocument();
       JsonVariant target;
       if (result)  // TODO: make this more transparent (quick hack to include
                    // "error" object in case we are responding from
@@ -108,21 +108,38 @@ namespace esp32m {
       if (result)
         *result = doc;
       return doc;
+    }*/
+    void toJson(std::unique_ptr<JsonDocument> &result) const {
+      if (empty()) return;
+      JsonVariant target;
+      if (result)  // TODO: make this more transparent (quick hack to include
+                   // "error" object in case we are responding from
+                   // setConfig/setState)
+        target = result->as<JsonObject>();
+      else {
+        auto doc = new JsonDocument();
+        target = doc->to<JsonObject>();
+        result.reset(doc);
+      }
+      toJson(target);
     }
-    bool empty() {
+
+    bool empty() const {
       return _list.empty();
     }
     void copyFrom(ErrorList &other) {
       for (auto &item : other._list) _list.push_back(item);
     }
-    void dump() {
+    void dump() const {
       if (empty())
         return;
-      auto doc = toJson(nullptr);
-      auto str = json::allocSerialize(doc->as<JsonVariantConst>());
-      delete doc;
-      loge(str);
-      free(str);
+      std::unique_ptr<JsonDocument> doc;
+      toJson(doc);
+      std::string str;
+      serializeJson(doc->as<JsonVariantConst>(), str);
+      // auto str = json::allocSerialize(doc->as<JsonVariantConst>());
+      loge(str.c_str());
+      // free(str);
     }
     void clear() {
       _list.clear();

@@ -55,9 +55,8 @@ namespace esp32m {
     void handleEvent(Event &ev) override;
     void wsSend(const char *text);
     esp_err_t wsSend(uint32_t cid, const char *text);
-    bool setConfig(const JsonVariantConst cfg,
-                   DynamicJsonDocument **result) override {
-      JsonObjectConst root = cfg.as<JsonObjectConst>();
+    bool setConfig(RequestContext &ctx) override {
+      JsonObjectConst root = ctx.data.as<JsonObjectConst>();
       auto auth = root["auth"];
       bool changed = false;
       if (auth) {
@@ -67,14 +66,14 @@ namespace esp32m {
       }
       return changed;
     }
-    DynamicJsonDocument *getConfig(RequestContext &ctx) override {
-      size_t size = JSON_OBJECT_SIZE(4)  // auth: enabled, username, password
+    JsonDocument *getConfig(RequestContext &ctx) override {
+      /*size_t size = JSON_OBJECT_SIZE(4)  // auth: enabled, username, password
                     + JSON_STRING_SIZE(_auth.username.size()) +
-                    JSON_STRING_SIZE(_auth.password.size());
-      auto doc = new DynamicJsonDocument(size);
+                    JSON_STRING_SIZE(_auth.password.size());*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       if (!_auth.empty()) {
-        auto auth = root.createNestedObject("auth");
+        auto auth = root["auth"].to<JsonObject>();
         json::to(auth, "enabled", _auth.enabled);
         json::to(auth, "username", _auth.username);
         json::to(auth, "password", _auth.password);
@@ -90,7 +89,7 @@ namespace esp32m {
     std::map<uint32_t, std::unique_ptr<ui::Client> > _clients;
     std::vector<ui::Asset> _assets;
     void run();
-    void incoming(uint32_t cid, DynamicJsonDocument *json);
+    void incoming(uint32_t cid, JsonDocument *json);
     void sessionClosed(uint32_t cid);
     friend class ui::Req;
     friend class ui::Transport;

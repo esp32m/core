@@ -231,10 +231,9 @@ namespace esp32m {
       static const uint8_t DiagApRunning = 4;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
       bool pollSensors() override;
       bool handleRequest(Request &req) override;
       void handleEvent(Event &ev) override;
@@ -260,6 +259,8 @@ namespace esp32m {
       Response *_pendingResponse = nullptr;
       std::unique_ptr<ApInfo> _connect;
       Sensor _rssi;
+
+      std::unique_ptr<JsonDocument> _delayedConfig;
 
       Wifi();
       esp_err_t init();

@@ -22,17 +22,16 @@ namespace esp32m {
       bool pollSensors() override;
       bool initSensors() override;
       const JsonVariantConst descriptor() const override {
-        static StaticJsonDocument<JSON_ARRAY_SIZE(1)> doc;
+        static JsonDocument/*<JSON_ARRAY_SIZE(1)>*/ doc;
         if (doc.isNull()) {
           auto root = doc.to<JsonArray>();
           root.add("flow");
         }
         return doc.as<JsonArrayConst>();
       };
-      bool setConfig(const JsonVariantConst cfg,
-                     DynamicJsonDocument **result) override;
-      DynamicJsonDocument *getConfig(RequestContext &ctx) override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      bool setConfig(RequestContext &ctx) override;
+      JsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       virtual float compute(int pcnt, int ms);
 
      private:

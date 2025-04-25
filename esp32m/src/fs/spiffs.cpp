@@ -16,8 +16,8 @@ namespace esp32m {
       return Spiffs::instance();
     }
 
-    DynamicJsonDocument *Spiffs::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(3));
+    JsonDocument *Spiffs::getState(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
       auto root = doc->to<JsonObject>();
       size_t total, used;
       root["label"] = _label;

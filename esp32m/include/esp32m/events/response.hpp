@@ -39,7 +39,7 @@ namespace esp32m {
     const char *source() const {
       return _source;
     }
-    DynamicJsonDocument *data() {
+    JsonDocument *data() {
       return _data;
     }
     bool isPartial() const {
@@ -52,18 +52,18 @@ namespace esp32m {
       return _isError;
     }
     void setError(esp_err_t err) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
       doc->set(err);
       setData(doc);
       _isError = true;
     }
-    void setError(DynamicJsonDocument *data) {
+    void setError(JsonDocument *data) {
       if (_data)
         delete (_data);
       _data = data;
       _isError = true;
     }
-    void setData(DynamicJsonDocument *data) {
+    void setData(JsonDocument *data) {
       if (_data)
         delete (_data);
       _data = data;
@@ -81,24 +81,24 @@ namespace esp32m {
       return true;
     }
     static void respond(std::unique_ptr<Response> &response,
-                        DynamicJsonDocument *data = nullptr) {
+                        JsonDocument *data = nullptr) {
       response->setData(data);
       response->publish();
       response.reset();
     }
-    static void respondError(std::unique_ptr<Response> &response,
+    /*static void respondError(std::unique_ptr<Response> &response,
                              ErrorList &errors) {
       auto doc = errors.toJson(nullptr);
       response->setError(doc);
       response->publish();
       response.reset();
-    }
+    }*/
 
    protected:
     constexpr static const char *Type = "response";
 
    private:
-    DynamicJsonDocument *_data = nullptr;
+    JsonDocument *_data = nullptr;
     bool _isError = false, _partial = false;
 
     const char *_transport;

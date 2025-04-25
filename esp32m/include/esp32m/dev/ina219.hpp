@@ -112,7 +112,7 @@ namespace esp32m {
       Ina219(const Ina219 &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       bool pollSensors() override;
       bool initSensors() override;
     };

@@ -20,7 +20,7 @@ const Mode = () => {
   const enable = (m: PinMode, on: boolean) =>
     setFieldValue('mode', on ? mode | m : mode & ~m);
   return (
-    <Grid item xs={12}>
+    <Grid size={{ xs: 12 }}>
       {(flags & PinFlags.Input) != 0 && (
         <FormControlLabel
           control={
@@ -82,9 +82,9 @@ const Mode = () => {
 
 const component = () => {
   return (
-    <Grid item container spacing={2}>
+    <Grid container spacing={2}>
       <Mode />
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <FieldSwitch name="high" label="Digital state (LOW / HIGH)" />
       </Grid>
     </Grid>

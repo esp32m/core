@@ -98,7 +98,7 @@ namespace esp32m {
       Cap11xx(const Cap11xx &) = delete;
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
 
      private:
       uint64_t _stamp = 0;

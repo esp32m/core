@@ -92,7 +92,7 @@ namespace esp32m {
           else
             set(i, *v);
         }
-        size_t jsonSize() {
+        /*size_t jsonSize() {
           size_t r = 0;
           for (auto& i : _data) {
             const char* name = indicatorName(i.first);
@@ -103,14 +103,14 @@ namespace esp32m {
               r += JSON_ARRAY_SIZE(3);
           }
           return r;
-        }
+        }*/
         void toJson(JsonObject obj) {
           for (auto& i : _data) {
             const char* name = indicatorName(i.first);
             if (!name)
               continue;
             if (i.second.isThreePhase()) {
-              auto arr = obj.createNestedArray(name);
+              auto arr = obj[name].to<JsonArray>();
               for (auto p = 0; p < 3; p++) arr.add(i.second.get(p));
             } else
               obj[name] = i.second.get(0);

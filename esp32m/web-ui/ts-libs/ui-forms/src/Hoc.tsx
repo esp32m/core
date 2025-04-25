@@ -9,7 +9,7 @@ type Props = {
 const Hoc = (props: Props) => {
   const { grid, children } = props;
   if (!grid) return children;
-  const gp: GridProps = isBoolean(grid) ? { item: true, xs: true } : grid;
+  const gp: GridProps = isBoolean(grid) ? { size: { xs: 'grow' } } : grid;
   return <Grid {...gp}>{children}</Grid>;
 };
 

@@ -94,9 +94,9 @@ namespace esp32m {
           }
           return false;
         }
-        DynamicJsonDocument *getConfig(RequestContext &ctx) override {
+        JsonDocument *getConfig(RequestContext &ctx) override {
           auto size = JSON_OBJECT_SIZE(3);
-          auto doc = new DynamicJsonDocument(size);
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           json::to(root, "autoupdate", _autoUpdate);
           json::to(root, "autocheck", _autoCheck);
@@ -104,8 +104,7 @@ namespace esp32m {
           return doc;
         }
 
-        bool setConfig(const JsonVariantConst cfg,
-                       DynamicJsonDocument **result) override {
+        bool setConfig(RequestContext &ctx) override {
           bool changed = false;
           json::from(cfg["autoupdate"], _autoUpdate, &changed);
           json::from(cfg["autocheck"], _autoCheck, &changed);
@@ -116,7 +115,7 @@ namespace esp32m {
         size_t stateSize() {
           return 0;
         }
-        DynamicJsonDocument *getState(const JsonVariantConst args) override {
+        JsonDocument *getState(const JsonVariantConst args) override {
           auto size = 0;
           if (_running)
             size += JSON_OBJECT_SIZE(1);
@@ -128,7 +127,7 @@ namespace esp32m {
           auto errsize = _errors.jsonSize();
           if (errsize)
             size += JSON_OBJECT_SIZE(1) + errsize;
-          auto doc = new DynamicJsonDocument(size);
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           if (_running)
             json::to(root, "running", _running);
@@ -224,7 +223,7 @@ namespace esp32m {
           if (_manualCheck) {
             if (newVersion) {
               auto nv = newVersion->version.toString();
-              doc = new DynamicJsonDocument(JSON_STRING_SIZE(nv.size()));
+              doc = new JsonDocument(); /* JSON_STRING_SIZE(nv.size()) */
               doc->set(nv);
               Response::respond(_manualCheck, doc);
             } else
@@ -285,9 +284,9 @@ namespace esp32m {
       return f;
     }
 
-    DynamicJsonDocument *Ota::getState(const JsonVariantConst args) {
-      auto size = JSON_OBJECT_SIZE(1 /*flags*/ + (_updating ? 2 : 0));
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Ota::getState(RequestContext &ctx) {
+      // auto size = JSON_OBJECT_SIZE(1 /*flags*/ + (_updating ? 2 : 0));
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "flags", flags().value);
       if (_updating) {
@@ -297,12 +296,12 @@ namespace esp32m {
       return doc;
     }
 
-    DynamicJsonDocument *Ota::getConfig(RequestContext &ctx) {
+    JsonDocument *Ota::getConfig(RequestContext &ctx) {
       auto dl = _savedUrl.size();
-      auto size = JSON_OBJECT_SIZE(1);
+      /*auto size = JSON_OBJECT_SIZE(1);
       if (dl)
-        size += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(dl);
-      auto doc = new DynamicJsonDocument(size);
+        size += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(dl);*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "features", features().value);
       if (dl)
@@ -310,9 +309,9 @@ namespace esp32m {
       return doc;
     }
 
-    bool Ota::setConfig(const JsonVariantConst cfg,
-                        DynamicJsonDocument **result) {
+    bool Ota::setConfig(RequestContext &ctx) {
       bool changed = false;
+      auto cfg = ctx.data.as<JsonObjectConst>();
       json::from(cfg["url"], _savedUrl, &changed);
       return changed;
     }
@@ -329,9 +328,11 @@ namespace esp32m {
         auto f = features();
         if (!f.vendorOnly) {
           auto data = req.data();
-          if (data["save"])
-            if (setConfig(data, nullptr))
+          if (data["save"]) {
+            RequestContext ctx(req, req.data());
+            if (setConfig(ctx))
               config::Changed::publish(this);
+          }
           json::from(data["url"], _pendingUrl);
         }
 #if CONFIG_ESP32M_NET_OTA_CHECK_FOR_UPDATES

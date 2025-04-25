@@ -106,7 +106,7 @@ const content = (props: { name: string; title?: string }) => {
       onClick: () => playNote(i),
     };
     return (
-      <Grid item xs={1} key={i}>
+      <Grid size={{ xs: 1 }} key={i}>
         <NoteButton {...bp}>{e}</NoteButton>
       </Grid>
     );
@@ -114,7 +114,7 @@ const content = (props: { name: string; title?: string }) => {
   return (
     <CardBox title={title || 'Buzzer'}>
       <Grid container spacing={3}>
-        <Grid item xs={9}>
+        <Grid size={{ xs: 9 }}>
           <TextField
             variant="standard"
             label="Octave"
@@ -126,7 +126,7 @@ const content = (props: { name: string; title?: string }) => {
             {OctaveNames.map(toMenuItem)}
           </TextField>
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={{ xs: 3 }}>
           <TextField
             variant="standard"
             label="Duration, ms"
@@ -140,7 +140,7 @@ const content = (props: { name: string; title?: string }) => {
       </Grid>
       <StyledDivider/>
       <Grid container spacing={3} alignItems="flex-end">
-        <Grid item xs={10}>
+        <Grid size={{ xs: 10 }}>
           <TextField
             variant="standard"
             label="Music as [frequency,duration...]"
@@ -150,7 +150,7 @@ const content = (props: { name: string; title?: string }) => {
             fullWidth
           />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <Button
             variant="contained"
             color="primary"

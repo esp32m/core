@@ -25,10 +25,10 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    DynamicJsonDocument *Qdy30a::getState(const JsonVariantConst args) {
+    JsonDocument *Qdy30a::getState(RequestContext &ctx) {
       auto regc = sizeof(_regs) / sizeof(uint16_t);
-      DynamicJsonDocument *doc =
-          new DynamicJsonDocument(JSON_ARRAY_SIZE(8 + regc));
+      JsonDocument *doc =
+          new JsonDocument(); /* JSON_ARRAY_SIZE(8 + regc) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -37,7 +37,7 @@ namespace esp32m {
       arr.add(_min);
       arr.add(_max);
       arr.add(_value);
-      auto regs = arr.createNestedArray();
+      auto regs = arr.add<JsonArray>();
       for (auto i = 0; i < regc; i++) regs.add(_regs[i]);
       return doc;
     }
@@ -55,8 +55,6 @@ namespace esp32m {
       _value = ((int16_t)_regs[4]) / div;
       _min = ((int16_t)_regs[5]) / div;
       _max = ((int16_t)_regs[6]) / div;
-/*      sensor("value", _value);
-      sensor("raw", (int16_t)_regs[10]);*/
       _stamp = millis();
       _sensor.set(_value);
 //      delay(500);

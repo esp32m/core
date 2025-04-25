@@ -1,7 +1,7 @@
 import * as Yup from 'yup';
 import { Button, Grid, MenuItem, styled, TextField } from '@mui/material';
 
-import { Name, IConfig, StartAction, ILocalState, IResult } from './types';
+import { Name, TConfig, StartAction, TLocalState, TResult } from './types';
 import { useFormikContext } from 'formik';
 import { useDispatch } from 'react-redux';
 import { useSelector } from 'react-redux';
@@ -28,7 +28,7 @@ const ActionButton = ({ action }: { action: string }) => {
   const dispatch = useDispatch();
   const onClick = async () => {
     if (dirty) await submitForm();
-    dispatch({ type: StartAction });
+    dispatch(StartAction());
     api.request(Name, action);
   };
   return (
@@ -45,8 +45,8 @@ const ActionButton = ({ action }: { action: string }) => {
 const ValidationSchema = Yup.object().shape({});
 
 export const Content = () => {
-  const ls = useSelector<any>((s) => s[Name]) as ILocalState;
-  const [config, refresh] = useModuleConfig<IConfig>(Name);
+  const ls = useSelector<any>((s) => s[Name]) as TLocalState;
+  const {config, refreshConfig} = useModuleConfig<TConfig>(Name);
   if (!config) return null;
   const rows = ls?.results?.reduce((p, c) => {
     const { row, ...rd } = c;
@@ -55,7 +55,7 @@ export const Content = () => {
       r.push(rd);
     }
     return p;
-  }, [] as Array<Array<IResult>>);
+  }, [] as Array<Array<TResult>>);
   const lines = rows?.map((r) => {
     const f = r[0];
     let s = `${f.ttls.toString().padStart(3, ' ')}  ${f.ip?.padEnd(16, ' ')}`;
@@ -70,24 +70,24 @@ export const Content = () => {
     <ConfigBox
       name={Name}
       initial={config}
-      onChange={refresh}
+      onChange={refreshConfig}
       title="Traceroute"
       validationSchema={ValidationSchema}
     >
       <Grid container spacing={2}>
-        <Grid item xs={5}>
+        <Grid size={{ xs: 5 }}>
           <FieldText name="target" label="Host name or IP" fullWidth />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <FieldText name="timeout" label="Timeout, ms" fullWidth />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <FieldSelect name="proto" label="Protocol" fullWidth>
             <MenuItem value={1}>ICMP</MenuItem>
             <MenuItem value={17}>UDP</MenuItem>
           </FieldSelect>
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={{ xs: 3 }}>
           <InterfacesSelect interfaces={config.interfaces} />
         </Grid>
       </Grid>
@@ -103,14 +103,16 @@ export const Content = () => {
         label="Traceroute results"
         value={rtext}
         style={{ marginTop: '8px' }}
-        InputProps={{
-          style: {
-            fontFamily: 'monospace',
-            overflow: 'auto',
-            whiteSpace: 'nowrap',
-          },
+        slotProps={{
+          input: {
+            style: {
+              fontFamily: 'monospace',
+              overflow: 'auto',
+              whiteSpace: 'nowrap',
+            },
+          }
         }}
       ></TextField>
-    </ConfigBox>
+    </ConfigBox >
   );
 };

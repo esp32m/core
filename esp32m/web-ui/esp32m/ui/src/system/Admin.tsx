@@ -19,7 +19,7 @@ export const Admin = () => {
   const requestReset = () =>
     api.request(Name, 'reset').then(() => window.location.reload());
   const { t } = useTranslation();
-  const [config] = useModuleConfig<TOtaConfig>('ota');
+  const { config } = useModuleConfig<TOtaConfig>('ota');
   const { messageBoxProps, open } = useMessageBox({
     restart: {
       title: 'Do you really want to restart the CPU ?',
@@ -36,18 +36,18 @@ export const Admin = () => {
         <OtaCheck />
       )}
       <ButtonBar container spacing={2}>
-        <Grid item>
+        <Grid>
           <Button onClick={() => open('restart')}>{t('system restart')}</Button>
         </Grid>
-        <Grid item>
+        <Grid>
           <Button onClick={() => open('reset')}>{t('reset settings')}</Button>
         </Grid>
         {((config?.features || 0) & OtaFeatures.VendorOnly) == 0 && (
-          <Grid item>
+          <Grid >
             <FirmwareUpdateButton url={config?.url} />
           </Grid>
         )}
-        <Grid item>
+        <Grid >
           <UiAuthConfigButton />
         </Grid>
       </ButtonBar>

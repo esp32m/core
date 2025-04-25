@@ -1,6 +1,6 @@
 export const Name = 'tasks';
 
-export interface ITasksState {
+export type TTasksState = {
   rt: number;
   tasks: Array<[number, string, number, number, number, number, number]>;
 }

@@ -38,10 +38,10 @@ namespace esp32m {
         arg_print_errors(stderr, request_args.end, argv[0]);
         return 1;
       }
-      DynamicJsonDocument *data = nullptr;
+      JsonDocument *data = nullptr;
       if (request_args.data->count > 0)
         data = json::parse(request_args.data->sval[0]);
-      size_t mu =
+      /*size_t mu =
           JSON_OBJECT_SIZE(1)  // type:request
           + (data ? data->memoryUsage() : 0) +
           (request_args.name->count > 0
@@ -51,8 +51,8 @@ namespace esp32m {
                ? (JSON_OBJECT_SIZE(1) + strlen(request_args.target->sval[0]) +
                   1)
                : 0) +
-          (request_args.seq->count > 0 ? JSON_OBJECT_SIZE(1) : 0);
-      DynamicJsonDocument *doc = new DynamicJsonDocument(mu);
+          (request_args.seq->count > 0 ? JSON_OBJECT_SIZE(1) : 0);*/
+      JsonDocument *doc = new JsonDocument(); /* mu */
       JsonObject root = doc->to<JsonObject>();
       root["type"] = "request";
       if (request_args.name->count > 0)

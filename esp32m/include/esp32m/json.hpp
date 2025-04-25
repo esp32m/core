@@ -13,17 +13,15 @@ namespace esp32m {
 
   namespace json {
 
-    DynamicJsonDocument *parse(const char *data, int len,
+    JsonDocument *parse(const char *data, int len,
                                DeserializationError *error = nullptr);
-    DynamicJsonDocument *parse(const char *data, DeserializationError *error);
-    DynamicJsonDocument *parse(const char *data);
+    JsonDocument *parse(const char *data, DeserializationError *error);
+    JsonDocument *parse(const char *data);
 
-    char *allocSerialize(const JsonVariantConst v, size_t *length = nullptr);
-    std::string serialize(const JsonVariantConst v);
-    size_t measure(const JsonVariantConst v);
+    // char *allocSerialize(const JsonVariantConst v, size_t *length = nullptr);
+//    std::string serialize(const JsonVariantConst v);
+    // size_t measure(const JsonVariantConst v);
     bool checkEqual(const JsonVariantConst a, const JsonVariantConst b);
-
-    void checkSetResult(esp_err_t err, DynamicJsonDocument **result);
 
     JsonDocument &empty();
     JsonArrayConst emptyArray();
@@ -106,10 +104,10 @@ namespace esp32m {
       }
 
      private:
-      StaticJsonDocument<JSON_ARRAY_SIZE(1)> _doc;
+      JsonDocument/*<JSON_ARRAY_SIZE(1)>*/ _doc;
     };
 
-    bool check(log::Loggable *l, DynamicJsonDocument *doc, const char *msg);
+    bool check(log::Loggable *l, JsonDocument *doc, const char *msg);
     void dump(log::Loggable *l, JsonVariantConst v, const char *msg);
 
     class PropsContainer {
@@ -119,7 +117,7 @@ namespace esp32m {
       }
     };
 
-    class DynamicObject {
+    /*class DynamicObject {
      public:
       DynamicObject() {}
       DynamicObject(const DynamicObject &) = delete;
@@ -157,55 +155,55 @@ namespace esp32m {
       }
 
      private:
-      std::unique_ptr<DynamicJsonDocument> _doc;
+      std::unique_ptr<JsonDocument> _doc;
       void ensureCapacity(size_t capacity) {
         if (_doc) {
           if (_doc->capacity() >= capacity)
             return;
           capacity = std::max(_doc->capacity() * 2 / 3, capacity);
         }
-        auto newDoc = new DynamicJsonDocument(capacity);
+        auto newDoc = new JsonDocument(); // capacity 
         auto root = newDoc->to<JsonObject>();
         if (_doc)
           root.set(_doc->as<JsonObjectConst>());
         _doc.reset(newDoc);
       }
-    };
+    };*/
 
     class ConcatToArray {
      public:
-      void add(DynamicJsonDocument *doc) {
-        _documents.push_back(std::unique_ptr<DynamicJsonDocument>(doc));
+      void add(JsonDocument *doc) {
+        _documents.push_back(std::unique_ptr<JsonDocument>(doc));
       }
-      DynamicJsonDocument *concat() {
-        size_t mu = JSON_ARRAY_SIZE(_documents.size());
-        for (auto &d : _documents) mu += d->memoryUsage();
-        auto doc = new DynamicJsonDocument(mu);
+      JsonDocument *concat() {
+        /*size_t mu = JSON_ARRAY_SIZE(_documents.size());
+        for (auto &d : _documents) mu += d->memoryUsage();*/
+        auto doc = new JsonDocument(); /* mu */
         auto root = doc->to<JsonArray>();
         for (auto &d : _documents) root.add(*d);
         return doc;
       }
 
      private:
-      std::vector<std::unique_ptr<DynamicJsonDocument> > _documents;
+      std::vector<std::unique_ptr<JsonDocument> > _documents;
     };
     class ConcatToObject {
      public:
-      void add(const char *key, DynamicJsonDocument *doc) {
-        _documents[key] = std::unique_ptr<DynamicJsonDocument>(doc);
+      void add(const char *key, JsonDocument *doc) {
+        _documents[key] = std::unique_ptr<JsonDocument>(doc);
       }
-      DynamicJsonDocument *concat() {
-        size_t mu = JSON_OBJECT_SIZE(_documents.size());
+      JsonDocument *concat() {
+        /*size_t mu = JSON_OBJECT_SIZE(_documents.size());
         for (auto &d : _documents)
-          mu += d.second->memoryUsage() + JSON_STRING_SIZE(d.first.size());
-        auto doc = new DynamicJsonDocument(mu);
+          mu += d.second->memoryUsage() + JSON_STRING_SIZE(d.first.size());*/
+        auto doc = new JsonDocument(); /* mu */
         auto root = doc->to<JsonObject>();
         for (auto &d : _documents) root[d.first] = *d.second;
         return doc;
       }
 
      private:
-      std::map<std::string, std::unique_ptr<DynamicJsonDocument> > _documents;
+      std::map<std::string, std::unique_ptr<JsonDocument> > _documents;
     };
 
   }  // namespace json

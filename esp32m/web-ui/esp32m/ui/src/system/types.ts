@@ -1,6 +1,6 @@
 export const Name = 'ESP32';
 
-export interface IHeapState {
+export type THeapState = {
   size: number;
   free: number;
   min: number;
@@ -42,7 +42,7 @@ export const enum ResetReason {
   Sdio,
 }
 
-export interface IChipState {
+export type TChipState = {
   model: ChipModel;
   revision: number;
   cores: number;
@@ -54,33 +54,33 @@ export interface IChipState {
   rr: ResetReason;
 }
 
-export interface IFlashState {
+export type TFlashState = {
   size: number;
   speed: number;
   mode: number;
 }
 
-export interface ISpiffsState {
+export type TSpiffsState = {
   size: number;
   free: number;
 }
 
-export interface IPsramState {
+export type TPsramState = {
   size: number;
   free: number;
   min: number;
   max: number;
 }
 
-export interface IHardwareState {
-  heap: IHeapState;
-  chip: IChipState;
-  flash: IFlashState;
-  spiffs: ISpiffsState;
-  psram: IPsramState;
+export type THardwareState = {
+  heap: THeapState;
+  chip: TChipState;
+  flash: TFlashState;
+  spiffs: TSpiffsState;
+  psram: TPsramState;
 }
 
-export interface IAppState {
+export type TAppState = {
   name: string;
   time: number;
   uptime: number;

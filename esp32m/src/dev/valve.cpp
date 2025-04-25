@@ -114,8 +114,8 @@ namespace esp32m {
     const char *StateNames[] = {"unknown", "open",    "close",
                                 "invalid", "opening", "closing"};
 
-    DynamicJsonDocument *Valve::getState(const JsonVariantConst args) {
-      auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(3));
+    JsonDocument *Valve::getState(RequestContext &ctx) {
+      auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
       JsonObject info = doc->to<JsonObject>();
       info["state"] = StateNames[(int)_state];
       info["value"] = _value;
@@ -123,9 +123,9 @@ namespace esp32m {
       return doc;
     }
 
-    void Valve::setState(const JsonVariantConst state,
-                         DynamicJsonDocument **result) {
+    void Valve::setState(RequestContext &ctx) {
       esp_err_t err = ESP_OK;
+      auto state = ctx.data.as<JsonObjectConst>();
       JsonVariantConst value = state["value"];
       if (value.is<float>() && value.as<float>() >= 0)
         err = turn(value.as<float>());
@@ -141,21 +141,20 @@ namespace esp32m {
         else
           logW("unrecognized action: %s", action);
       }
-      json::checkSetResult(ESP_ERROR_CHECK_WITHOUT_ABORT(err), result);
+      ctx.errors.check(ESP_ERROR_CHECK_WITHOUT_ABORT(err));
     }
 
-    bool Valve::setConfig(const JsonVariantConst cfg,
-                          DynamicJsonDocument **result) {
+    bool Valve::setConfig(RequestContext &ctx) {
       if (_persistent) {
-        setState(cfg, result);
+        setState(ctx);
         return true;
       }
       return false;
     }
 
-    DynamicJsonDocument *Valve::getConfig(RequestContext &ctx) {
+    JsonDocument *Valve::getConfig(RequestContext &ctx) {
       if (_persistent) {
-        auto doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+        auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
         JsonObject info = doc->to<JsonObject>();
         switch (_state) {
           case State::Opened:
@@ -225,7 +224,7 @@ namespace esp32m {
       _startTime = 0;
       return err;
     }
-    
+
     void Valve::setState(State state) {
       if (_state == state)
         return;

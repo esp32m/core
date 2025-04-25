@@ -15,8 +15,8 @@ namespace esp32m {
   namespace bus {
     namespace scanner {
 
-      DynamicJsonDocument *I2C::getState(const JsonVariantConst args) {
-        DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(5));
+      JsonDocument *I2C::getState(RequestContext &ctx) {
+        JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(5) */
         auto root = doc->to<JsonObject>();
         root["sda"] = _pinSDA;
         root["scl"] = _pinSCL;
@@ -74,9 +74,10 @@ namespace esp32m {
           if (_pendingResponse) {
             memset(&_ids, 0, sizeof(_ids));
             scan();
-            DynamicJsonDocument *doc = new DynamicJsonDocument(
-                JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(sizeof(_ids)));
-            auto ids = doc->createNestedArray("ids");
+            JsonDocument *doc = new JsonDocument(
+                /*JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(sizeof(_ids))*/);
+                auto root=doc->to<JsonObject>();
+            auto ids = root["ids"].to<JsonArray>();
             for (auto i = 0; i < sizeof(_ids); i++) ids.add(_ids[i]);
             _pendingResponse->setData(doc);
             _pendingResponse->publish();

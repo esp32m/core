@@ -39,7 +39,7 @@ namespace esp32m {
       return _data;
     }
 
-    void setMeta(DynamicJsonDocument* meta) {
+    void setMeta(JsonDocument* meta) {
       _meta.reset(meta);
     }
     JsonVariantConst getMeta() {
@@ -52,7 +52,7 @@ namespace esp32m {
     void* _data = nullptr;
     size_t _size = 0;
     bool _ownsData = false;
-    std::unique_ptr<DynamicJsonDocument> _meta;
+    std::unique_ptr<JsonDocument> _meta;
   };
 
   struct ResourceRequestOptions {

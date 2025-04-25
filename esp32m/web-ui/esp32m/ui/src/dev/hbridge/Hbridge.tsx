@@ -48,19 +48,11 @@ const Buttons = ({ mode, onChange, disabled }: IButtonsProps) => {
 
 export const Hbridge = ({ name, title }: IProps) => {
   const state = useModuleState<TState>(name);
-  const [config, refresh] = useModuleConfig<TConfig>(name);
+  const { config, setConfig } = useModuleConfig<TConfig>(name);
   const snackApi = useSnackApi();
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},
-    onSubmit: async (v) => {
-      try {
-        await api.setConfig(name, v);
-      } catch (e) {
-        snackApi.error(e);
-      } finally {
-        refresh();
-      }
-    },
+    onSubmit: (v) => setConfig(v),
     validationSchema,
   });
 

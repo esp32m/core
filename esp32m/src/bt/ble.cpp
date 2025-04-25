@@ -432,8 +432,8 @@ namespace esp32m {
         case BLE_GAP_EVENT_CONNECT:
           if (event->connect.status == 0) {
             logI("connected, handle: %d", event->connect.conn_handle);
-            DynamicJsonDocument *doc =
-                new DynamicJsonDocument(JSON_OBJECT_SIZE(1));
+            JsonDocument *doc =
+                new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
             doc->set(event->connect.conn_handle);
             _pendingResponse->setData(doc);
           } else {
@@ -524,7 +524,7 @@ namespace esp32m {
               partial = false;
             }
             size_t count, olen, js;
-            DynamicJsonDocument *doc;
+            JsonDocument *doc;
             JsonArray arr;
             if (!respond)
               switch (_reqType) {
@@ -546,14 +546,14 @@ namespace esp32m {
                       js += olen + 1;
                     }
                   }
-                  doc = new DynamicJsonDocument(js);
+                  doc = new JsonDocument(); /* js */
                   arr = doc->to<JsonArray>();
                   for (auto it = _disc.begin(); it != _disc.end();) {
                     ble_gap_disc_desc *item =
                         (ble_gap_disc_desc *)(*it)->data();
                     if (format(item->addr, addrbuf) != ESP_OK)
                       continue;
-                    auto entry = arr.createNestedArray();
+                    auto entry = arr.add<JsonArray>();
                     if (!entry)
                       break;
                     entry.add(item->event_type);
@@ -592,10 +592,10 @@ namespace esp32m {
                     ble_gatt_svc *item = (ble_gatt_svc *)(*it)->data();
                     js += type2len(item->uuid.u) + 1;
                   }
-                  doc = new DynamicJsonDocument(js);
+                  doc = new JsonDocument(); /* js */
                   arr = doc->to<JsonArray>();
                   for (auto it = _disc.begin(); it != _disc.end();) {
-                    auto entry = arr.createNestedArray();
+                    auto entry = arr.add<JsonArray>();
                     if (!entry)
                       break;
                     ble_gatt_svc *item = (ble_gatt_svc *)(*it)->data();
@@ -615,10 +615,10 @@ namespace esp32m {
                     ble_gatt_chr *item = (ble_gatt_chr *)(*it)->data();
                     js += type2len(item->uuid.u) + 1;
                   }
-                  doc = new DynamicJsonDocument(js);
+                  doc = new JsonDocument(); /* js */
                   arr = doc->to<JsonArray>();
                   for (auto it = _disc.begin(); it != _disc.end();) {
-                    auto entry = arr.createNestedArray();
+                    auto entry = arr.add<JsonArray>();
                     if (!entry)
                       break;
                     ble_gatt_chr *item = (ble_gatt_chr *)(*it)->data();
@@ -642,10 +642,10 @@ namespace esp32m {
                                           item->size);
                     js += olen + 1;
                   }
-                  doc = new DynamicJsonDocument(js);
+                  doc = new JsonDocument(); /* js */
                   arr = doc->to<JsonArray>();
                   for (auto it = _disc.begin(); it != _disc.end();) {
-                    auto entry = arr.createNestedArray();
+                    auto entry = arr.add<JsonArray>();
                     if (!entry)
                       break;
                     gatt_value *item = (gatt_value *)(*it)->data();

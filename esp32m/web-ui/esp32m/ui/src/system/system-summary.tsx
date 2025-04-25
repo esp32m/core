@@ -1,13 +1,13 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { Name, IHardwareState, IAppState, ResetReasons } from './types';
+import { Name, THardwareState, TAppState, ResetReasons } from './types';
 import { NameValueList } from '../app';
 import { useTimeTranslation } from '@ts-libs/ui-i18n';
 
 export const SystemSummary = () => {
-  const hw = useModuleState<IHardwareState>(Name);
-  const app = useModuleState<IAppState>('app');
+  const hw = useModuleState<THardwareState>(Name);
+  const app = useModuleState<TAppState>('app');
   const { elapsed } = useTimeTranslation();
   const list = [];
   if (app) {
@@ -32,22 +32,22 @@ export const SystemSummary = () => {
       list.push([
         'RAM size / free (% fragmented)',
         formatBytes(heap.size) +
-          ' / ' +
-          formatBytes(heap.free) +
-          ' (' +
-          Math.round(((heap.free - heap.max) * 100) / heap.free) +
-          '%)',
+        ' / ' +
+        formatBytes(heap.free) +
+        ' (' +
+        Math.round(((heap.free - heap.max) * 100) / heap.free) +
+        '%)',
       ]);
     }
     if (spiffs && spiffs.size && spiffs.free) {
       list.push([
         'SPIFFS size / free (% used)',
         formatBytes(spiffs.size) +
-          ' / ' +
-          formatBytes(spiffs.free) +
-          ' (' +
-          Math.round(((spiffs.size - spiffs.free) * 100) / spiffs.size) +
-          '%)',
+        ' / ' +
+        formatBytes(spiffs.free) +
+        ' (' +
+        Math.round(((spiffs.size - spiffs.free) * 100) / spiffs.size) +
+        '%)',
       ]);
     }
   }

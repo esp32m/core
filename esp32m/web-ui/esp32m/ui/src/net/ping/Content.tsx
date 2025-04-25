@@ -28,7 +28,7 @@ const ActionButton = ({ action }: { action: string }) => {
   const api = useBackendApi();
   const onClick = async () => {
     if (dirty) await submitForm();
-    dispatch({ type: StartAction });
+    dispatch(StartAction());
     api.request(Name, action);
   };
   return (
@@ -46,7 +46,7 @@ const ValidationSchema = Yup.object().shape({});
 
 export const Content = () => {
   const ls = useSelector<any>((s) => s[Name]) as ILocalState;
-  const [config, refresh] = useModuleConfig<IConfig>(Name);
+  const { config, refreshConfig } = useModuleConfig<IConfig>(Name);
   if (!config) return null;
   const lines = ls?.results?.map((r) => {
     let s = '';
@@ -58,9 +58,8 @@ export const Content = () => {
         s = `Request timed out.`;
         break;
       case 2:
-        s = `Sent: ${r.tx}, received: ${r.rx}, lost: ${
-          r.tx - r.rx
-        } (${Math.round(((r.tx - r.rx) * 100) / r.tx)}% lost)`;
+        s = `Sent: ${r.tx}, received: ${r.rx}, lost: ${r.tx - r.rx
+          } (${Math.round(((r.tx - r.rx) * 100) / r.tx)}% lost)`;
         break;
     }
     return s;
@@ -70,30 +69,30 @@ export const Content = () => {
     <ConfigBox
       name={Name}
       initial={config}
-      onChange={refresh}
+      onChange={refreshConfig}
       title="Ping"
       validationSchema={ValidationSchema}
     >
       <Grid container spacing={2}>
-        <Grid item xs={6}>
+        <Grid size={{ xs: 6 }}>
           <FieldText name="target" label="Host name or IP" fullWidth />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <FieldText name="count" label="Count" fullWidth />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <FieldText name="interval" label="Interval, ms" fullWidth />
         </Grid>
-        <Grid item xs={2}>
+        <Grid size={{ xs: 2 }}>
           <FieldText name="size" label="Size, bytes" fullWidth />
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={{ xs: 3 }}>
           <FieldText name="ttl" label="Time to live" fullWidth />
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={{ xs: 3 }}>
           <FieldText name="timeout" label="Timeout, ms" fullWidth />
         </Grid>
-        <Grid item xs={6}>
+        <Grid size={{ xs: 6 }}>
           <InterfacesSelect interfaces={config.interfaces} />
         </Grid>
       </Grid>
@@ -109,12 +108,14 @@ export const Content = () => {
         label="Ping results"
         value={rtext}
         style={{ marginTop: '8px' }}
-        InputProps={{
-          style: {
-            fontFamily: 'monospace',
-            overflow: 'auto',
-            whiteSpace: 'nowrap',
-          },
+        slotProps={{
+          input: {
+            style: {
+              fontFamily: 'monospace',
+              overflow: 'auto',
+              whiteSpace: 'nowrap',
+            },
+          }
         }}
       ></TextField>
     </ConfigBox>

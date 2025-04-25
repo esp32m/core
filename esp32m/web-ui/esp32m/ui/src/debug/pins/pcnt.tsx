@@ -64,36 +64,36 @@ const component = () => {
   const { state } = useFeatureState<TPcntState>() || {};
 
   return (
-    <Grid item container spacing={2}>
-      <Grid item xs={12}>
+    <Grid  container spacing={2}>
+      <Grid size={{ xs: 12 }}>
         <FieldSwitch name="enabled" label="Pulse counter enabled" />
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldSelect name="hla" label="High level action" fullWidth>
           {levelActions}
         </FieldSelect>
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldSelect name="lla" label="Low level action" fullWidth>
           {levelActions}
         </FieldSelect>
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldSelect name="pea" label="Positive edge action" fullWidth>
           {edgeActions}
         </FieldSelect>
         D
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldSelect name="nea" label="Neagtive edge action" fullWidth>
           {edgeActions}
         </FieldSelect>
       </Grid>
-      <Grid item xs={6}>
+      <Grid size={{ xs: 6 }}>
         <FieldText name="gns" label="Filter, ns" fullWidth type="number" />
       </Grid>
       {state && (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           {`Counter value: ${state.value}, frequency: ${state.freq?.toFixed(3) || 0} Hz`}
         </Grid>
       )}

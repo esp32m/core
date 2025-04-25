@@ -86,7 +86,7 @@ namespace esp32m {
      * @brief Subscribe for events
      * @param cb Callback function to be invoked when any event is fired
      */
-    const Subscription *subscribe(Subscription::Callback cb);
+    Subscription *subscribe(Subscription::Callback cb);
 
     static EventManager &instance();
 

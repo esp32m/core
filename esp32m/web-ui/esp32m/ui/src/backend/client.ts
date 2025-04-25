@@ -13,16 +13,16 @@ import {
   TMessage,
   TRequest,
   TResponse,
+  TRequestOptions,
+  MessageName,
+  MessageType,
+  IStatePoller,
 } from './types';
 import { Subject } from 'rxjs';
 import WebSocket from 'reconnecting-websocket';
 import { selectors } from './state';
 import { createSelector } from '@reduxjs/toolkit';
 import { deserializeEsp32mError } from './errors';
-
-interface RequestOptions {
-  timeout?: number;
-}
 
 type PendingRequestResolver = (response: TResponse) => void;
 type PendingRequestRejector = (error: any) => void;
@@ -51,10 +51,33 @@ class Module implements IModuleApi {
     readonly api: Client,
     readonly name: string
   ) {
+    const
+      activeRequests = createSelector(
+        selectors.modules,
+        (devices) => devices[name]?.activeRequests || {}
+      );
+
     this.selectors = {
       state: createSelector(
         selectors.modules,
         (devices) => devices[name]?.state
+      ),
+      config: createSelector(
+        selectors.modules,
+        (devices) => devices[name]?.config
+      ),
+      info: createSelector(
+        selectors.modules,
+        (devices) => devices[name]?.info
+      ),
+      activeRequests,
+      isSettingState: createSelector(
+        activeRequests,
+        (ar) => (ar[MessageName.SetState] ?? 0) > 0
+      ),
+      isSettingConfig: createSelector(
+        activeRequests,
+        (ar) => (ar[MessageName.SetConfig] ?? 0) > 0
       ),
     };
   }
@@ -81,17 +104,53 @@ class Module implements IModuleApi {
   private _statePollRefs = 0;
 }
 
+class StatePoller implements IStatePoller {
+  constructor(private readonly poller: Periodic) {
+
+  }
+  suspend() {
+    this._suspendCount++;
+    this.update();
+    this.poller.disable();
+    return () => {
+      this._suspendCount++;
+      this.poller.disable();
+    }
+  }
+  disable() {
+    this._disabled = true;
+    this.update();
+  }
+  enable() {
+    this._disabled = false;
+    this.update();
+  }
+  private _suspendCount = 0;
+  private _disabled = false;
+  private update() {
+    const disable = this._disabled || this._suspendCount > 0;
+    if (disable != !this.poller.enabled) {
+      if (disable) this.poller.disable();
+      else this.poller.enable();
+    }
+  }
+}
+
 class Client implements IBackendApi {
   readonly status = new DiscreteStatus(ConnectionStatus.Disconnected);
   readonly incoming = new Subject<TMessage>();
+  readonly outgoing = new Subject<TRequest>();
+  readonly resolved = new Subject<[TRequest, TResponse]>();
+  readonly rejected = new Subject<[TRequest, Error]>();
+  readonly statePoller;
   constructor(readonly ws: WebSocket) {
     ws.onopen = () => {
       this.status.set(ConnectionStatus.Connected);
-      this._statePoller.enable();
+      this.statePoller.enable();
     };
     ws.onclose = () => {
       this.status.set(ConnectionStatus.Connecting);
-      this._statePoller.disable();
+      this.statePoller.disable();
     };
     ws.onerror = (e: any) => {
       this.status.set(ConnectionStatus.Connecting, serializeError(e));
@@ -111,6 +170,12 @@ class Client implements IBackendApi {
         }
       }
     };
+    this.statePoller = new StatePoller(new Periodic(async () => {
+      const tasks = Object.values(this._devices)
+        .filter((d) => d.isPolling())
+        .map((d) => this.getState(d.name, d.stateGetData));
+      await Promise.allSettled(tasks);
+    }, 1000));
   }
   module(name: string): IModuleApi {
     return (
@@ -129,7 +194,7 @@ class Client implements IBackendApi {
     target: string,
     name: string,
     data?: any,
-    options?: RequestOptions
+    options?: TRequestOptions
   ): Promise<TResponse> {
     const existing = Object.values(this._pending).find(
       (pr) =>
@@ -140,7 +205,7 @@ class Client implements IBackendApi {
     if (existing) return existing.promise;
     const seq = ++this._seq;
     const request: TRequest = {
-      type: 'request',
+      type: MessageType.Request,
       target,
       name,
       seq,
@@ -154,16 +219,20 @@ class Client implements IBackendApi {
       const startTimer = () =>
         setTimeout(() => {
           delete this._pending[capturedSeq];
-          rejectFn('timeout');
+          const error = new Error('timeout')
+          this.rejected.next([request, error]);
+          rejectFn(error);
         }, options?.timeout || 10000);
       let timer = startTimer();
       resolve = (response) => {
         clearTimeout(timer);
         delete this._pending[capturedSeq];
+        this.resolved.next([request, response]);
         resolveFn(response);
       };
       reject = (error) => {
         clearTimeout(timer);
+        this.rejected.next([request, error]);
         delete this._pending[capturedSeq];
         rejectFn(error);
       };
@@ -184,22 +253,26 @@ class Client implements IBackendApi {
     return promise;
   }
   getState(target: string, data?: any): Promise<TResponse> {
-    return this.request(target, 'state-get', data);
+    return this.request(target, MessageName.GetState, data);
   }
   setState(target: string, data?: any): Promise<TResponse> {
-    return this.request(target, 'state-set', data);
+    return this.request(target, MessageName.SetState, data);
   }
   getConfig(target: string, data?: any): Promise<TResponse> {
-    return this.request(target, 'config-get', data);
+    return this.request(target, MessageName.GetConfig, data);
   }
   setConfig(target: string, data?: any): Promise<TResponse> {
-    return this.request(target, 'config-set', data);
+    return this.request(target, MessageName.SetConfig, data);
+  }
+  getInfo(target: string, data?: any): Promise<TResponse> {
+    return this.request(target, MessageName.GetInfo, data);
   }
 
   private readonly flush = debounce(() => {
     const toSend = Object.values(this._pending).reduce((arr, pr) => {
       if (!pr.sent) {
         pr.sent = Date.now();
+        this.outgoing.next(pr.request);
         arr.push(pr.request);
       }
       return arr;
@@ -211,12 +284,6 @@ class Client implements IBackendApi {
   private _seq: number = Math.floor(Math.random() * (Math.pow(2, 31) / 2));
   private readonly _pending: { [key: number]: TPendingRequest } = {};
   private readonly _devices: Record<string, Module> = {};
-  private readonly _statePoller = new Periodic(async () => {
-    const tasks = Object.values(this._devices)
-      .filter((d) => d.isPolling())
-      .map((d) => this.getState(d.name, d.stateGetData));
-    await Promise.allSettled(tasks);
-  }, 1000);
 }
 
 export const newClient = (url: string) => {

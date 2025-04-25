@@ -56,7 +56,7 @@ namespace esp32m {
       arr.add(lower);
       arr.add(upper);
     }
-    size_t Bounds::jsonSize() {
+    /*size_t Bounds::jsonSize() {
       int n = 0;
       if (dhw.isDefined())
         n++;
@@ -65,10 +65,10 @@ namespace esp32m {
       if (hcr.isDefined())
         n++;
       if (n > 0)
-        n = JSON_OBJECT_SIZE(1) /* bounds */ +
+        n = JSON_OBJECT_SIZE(1)  +
             n * (JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(2));
       return n;
-    }
+    }*/
     bool Bounds::fromJson(JsonObjectConst hvac, bool *changed) {
       auto bounds = hvac["bounds"].as<JsonObjectConst>();
       if (!bounds)
@@ -82,24 +82,24 @@ namespace esp32m {
       bool hasch = ch.isDefined();
       bool hashcr = hcr.isDefined();
       if (hasdhw || hasch || hashcr) {
-        auto bounds = hvac.createNestedObject("bounds");
+        auto bounds = hvac["bounds"].to<JsonObject>();
         if (hasdhw)
-          dhw.toJson(bounds.createNestedArray("dhw"));
+          dhw.toJson(bounds["dhw"].to<JsonArray>());
         if (hasch)
-          ch.toJson(bounds.createNestedArray("ch"));
+          ch.toJson(bounds["ch"].to<JsonArray>());
         if (hashcr)
-          hcr.toJson(bounds.createNestedArray("hcr"));
+          hcr.toJson(bounds["hcr"].to<JsonArray>());
       }
     }
 
     void toJson(JsonObject o, const char *key, std::vector<uint8_t> &v) {
       if (v.size()) {
-        auto arr = o.createNestedArray(key);
+        auto arr = o[key].to<JsonArray>();
         for (auto i : v) arr.add(i);
       }
     }
 
-    size_t jsonSize(std::vector<uint8_t> &v) {
+    /*size_t jsonSize(std::vector<uint8_t> &v) {
       auto s = v.size();
       if (s)
         s = JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(s);
@@ -107,12 +107,12 @@ namespace esp32m {
     }
 
     size_t Hvac::jsonSize() {
-      return JSON_OBJECT_SIZE(1 /*hvac*/ + 37) + bounds.jsonSize() +
+      return JSON_OBJECT_SIZE(1 + 37) + bounds.jsonSize() +
              opentherm::jsonSize(tsps) + opentherm::jsonSize(fhb);
-    }
+    }*/
 
     void Hvac::toJson(JsonObject obj) {
-      auto hvac = obj.createNestedObject("hvac");
+      auto hvac = obj["hvac"].to<JsonObject>();
       hvac["status"] = status.value;
       json::to(hvac, "ts", tSet);
       if (config.value)
@@ -180,12 +180,12 @@ namespace esp32m {
       uint32_t mask = 15 << shift;
       _arr[i >> 3] = (slot & ~mask) | (neu << shift);
     }
-    size_t IdInfoArray::jsonSize() {
+    /*size_t IdInfoArray::jsonSize() {
       for (int i = 0; i < IdInfoArrayLength; i++)
         if (_arr[i] != 0)
           return JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(IdInfoArrayLength);
       return 0;
-    }
+    }*/
     bool IdInfoArray::fromJson(JsonObjectConst obj, bool *changed) {
       auto ids = obj["ids"].as<JsonArrayConst>();
       if (!ids)
@@ -200,10 +200,10 @@ namespace esp32m {
       return true;
     }
     void IdInfoArray::toJson(JsonObject obj) {
-      if (jsonSize()) {
-        auto ids = obj.createNestedArray("ids");
+      /*if (jsonSize()) {*/
+        auto ids = obj["ids"].to<JsonArray>();
         for (int i = 0; i < IdInfoArrayLength; i++) ids.add(_arr[i]);
-      }
+      //}
     }
 
     void Message::init(MessageType type, DataId id, uint16_t value) {
@@ -1041,9 +1041,8 @@ namespace esp32m {
       opentherm::Slave::init(driver, model, name);
     }
 
-    void OpenthermSlave::setState(const JsonVariantConst state,
-                                  DynamicJsonDocument **result) {
-      JsonVariantConst hvac = state["hvac"];
+    void OpenthermSlave::setState(RequestContext &ctx) {
+      JsonVariantConst hvac = ctx.data["hvac"];
       if (hvac) {
         json::from(hvac["status"], _hvac.status.value);
         json::from(hvac["ts"], _hvac.tSet);
@@ -1051,16 +1050,15 @@ namespace esp32m {
       }
     }
 
-    DynamicJsonDocument *OpenthermSlave::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(_hvac.jsonSize());
+    JsonDocument *OpenthermSlave::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* _hvac.jsonSize() */
       JsonObject root = doc->to<JsonObject>();
       _hvac.toJson(root);
       return doc;
     }
 
-    bool OpenthermSlave::setConfig(const JsonVariantConst cfg,
-                                   DynamicJsonDocument **result) {
-      JsonObjectConst hvac = cfg["hvac"];
+    bool OpenthermSlave::setConfig(RequestContext &ctx) {
+      JsonObjectConst hvac = ctx.data["hvac"];
       bool changed = false;
       if (hvac) {
         _hvac.bounds.fromJson(hvac, &changed);
@@ -1070,13 +1068,13 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *OpenthermSlave::getConfig(
+    JsonDocument *OpenthermSlave::getConfig(
         RequestContext &ctx) {
-      size_t docsize = JSON_OBJECT_SIZE(1 /*hvac*/ + 2 /*tset,config*/) +
-                       _hvac.bounds.jsonSize();
-      DynamicJsonDocument *doc = new DynamicJsonDocument(docsize);
+      /*size_t docsize = JSON_OBJECT_SIZE(1 + 2 ) +
+                       _hvac.bounds.jsonSize();*/
+      JsonDocument *doc = new JsonDocument(); /* docsize */
       JsonObject root = doc->to<JsonObject>();
-      auto hvac = root.createNestedObject("hvac");
+      auto hvac = root["hvac"].to<JsonObject>();
       json::to(hvac, "ts", _hvac.tSet);
       hvac["config"] = _hvac.config.value;
       _hvac.bounds.toJson(hvac);
@@ -1124,9 +1122,8 @@ namespace esp32m {
       return processed;
     }
 
-    void OpenthermMaster::setState(const JsonVariantConst state,
-                                   DynamicJsonDocument **result) {
-      JsonVariantConst hvac = state["hvac"];
+    void OpenthermMaster::setState(RequestContext &ctx) {
+      JsonVariantConst hvac = ctx.data["hvac"];
       if (hvac) {
         json::from(hvac["status"], _hvac.status.value);
         json::from(hvac["ts"], _hvac.tSet);
@@ -1149,17 +1146,17 @@ namespace esp32m {
       }
     }
 
-    DynamicJsonDocument *OpenthermMaster::getState(
-        const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(_hvac.jsonSize());
+    JsonDocument *OpenthermMaster::getState(
+        RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* _hvac.jsonSize() */
       JsonObject root = doc->to<JsonObject>();
       _hvac.toJson(root);
       return doc;
     }
 
-    bool OpenthermMaster::setConfig(const JsonVariantConst cfg,
-                                    DynamicJsonDocument **result) {
+    bool OpenthermMaster::setConfig(RequestContext &ctx) {
       bool changed = false;
+      auto cfg=ctx.data.as<JsonObjectConst>();
       _ids.fromJson(cfg, &changed);
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
@@ -1175,13 +1172,13 @@ namespace esp32m {
       return changed;
     }
 
-    DynamicJsonDocument *OpenthermMaster::getConfig(
+    JsonDocument *OpenthermMaster::getConfig(
         RequestContext &ctx) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(
-          JSON_OBJECT_SIZE(1 /*hvac*/ + 4) + _ids.jsonSize());
+      JsonDocument *doc = new JsonDocument(
+          /*JSON_OBJECT_SIZE(1 hvac + 4) + _ids.jsonSize()*/);
       JsonObject root = doc->to<JsonObject>();
       _ids.toJson(root);
-      auto hvac = root.createNestedObject("hvac");
+      auto hvac = root["hvac"].to<JsonObject>();
       opentherm::Status s = _hvac.status;
       s.slave.value = 0;
       hvac["status"] = s.value;
@@ -1196,7 +1193,7 @@ namespace esp32m {
       std::lock_guard lock(_mutexPR);
       if (!_pendingResponse || !_pendingResponse->is("request"))
         return;
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(3));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
       auto root = doc->to<JsonObject>();
       root["type"] = static_cast<int>(msg.type);
       root["id"] = static_cast<int>(msg.id);
@@ -1211,7 +1208,7 @@ namespace esp32m {
       std::lock_guard lock(_mutexPR);
       if (!_pendingResponse || !_pendingResponse->is("request"))
         return;
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(4));
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
       root["state"] = opentherm::RecvStateNames[static_cast<int>(_recv.state)];
       root["frame"] = _recv.buf;
@@ -1229,16 +1226,16 @@ namespace esp32m {
       const char *name = job->name();
       if (!_pendingResponse || !_pendingResponse->is(name))
         return;
-      DynamicJsonDocument *doc = nullptr;
+      JsonDocument *doc = nullptr;
       if (!strcmp(name, "scan")) {
-        doc = new DynamicJsonDocument(_ids.jsonSize());
+        doc = new JsonDocument(); /* _ids.jsonSize() */
         auto root = doc->to<JsonObject>();
         _ids.toJson(root);
       } else if (!strcmp(name, "snapshot")) {
         auto snapshot = (opentherm::SnapshotJob *)job;
         doc =
-            new DynamicJsonDocument(JSON_OBJECT_SIZE(snapshot->values.size()) +
-                                    snapshot->values.size() * 4);
+            new JsonDocument(/*JSON_OBJECT_SIZE(snapshot->values.size()) +
+                                    snapshot->values.size() * 4*/);
         auto root = doc->to<JsonObject>();
         char i[4];
         for (auto const &x : snapshot->values) {

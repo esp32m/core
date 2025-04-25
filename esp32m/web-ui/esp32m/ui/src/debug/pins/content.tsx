@@ -23,14 +23,14 @@ const Flags = () => {
   if (!pinState) return null;
   const flags = enumTool(PinFlagBits).bitsToNames(pinState.flags);
   const content = flags.map((f, i) => (
-    <Grid key={i} item sx={{ marginLeft: 'auto' }}>
+    <Grid key={i} sx={{ marginLeft: 'auto' }}>
       <Chip label={f || ''} />
     </Grid>
   ));
   if (!content.length) return null;
   return (
-    <Grid container spacing={1} item>
-      <Grid item xs={12}>
+    <Grid container spacing={1} >
+      <Grid size={{ xs: 12 }}>
         <Typography align="center">Pin capabilities:</Typography>
       </Grid>
       {content}
@@ -145,22 +145,22 @@ export const content = () => {
   return (
     <CardBox title="Pins">
       <Grid container spacing={2}>
-        <Grid container spacing={2} item xs={pin ? 4 : 12}>
-          <Grid item xs={12}>
+        <Grid container spacing={2} size={{ xs: pin ? 4 : 12 }}>
+          <Grid size={{ xs: 12 }}>
             <PinSelect />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             {pin && <FeatureSelect />}
           </Grid>
         </Grid>
         {pin && (
-          <Grid container spacing={2} item xs={8}>
+          <Grid container spacing={2} size={{ xs: 8 }}>
             <Flags />
           </Grid>
         )}
 
         {f.status == FeatureStatus.Supported && f.info && (
-          <Grid item xs>
+          <Grid size="grow">
             <Button
               disabled={featureRequestRunning}
               onClick={() => {

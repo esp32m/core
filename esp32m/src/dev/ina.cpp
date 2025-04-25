@@ -434,8 +434,8 @@ namespace esp32m {
       _power.unit = "W";
     }
 
-    DynamicJsonDocument *Ina::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(7));
+    JsonDocument *Ina::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(7) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_i2c->addr());

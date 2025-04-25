@@ -21,14 +21,14 @@ namespace esp32m {
      protected:
       bool pollSensors() override;
       bool initSensors() override;
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
       const JsonObjectConst props() const override {
         return _props.as<JsonObjectConst>();
       }
 
      private:
       char _name[8] = "SM538x";
-      StaticJsonDocument<JSON_OBJECT_SIZE(1)> _props;
+      JsonDocument/*<JSON_OBJECT_SIZE(1)>*/ _props;
       uint8_t _addr;
       uint16_t _model;
       float _value = NAN;

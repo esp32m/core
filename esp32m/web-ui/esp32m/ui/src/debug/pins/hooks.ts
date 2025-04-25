@@ -10,6 +10,7 @@ import { Name, selectors } from './state';
 import { useSelector } from 'react-redux';
 import { isNumber } from '@ts-libs/tools';
 import { useModuleState } from '../../backend';
+import { TJsonValue } from '../../../../../ts-libs/tools/src';
 
 type TFeatureComponents = { [key in FeatureType]: TFeatureInfo };
 
@@ -45,7 +46,7 @@ export function useFeature() {
   return { pin, stateRequestData };
 }
 
-export function useFeatureState<T>() {
+export function useFeatureState<T extends TJsonValue>() {
   const feature = useFeature();
   return useModuleState<TPinState<T>>(Name, {
     data: feature.stateRequestData,

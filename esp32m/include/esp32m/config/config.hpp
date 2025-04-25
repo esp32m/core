@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 
 #include "esp32m/events.hpp"
+#include "esp32m/events/request.hpp"
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
@@ -41,8 +42,8 @@ namespace esp32m {
 
     class Store : public log::Loggable {
      protected:
-      virtual void write(const DynamicJsonDocument& config) = 0;
-      virtual DynamicJsonDocument* read() = 0;
+      virtual void write(const JsonDocument& config) = 0;
+      virtual JsonDocument* read() = 0;
       virtual void reset() = 0;
       friend class esp32m::Config;
     };
@@ -62,11 +63,19 @@ namespace esp32m {
     void save();
     void load();
     void reset();
-    DynamicJsonDocument *read();
+    JsonDocument *read();
 
    private:
     std::unique_ptr<config::Store> _store;
     std::mutex _mutex;
+  };
+
+  class ConfigApply : public Request {
+   public:
+    ConfigApply(const JsonVariantConst data)
+        : Request(Config::KeyConfigSet, 0, nullptr, data, nullptr) {}
+    void respondImpl(const char *source, const JsonVariantConst data,
+                     bool isError) override {}
   };
 
 }  // namespace esp32m

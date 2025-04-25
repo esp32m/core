@@ -11,7 +11,7 @@ namespace esp32m {
   class Ui;
   namespace ui {
 
-    static bool requestsSame(DynamicJsonDocument *a, DynamicJsonDocument *b) {
+    static bool requestsSame(JsonDocument *a, JsonDocument *b) {
       if (!a && !b)
         return true;
       if (!a || !b)
@@ -39,7 +39,7 @@ namespace esp32m {
       bool isDisconnected() const {
         return _disconnected;
       }
-      bool enqueue(DynamicJsonDocument *req) {
+      bool enqueue(JsonDocument *req) {
         std::lock_guard<std::mutex> guard(_mutex);
         // http client may open new session with the id of the previous session that was closed just before.
         // So the new Client will not be created, but the old one will be re-used.
@@ -61,13 +61,13 @@ namespace esp32m {
         logD("enqueue %s", json);
         free(json);*/
 
-        _requests.push_back(std::unique_ptr<DynamicJsonDocument>(req));
+        _requests.push_back(std::unique_ptr<JsonDocument>(req));
         return true;
       }
-      DynamicJsonDocument *dequeue() {
+      JsonDocument *dequeue() {
         std::lock_guard<std::mutex> guard(_mutex);
         if (_requests.size()) {
-          DynamicJsonDocument *result = _requests.front().release();
+          JsonDocument *result = _requests.front().release();
           _requests.pop_front();
           return result;
         }
@@ -77,9 +77,9 @@ namespace esp32m {
      private:
       std::string _name;
       bool _disconnected = false;
-      std::deque<std::unique_ptr<DynamicJsonDocument> > _requests;
+      std::deque<std::unique_ptr<JsonDocument> > _requests;
       std::mutex _mutex;
-      bool sameRequestInQueue(DynamicJsonDocument *doc) {
+      bool sameRequestInQueue(JsonDocument *doc) {
         // must be called from scope guarded by mutex
         for (auto it = _requests.begin(); it != _requests.end(); ++it)
           if (requestsSame(it->get(), doc))

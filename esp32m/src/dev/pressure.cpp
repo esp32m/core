@@ -20,8 +20,8 @@ namespace esp32m {
       return _divisor != 0;
     }
 
-    DynamicJsonDocument *PressureSensor::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(4));
+    JsonDocument *PressureSensor::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);

@@ -7,7 +7,7 @@ const defaultStyle = {
   paddingLeft:4,
 };
 
-export const Flame = styled((props: SVGProps<SVGSVGElement>) => (
+export const Flame: React.FC<SVGProps<SVGSVGElement>> = styled((props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 611.999 611.999" {...props}>
     <g>
       <path
@@ -23,7 +23,7 @@ export const Flame = styled((props: SVGProps<SVGSVGElement>) => (
   </svg>
 ))(defaultStyle);
 
-export const TapWater = styled((props: SVGProps<SVGSVGElement>) => (
+export const TapWater: React.FC<SVGProps<SVGSVGElement>> = styled((props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 502 502" {...props}>
         <g>
           <path
@@ -56,7 +56,7 @@ export const TapWater = styled((props: SVGProps<SVGSVGElement>) => (
   </svg>
 ))(defaultStyle);
 
-export const Heater = styled((props: SVGProps<SVGSVGElement>) => (
+export const Heater: React.FC<SVGProps<SVGSVGElement>> = styled((props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 60 60" {...props}>
       <g>
         <path

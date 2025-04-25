@@ -36,8 +36,8 @@ namespace esp32m {
       return pcnt->isEnabled();
     }
 
-    DynamicJsonDocument *Fan::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(4));
+    JsonDocument *Fan::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonObject obj = doc->to<JsonObject>();
       json::to(obj, "stamp", millis() - _stamp);
       if (_tach)
@@ -49,16 +49,15 @@ namespace esp32m {
       return doc;
     }
 
-    void Fan::setState(const JsonVariantConst cfg,
-                       DynamicJsonDocument **result) {
+    void Fan::setState(RequestContext &ctx) {
       bool changed = false;
       auto speed = _speed;
-      if (json::from(cfg["speed"], speed, &changed))
+      if (json::from(ctx.data["speed"], speed, &changed))
         setSpeed(speed);
 
-      if (cfg["on"].is<bool>()) {
+      if (ctx.data["on"].is<bool>()) {
         bool on = _on;
-        json::from(cfg["on"], on, &changed);
+        json::from(ctx.data["on"], on, &changed);
         turn(on);
       }
     }
@@ -79,18 +78,17 @@ namespace esp32m {
       return true;
     }
 
-    bool Fan::setConfig(const JsonVariantConst cfg,
-                        DynamicJsonDocument **result) {
+    bool Fan::setConfig(RequestContext &ctx) {
       bool changed = false;
-      json::from(cfg["on"], _on, &changed);
-      json::from(cfg["speed"], _speed, &changed);
+      json::from(ctx.data["on"], _on, &changed);
+      json::from(ctx.data["speed"], _speed, &changed);
       if (changed)
         applyConfig();
       return changed;
     }
 
-    DynamicJsonDocument *Fan::getConfig(RequestContext &ctx) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+    JsonDocument *Fan::getConfig(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject root = doc->to<JsonObject>();
       json::to(root, "on", _on);
       if (_pwm) {

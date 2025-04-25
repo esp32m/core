@@ -54,7 +54,7 @@ namespace esp32m {
           bool _stateChanged = false;
           void command(std::string payload) {
             auto doc =
-                new DynamicJsonDocument(JSON_STRING_SIZE(payload.size()));
+                new JsonDocument(); /* JSON_STRING_SIZE(payload.size()) */
             auto root = doc->to<JsonVariant>();
             root.set(payload);
             CommandRequest ev(name(), root);
@@ -91,7 +91,7 @@ namespace esp32m {
         TaskHandle_t _task = nullptr;
         unsigned long _describeRequested = 0, _stateRequested = 0;
         std::map<std::string, std::unique_ptr<mqtt::Dev> > _devices;
-        Mqtt(){};
+        Mqtt() {};
         void run() {
           esp_task_wdt_add(NULL);
           auto &mqtt = net::Mqtt::instance();
@@ -154,21 +154,21 @@ namespace esp32m {
         void requestState(bool changedOnly) {
           const size_t MaxStaticIdLength = 32;
           _stateRequested = millis();
-          StaticJsonDocument<JSON_OBJECT_SIZE(1) +
-                             JSON_STRING_SIZE(MaxStaticIdLength)>
-              reqDoc;
+          /*StaticJsonDocument<JSON_OBJECT_SIZE(1) +
+                             JSON_STRING_SIZE(MaxStaticIdLength)>*/
+          JsonDocument reqDoc;
           auto reqData = reqDoc.to<JsonObject>();
           auto &mqtt = net::Mqtt::instance();
           for (auto const &[id, dev] : _devices) {
             if (changedOnly && !dev->isStateChanged())
               continue;
             dev->resetStateChanged();
-            DynamicJsonDocument *dynReqDoc = nullptr;
+            JsonDocument *dynReqDoc = nullptr;
             JsonObject safeReqData = reqData;
             if (id.size() > MaxStaticIdLength) {  // very unlikely, but still
                                                   // need to account for it
-              dynReqDoc = new DynamicJsonDocument(JSON_OBJECT_SIZE(1) +
-                                                  JSON_STRING_SIZE(id.size()));
+              dynReqDoc = new JsonDocument(/*JSON_OBJECT_SIZE(1) +
+                                           JSON_STRING_SIZE(id.size())*/);
               safeReqData = dynReqDoc->to<JsonObject>();
             }
             safeReqData["id"] = id;
@@ -187,19 +187,25 @@ namespace esp32m {
               logW("device %s did not provide state", id.c_str());
               continue;
             }
-            char *statePayload;
+            /*char *statePayload;
             bool jsonStatePayload = false;
             if (state.is<const char *>()) {
               statePayload = (char *)state.as<const char *>();
             } else {
               statePayload = json::allocSerialize(state);
               jsonStatePayload = true;
+            }*/
+            std::string statePayload;
+            if (state.is<const char *>()) {
+              statePayload = state.as<const char *>();
+            } else {
+              serializeJson(state, statePayload);
             }
             /*logD("state topic: %s, payload: %s", dev->stateTopic.c_str(),
                  statePayload);*/
-            mqtt.publish(dev->stateTopic.c_str(), statePayload);
-            if (jsonStatePayload)
-              free(statePayload);
+            mqtt.publish(dev->stateTopic.c_str(), statePayload.c_str());
+            /*if (jsonStatePayload)
+              free(statePayload);*/
           }
         }
       };
@@ -213,6 +219,6 @@ namespace esp32m {
           ha::Mqtt::instance().wakeUp();
         }
       }  // namespace mqtt
-    }    // namespace ha
-  }      // namespace integrations
+    }  // namespace ha
+  }  // namespace integrations
 }  // namespace esp32m

@@ -36,7 +36,7 @@ namespace esp32m {
 
     void to(JsonObject target, const esp_netif_ip_info_t &source) {
       char buf[net::Ipv4MaxChars];
-      auto arr = target.createNestedArray("ip");
+      auto arr = target["ip"].to<JsonArray>();
       esp_ip4addr_ntoa(&source.ip, buf, sizeof(buf));
       arr.add(buf);
       esp_ip4addr_ntoa(&source.gw, buf, sizeof(buf));
@@ -49,7 +49,7 @@ namespace esp32m {
       char buf[net::Ipv6MaxChars];
       if (count == 0)
         return;
-      auto arr = target.createNestedArray("ipv6");
+      auto arr = target["ipv6"].to<JsonArray>();
       for (int i = 0; i < count; i++) {
         ip6addr_ntoa_r((ip6_addr_t *)&ip6[i], buf, sizeof(buf));
         arr.add(buf);
@@ -61,7 +61,7 @@ namespace esp32m {
       char buf[net::Ipv6MaxChars];
       if (source.size() == 0)
         return;
-      auto arr = target.createNestedArray("dns");
+      auto arr = target["dns"].to<JsonArray>();
       for (int i = 0; i < ESP_NETIF_DNS_MAX; i++) {
         auto it = source.find((esp_netif_dns_type_t)i);
         bool valid = false;
@@ -89,7 +89,7 @@ namespace esp32m {
     }
     void to(JsonObject target, const dhcps_lease_t &source) {
       char buf[net::Ipv4MaxChars];
-      auto arr = target.createNestedArray("lease");
+      auto arr = target["lease"].to<JsonArray>();
       arr.add(source.enable);
       ip4addr_ntoa_r(&source.start_ip, buf, sizeof(buf));
       arr.add(buf);
@@ -115,11 +115,11 @@ namespace esp32m {
       auto nr = esp_netif_get_nr_of_ifs();
       if (nr == 0)
         return;
-      auto ifaces = target.createNestedArray("interfaces");
+      auto ifaces = target["interfaces"].to<JsonArray>();
       std::vector<esp_netif_t *> netifs;
       net::netifEnum(netifs);
       for (auto cif : netifs) {
-        auto a = ifaces.createNestedArray();
+        auto a = ifaces.add<JsonArray>();
         a.add(esp_netif_get_ifkey(cif));
         a.add(esp_netif_get_desc(cif));
         a.add(esp_netif_get_netif_impl_index(cif));
@@ -134,13 +134,13 @@ namespace esp32m {
                 break;
             }*/
     }
-    size_t interfacesSize() {
+    /*size_t interfacesSize() {
       auto nr = esp_netif_get_nr_of_ifs();
       if (nr == 0)
         return 0;
       return JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(nr) +
              nr * JSON_ARRAY_SIZE(4) + nr * JSON_STRING_SIZE(NETIF_NAMESIZE);
-    }
+    }*/
 
     bool from(JsonVariantConst source, ip_addr_t &target, bool *changed) {
       if (source.isUnbound() || source.isNull())

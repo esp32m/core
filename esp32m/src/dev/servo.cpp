@@ -64,11 +64,11 @@ namespace esp32m {
       return ticksToUs(_pulseWidth);
     }
 
-    void Servo::setState(const JsonVariantConst state,
-                         DynamicJsonDocument **result) {
+    void Servo::setState(RequestContext &ctx) {
+      auto state = ctx.data.as<JsonObjectConst>();
       JsonVariantConst v = state["angle"];
       if (!v.isNull() && v.is<float>()) {
-        json::checkSetResult(setAngle(v.as<float>()), result);
+        ctx.errors.check(setAngle(v.as<float>()));
         return;
       }
       v = state["pw"];
@@ -77,29 +77,28 @@ namespace esp32m {
         w = v.as<int>();
       if (w == -1)
         w = getPulseWidth();
-      json::checkSetResult(setPulseWidth(w), result);
+      ctx.errors.check(setPulseWidth(w));
     }
 
-    DynamicJsonDocument *Servo::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_OBJECT_SIZE(2));
+    JsonDocument *Servo::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject info = doc->to<JsonObject>();
       info["angle"] = getAngle();
       info["pw"] = getPulseWidth();
       return doc;
     }
 
-    bool Servo::setConfig(const JsonVariantConst cfg,
-                          DynamicJsonDocument **result) {
+    bool Servo::setConfig(RequestContext &ctx) {
       if (isPersistent()) {
-        setState(cfg, result);
+        setState(ctx);
         return true;
       }
       return false;
     }
 
-    DynamicJsonDocument *Servo::getConfig(RequestContext &ctx) {
+    JsonDocument *Servo::getConfig(RequestContext &ctx) {
       if (isPersistent())
-        return getState(ctx.request.data());
+        return getState(ctx);
       return nullptr;
     }
 

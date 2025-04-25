@@ -20,8 +20,8 @@ namespace esp32m {
       return _divisor != 0;
     }
 
-    DynamicJsonDocument *Mq135::getState(const JsonVariantConst args) {
-      DynamicJsonDocument *doc = new DynamicJsonDocument(JSON_ARRAY_SIZE(2));
+    JsonDocument *Mq135::getState(RequestContext &ctx) {
+      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);

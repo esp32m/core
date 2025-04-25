@@ -15,7 +15,7 @@ namespace esp32m {
       }
 
      protected:
-      DynamicJsonDocument *getState(const JsonVariantConst args) override;
+      JsonDocument *getState(RequestContext &ctx) override;
 
      private:
       Partitions() {}

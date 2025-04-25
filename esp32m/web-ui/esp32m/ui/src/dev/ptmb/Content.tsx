@@ -37,16 +37,10 @@ export const Content = ({
   );
 
   const api = useBackendApi();
-  const [config, refresh] = useModuleConfig<TConfig>(name);
+  const { config, setConfig } = useModuleConfig<TConfig>(name);
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},
-    onSubmit: async (v) => {
-      try {
-        await api.setConfig(name, v);
-      } finally {
-        refresh();
-      }
-    },
+    onSubmit: (v) => setConfig(v),
     validationSchema,
   });
   const state = useModuleState<TState>(name);

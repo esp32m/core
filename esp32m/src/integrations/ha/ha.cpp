@@ -7,7 +7,7 @@ namespace esp32m {
 
       const char *stateClasses[] = {"measurement", "total", "total_increasing"};
 
-      DynamicJsonDocument *describeSensor(Sensor *sensor) {
+      JsonDocument *describeSensor(Sensor *sensor) {
         auto uid = sensor->uid();
         auto id = sensor->id();
         auto name = sensor->name;
@@ -42,12 +42,12 @@ namespace esp32m {
         }
         auto group = sensor->group;
 
-        DynamicJsonDocument *doc = new DynamicJsonDocument(
-            JSON_OBJECT_SIZE(8 + (group > 0 ? 1 : 0) + (unit ? 1 : 0) +
+        JsonDocument *doc = new JsonDocument(
+            /*JSON_OBJECT_SIZE(8 + (group > 0 ? 1 : 0) + (unit ? 1 : 0) +
                              (precision >= 0 ? 1 : 0) + (name ? 1 : 0) +
                              (stateClass >= 0 ? 1 : 0)) +
             JSON_STRING_SIZE(uid.size()) +
-            JSON_STRING_SIZE(strlen(id) + 15)  // {{value_json.%id%}}
+            JSON_STRING_SIZE(strlen(id) + 15)  // {{value_json.%id%}}*/
         );
         auto root = doc->to<JsonObject>();
         root["id"] = uid;
@@ -57,7 +57,7 @@ namespace esp32m {
         if (group > 0)
           root["group"] = group;
         root["state_class"] = "measurement";
-        auto config = root.createNestedObject("config");
+        auto config = root["config"].to<JsonObject>();
         if (name)
           config["name"] = name;
         config["device_class"] = sensor->type();

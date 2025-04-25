@@ -44,15 +44,15 @@ namespace esp32m {
                 _rflags = default_router_list[i].flags;
               }
         }
-        size_t jsonSize() {
+        /*size_t jsonSize() {
           auto s = JSON_ARRAY_SIZE(6) + JSON_STRING_SIZE(_nexthop.size()) +
                    JSON_STRING_SIZE(_lladdr.size()) + JSON_STRING_SIZE(3);
           if (_isrouter)
             s += JSON_ARRAY_SIZE(2);
           return s;
-        }
+        }*/
         void toJson(JsonArray a) {
-          a = a.createNestedArray();
+          a = a.add<JsonArray>();
           a.add(_ifname);
           a.add(_lladdr);
           a.add(_nexthop);
@@ -86,12 +86,12 @@ namespace esp32m {
           _pmtu = entry.pmtu;
           _age = entry.age;
         }
-        size_t jsonSize() {
+        /*size_t jsonSize() {
           return JSON_ARRAY_SIZE(4) + JSON_STRING_SIZE(_nexthop.size()) +
                  JSON_STRING_SIZE(_dest.size());
-        }
+        }*/
         void toJson(JsonArray a) {
-          a = a.createNestedArray();
+          a = a.add<JsonArray>();
           a.add(_dest);
           a.add(_nexthop);
           a.add(_pmtu);
@@ -114,12 +114,12 @@ namespace esp32m {
           _it = entry.invalidation_timer;
         }
 
-        size_t jsonSize() {
+/*        size_t jsonSize() {
           return JSON_ARRAY_SIZE(3) + JSON_STRING_SIZE(_prefix.size()) +
                  JSON_STRING_SIZE(3);
-        }
+        }*/
         void toJson(JsonArray a) {
-          a = a.createNestedArray();
+          a = a.add<JsonArray>();
           a.add(_prefix);
           a.add(_ifname);
           a.add(_it);
@@ -131,39 +131,39 @@ namespace esp32m {
         u32_t _it;
       };
 
-      DynamicJsonDocument* Nd6::getState(const JsonVariantConst args) {
-        size_t size = JSON_OBJECT_SIZE(3);
+      JsonDocument *Nd6::getState(RequestContext &ctx) {
+        //size_t size = JSON_OBJECT_SIZE(3);
         std::vector<Neigh> neighs;
         for (int i = 0; i < LWIP_ND6_NUM_NEIGHBORS; i++)
           if (neighbor_cache[i].state != ND6_NO_ENTRY) {
             neighs.emplace_back(neighbor_cache[i]);
-            size += neighs.back().jsonSize();
+          //  size += neighs.back().jsonSize();
           }
         std::vector<Dest> dests;
         for (int i = 0; i < LWIP_ND6_NUM_DESTINATIONS; i++)
           if (!ip6_addr_isany(&(destination_cache[i].destination_addr))) {
             dests.emplace_back(destination_cache[i]);
-            size += dests.back().jsonSize();
+            //size += dests.back().jsonSize();
           }
         std::vector<Prefix> prefixes;
         for (int i = 0; i < LWIP_ND6_NUM_PREFIXES; i++)
           if (prefix_list[i].netif) {
             prefixes.emplace_back(prefix_list[i]);
-            size += prefixes.back().jsonSize();
+            //size += prefixes.back().jsonSize();
           }
 
-        size += JSON_ARRAY_SIZE(neighs.size()) + JSON_ARRAY_SIZE(dests.size()) +
-                JSON_ARRAY_SIZE(prefixes.size());
+        /*size += JSON_ARRAY_SIZE(neighs.size()) + JSON_ARRAY_SIZE(dests.size()) +
+                JSON_ARRAY_SIZE(prefixes.size());*/
 /*        for (auto& neigh : neighs) size += neigh.jsonSize();
         for (auto& dest : dests) size += dest.jsonSize();
         for (auto& prefix : prefixes) size += prefix.jsonSize();*/
-        DynamicJsonDocument* doc = new DynamicJsonDocument(size);
+        JsonDocument* doc = new JsonDocument(); /* size */
         auto root = doc->to<JsonObject>();
-        auto a = root.createNestedArray("neighs");
+        auto a = root["neighs"].to<JsonArray>();
         for (auto& neigh : neighs) neigh.toJson(a);
-        a = root.createNestedArray("dests");
+        a = root["dests"].to<JsonArray>();
         for (auto& dest : dests) dest.toJson(a);
-        a = root.createNestedArray("prefixes");
+        a = root["prefixes"].to<JsonArray>();
         for (auto& prefix : prefixes) prefix.toJson(a);
 
         return doc;

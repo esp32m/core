@@ -45,7 +45,7 @@ namespace esp32m {
               char *devname = strndup(cmdStart, firstSlash - cmdStart);
               char *command = strndup(firstSlash + 1,
                                       devlen - 1 - (firstSlash - cmdStart + 1));
-              DynamicJsonDocument *doc = nullptr;
+              JsonDocument *doc = nullptr;
               auto data = iev.payload();
               if (data.size())
                 doc = json::parse(data.c_str());
@@ -60,7 +60,7 @@ namespace esp32m {
             }
           }
         } else if (Response::is(ev, this->name(), &r)) {
-          DynamicJsonDocument *doc = r->data();
+          JsonDocument *doc = r->data();
           JsonVariantConst data = doc ? doc->as<JsonVariantConst>()
                                       : json::null<JsonVariantConst>();
           respond(r->source(), r->seq(), data, r->isError());
@@ -87,11 +87,13 @@ namespace esp32m {
       }
       if (isError && tl)
         strlcpy(tp, "/error", tl);
-      char *ds = json::allocSerialize(data);
-      net::Mqtt::instance().publish(topic, ds);
+      std::string ds;
+      serializeJson(data, ds);
+      // char *ds = json::allocSerialize(data);
+      net::Mqtt::instance().publish(topic, ds.c_str());
       free(topic);
-      if (ds)
-        free(ds);
+/*      if (ds)
+        free(ds);*/
     }
 
     Mqtt &Mqtt::instance() {

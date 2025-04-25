@@ -1,3 +1,5 @@
+import { TJsonValue } from "@ts-libs/tools";
+
 export const Name = 'lwip-mld6';
 
 export type TGroup = [
@@ -10,4 +12,4 @@ export type TGroup = [
 
 export type TMld6State = {
   [ifname: string]: ReadonlyArray<TGroup>;
-};
+} & TJsonValue;

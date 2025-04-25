@@ -1,5 +1,5 @@
 import { Name, TState, TProps, TConfig } from './types';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useModuleConfig, useModuleState } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 import { Grid, IconButton } from '@mui/material';
@@ -21,17 +21,10 @@ export const Content = ({
   title = 'Moisture sensor',
   addr,
 }: TProps) => {
-  const api = useBackendApi();
-  const [config, refresh] = useModuleConfig<TConfig>(name);
+  const { config, setConfig } = useModuleConfig<TConfig>(name);
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},
-    onSubmit: async (v) => {
-      try {
-        await api.setConfig(name, v);
-      } finally {
-        refresh();
-      }
-    },
+    onSubmit: async (v) => setConfig(v),
     validationSchema,
   });
   const state = useModuleState<TState>(name);

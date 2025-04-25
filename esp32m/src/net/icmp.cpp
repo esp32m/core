@@ -38,8 +38,8 @@ namespace esp32m {
         return;
       switch (s) {
         case Status::Success: {
-          size_t size = JSON_OBJECT_SIZE(6) + Ipv6MaxChars;
-          auto doc = new DynamicJsonDocument(size);
+          //size_t size = JSON_OBJECT_SIZE(6) + Ipv6MaxChars;
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           uint16_t seq;
           uint8_t ttl;
@@ -65,8 +65,8 @@ namespace esp32m {
           _pendingResponse->publish();
         } break;
         case Status::Timeout: {
-          size_t size = JSON_OBJECT_SIZE(3) + Ipv6MaxChars;
-          auto doc = new DynamicJsonDocument(size);
+          // size_t size = JSON_OBJECT_SIZE(3) + Ipv6MaxChars;
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           uint16_t seq;
           ip_addr_t addr;
@@ -81,8 +81,8 @@ namespace esp32m {
           _pendingResponse->publish();
         } break;
         case Status::End: {
-          size_t size = JSON_OBJECT_SIZE(4);
-          auto doc = new DynamicJsonDocument(size);
+          // size_t size = JSON_OBJECT_SIZE(4);
+          auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
           uint32_t tx;
           uint32_t rx;
@@ -165,18 +165,18 @@ namespace esp32m {
       }
     }
 
-    DynamicJsonDocument *Ping::getState(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(2);
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Ping::getState(RequestContext &ctx) {
+      //size_t size = JSON_OBJECT_SIZE(2);
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "running", 1);
       return doc;
     }
 
-    DynamicJsonDocument *Ping::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
-                    json::interfacesSize();
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Ping::getConfig(RequestContext &ctx) {
+      /*size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
+                    json::interfacesSize();*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::interfacesTo(root);
       if (_host.size())
@@ -193,9 +193,8 @@ namespace esp32m {
       return doc;
     }
 
-    bool Ping::setConfig(const JsonVariantConst data,
-                         DynamicJsonDocument **result) {
-      JsonObjectConst obj = data.as<JsonObjectConst>();
+    bool Ping::setConfig(RequestContext &ctx) {
+      JsonObjectConst obj = ctx.data.as<JsonObjectConst>();
       bool changed = false;
       json::from(obj["target"], _host, &changed);
       if (!_host.size()) {
@@ -552,8 +551,8 @@ namespace esp32m {
           session->step();
           if (_pendingResponse) {
             auto r = session->result();
-            size_t size = JSON_OBJECT_SIZE(7) + Ipv6MaxChars;
-            auto doc = new DynamicJsonDocument(size);
+           //size_t size = JSON_OBJECT_SIZE(7) + Ipv6MaxChars;
+            auto doc = new JsonDocument(); /* size */
             auto root = doc->to<JsonObject>();
             json::to(root, "ip", r->from);
             json::to(root, "seq", r->seq);
@@ -581,18 +580,18 @@ namespace esp32m {
       vTaskDelete(NULL);
     }
 
-    DynamicJsonDocument *Traceroute::getState(const JsonVariantConst args) {
-      size_t size = JSON_OBJECT_SIZE(1);
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Traceroute::getState(RequestContext &ctx) {
+      //size_t size = JSON_OBJECT_SIZE(1);
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "running", !_stopped);
       return doc;
     }
 
-    DynamicJsonDocument *Traceroute::getConfig(RequestContext &ctx) {
-      size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
-                    json::interfacesSize();
-      auto doc = new DynamicJsonDocument(size);
+    JsonDocument *Traceroute::getConfig(RequestContext &ctx) {
+      /*size_t size = JSON_OBJECT_SIZE(8) + JSON_STRING_SIZE(_host.size()) +
+                    json::interfacesSize();*/
+      auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::interfacesTo(root);
       if (_host.size())
@@ -605,9 +604,8 @@ namespace esp32m {
       return doc;
     }
 
-    bool Traceroute::setConfig(const JsonVariantConst data,
-                               DynamicJsonDocument **result) {
-      JsonObjectConst obj = data.as<JsonObjectConst>();
+    bool Traceroute::setConfig(RequestContext &ctx) {
+      auto obj=ctx.data.as<JsonObjectConst>();
       bool changed = false;
       json::from(obj["target"], _host, &changed);
       if (!_host.size()) {
