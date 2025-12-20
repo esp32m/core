@@ -18,7 +18,8 @@
     "@esp32m/ui": "*",
     "@ts-libs/ui-app": "*",
     "lodash": "*",
+    "react-dom": "*",
     "react": "*"
   },
-  "packageManager": "yarn@4.1.0"
+  "packageManager": "yarn@4.12.0"
 }

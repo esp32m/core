@@ -47,8 +47,8 @@ namespace esp32m {
            uint32_t clk_speed)
       : _port(port),
         _cfg{.mode = I2C_MODE_MASTER,
-             .sda_io_num = (int)sda,
-             .scl_io_num = (int)scl,
+             .sda_io_num = sda,
+             .scl_io_num = scl,
              .sda_pullup_en = GPIO_PULLUP_ENABLE,
              .scl_pullup_en = GPIO_PULLUP_ENABLE,
              .master = {.clk_speed = clk_speed},

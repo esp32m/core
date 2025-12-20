@@ -7,29 +7,37 @@
 namespace esp32m {
   namespace modbus {
 
-    Master &Master::instance() {
+    Master& Master::instance() {
       static Master i;
       return i;
     }
 
+    mb_parameter_descriptor_t dummy_device_parameters[] = {
+        // CID, Name, Units, Modbus addr, register type, Modbus Reg Start
+        // Addr, Modbus Reg read length,
+        {0, "--", "--", 1, MB_PARAM_INPUT, 0, 2, 0, PARAM_TYPE_U32, 4, {},
+         PAR_PERMS_READ_WRITE_TRIGGER},
+    };
+
     void Master::configureSerial(uart_port_t port, uint32_t baud,
                                  uart_parity_t parity, bool ascii) {
-      auto mode = ascii ? MB_MODE_ASCII : MB_MODE_RTU;
+      auto mode = ascii ? MB_ASCII : MB_RTU;
       bool changed = false;
-      if (_config.mode != mode) {
-        _config.mode = mode;
+      auto& ser = _config.ser_opts;
+      if (ser.mode != mode) {
+        ser.mode = mode;
         changed = true;
       }
-      if (_config.port != port) {
-        _config.port = port;
+      if (ser.port != port) {
+        ser.port = port;
         changed = true;
       }
-      if (_config.baudrate != baud) {
-        _config.baudrate = baud;
+      if (ser.baudrate != baud) {
+        ser.baudrate = baud;
         changed = true;
       }
-      if (_config.parity != parity) {
-        _config.parity = parity;
+      if (ser.parity != parity) {
+        ser.parity = parity;
         changed = true;
       }
       _mutex = &locks::uart(port);
@@ -37,6 +45,9 @@ namespace esp32m {
         stop();
         start();
       }
+      _config.ser_opts.response_tout_ms = 1000,
+      _config.ser_opts.data_bits = UART_DATA_8_BITS,
+      _config.ser_opts.stop_bits = UART_STOP_BITS_1;
       _configured = true;
     }
 
@@ -44,10 +55,12 @@ namespace esp32m {
       if (!_mutex)
         return ESP_ERR_INVALID_STATE;
       std::lock_guard guard(*_mutex);
-      ESP_CHECK_RETURN(mbc_master_init(MB_PORT_SERIAL_MASTER, &_handle));
-      ESP_CHECK_RETURN(mbc_master_setup((void *)&_config));
+      // ESP_CHECK_RETURN(mbc_master_init(MB_PORT_SERIAL_MASTER, &_handle));
+      // ESP_CHECK_RETURN(mbc_master_setup((void*)&_config));
+      if (!_handle)
+        ESP_CHECK_RETURN(mbc_master_create_serial(&_config, &_handle));
       int txp = 17, rxp = 16;
-      switch (_config.port) {
+      switch (_config.ser_opts.port) {
         case UART_NUM_0:
           txp = 1;
           rxp = 3;
@@ -63,11 +76,17 @@ namespace esp32m {
         default:
           return ESP_FAIL;
       }
-      ESP_CHECK_RETURN(uart_set_pin(_config.port, txp, rxp, UART_PIN_NO_CHANGE,
-                                    UART_PIN_NO_CHANGE));
-      ESP_CHECK_RETURN(mbc_master_start());
+      ESP_CHECK_RETURN(uart_set_pin(_config.ser_opts.port, txp, rxp,
+                                    UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+
+      // it appears that mbc_master_set_descriptor must be called even if we
+      // don't use device parameters
       ESP_CHECK_RETURN(
-          uart_set_mode(_config.port, UART_MODE_RS485_HALF_DUPLEX));
+          mbc_master_set_descriptor(_handle, &dummy_device_parameters[0], 1));
+
+      ESP_CHECK_RETURN(mbc_master_start(_handle));
+      ESP_CHECK_RETURN(
+          uart_set_mode(_config.ser_opts.port, UART_MODE_RS485_HALF_DUPLEX));
       _running = true;
       return ESP_OK;
     }
@@ -76,13 +95,13 @@ namespace esp32m {
       if (!_mutex)
         return ESP_ERR_INVALID_STATE;
       std::lock_guard guard(*_mutex);
-      ESP_CHECK_RETURN(mbc_master_destroy());
+      ESP_CHECK_RETURN(mbc_master_stop(_handle));
       _running = false;
       return ESP_OK;
     }
 
     esp_err_t Master::request(uint8_t addr, Command command, uint16_t reg_start,
-                              uint16_t reg_size, void *data) {
+                              uint16_t reg_size, void* data) {
       if (!_mutex)
         return ESP_ERR_INVALID_STATE;
       std::lock_guard guard(*_mutex);
@@ -90,7 +109,7 @@ namespace esp32m {
                                 .command = command,
                                 .reg_start = reg_start,
                                 .reg_size = reg_size};
-      return mbc_master_send_request(&req, data);
+      return mbc_master_send_request(_handle, &req, data);
     }
 
     namespace master {

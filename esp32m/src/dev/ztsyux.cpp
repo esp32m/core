@@ -8,7 +8,7 @@
 namespace esp32m {
   namespace dev {
     Ztsyux::Ztsyux(uint8_t addr, const char *name)
-        : _name(name ? name : "ZTS-YUX"), _addr(addr), _sensor(this, "rain") {
+        : _name(name ? name : "ZTS-YUX"), _addr(addr), _sensor(this, "moisture", "rain") {
       Device::init(Flags::HasSensors);
     }
 

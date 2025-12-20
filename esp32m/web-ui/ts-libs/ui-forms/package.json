@@ -7,19 +7,19 @@
   "type": "module",
   "main": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^22.14.1",
-    "@types/react": "^19.1.2",
-    "typescript": "^5.8.3"
+    "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@mui/icons-material": "^7.0.2",
-    "@mui/material": "^7.0.2",
-    "@reduxjs/toolkit": "^2.7.0",
+    "@mui/icons-material": "^7.3.6",
+    "@mui/material": "^7.3.6",
+    "@reduxjs/toolkit": "^2.11.2",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",
-    "formik": "^2.4.6",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "yup": "^1.6.1"
+    "formik": "^2.4.9",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "yup": "^1.7.1"
   }
 }

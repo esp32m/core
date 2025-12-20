@@ -3,7 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.runWebpack = exports.WebpackConfigBuilder = void 0;
+exports.WebpackConfigBuilder = void 0;
+exports.runWebpack = runWebpack;
 const path_1 = __importDefault(require("path"));
 const terser_webpack_plugin_1 = __importDefault(require("terser-webpack-plugin"));
 const html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
@@ -60,6 +61,14 @@ const expressViewsFixLoader = {
         replace: 'function() { throw "views are not implemented"; }',
     },
 };
+const muiLicenseFixLoader = {
+    test: /Watermark\.js$/,
+    loader: 'string-replace-loader',
+    options: {
+        search: 'function getLicenseErrorMessage(licenseStatus) {',
+        replace: 'function getLicenseErrorMessage(licenseStatus) { return ""; } function _getLicenseErrorMessage(licenseStatus) {',
+    },
+};
 const ssdpOptionsFixLoader = {
     test: /default-ssdp-options\.js$/,
     loader: 'string-replace-loader',
@@ -75,6 +84,10 @@ const bindingsFixLoader = {
         search: 'opts.module_root = ',
         replace: 'opts.module_root = __dirname; //',
     },
+};
+const cssLoader = {
+    test: /\.css$/i,
+    use: ['style-loader', 'css-loader'],
 };
 /*const nodeGypFixLoader = {
   test: /node-gyp-build\.js$/,
@@ -228,7 +241,9 @@ class WebpackConfigBuilder {
             built.push(ssdpOptionsFixLoader);
             built.push(inlineJsonLoader);
         }
+        built.push(muiLicenseFixLoader);
         built.push(bindingsFixLoader);
+        built.push(cssLoader);
         built.push(...serialportFixLoaders);
         const url = findModuleRule(rules, 'url-loader');
         if (!url && this.hasWebTargets())
@@ -378,5 +393,4 @@ function runWebpack(dir, env, argv) {
         }
     });
 }
-exports.runWebpack = runWebpack;
 //# sourceMappingURL=webpack.js.map

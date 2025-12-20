@@ -12,6 +12,7 @@ import { useSnackApi } from '@ts-libs/ui-snack';
 import { isNumber, noop, TJsonValue } from '@ts-libs/tools';
 import { Name, TBackendStateRoot } from './state';
 import { ActionCreator, UnknownAction } from 'redux';
+import { setIn } from 'formik';
 
 export const ClientContext = createContext<IBackendApi | undefined>(undefined);
 
@@ -147,67 +148,78 @@ export const useModuleState = <T extends TJsonValue>(
   ) as T;
 };
 
-export const useModuleApi = (
-  name: string) => {
+export const useModuleApi = (target: string) => {
   const api = useBackendApi();
   const snack = useSnackApi();
   const [inProgress, setInProgress] = useState(0);
+  const enter = () => setInProgress((v) => v + 1);
+  const leave = () => setInProgress((v) => v - 1);
+const request = useCallback(async <T extends TJsonValue>(name: string, data?: T) => {
+    try {
+      enter()
+      return await api.request(target, name, data);
+    } catch (e) {
+      snack.error(e);
+    } finally {
+      leave();
+    }
+  }, [target, api, snack]);
   const getState = useCallback(async <T extends TJsonValue>(data?: T) => {
     try {
-      setInProgress(inProgress + 1);
-      return await api.getState(name, data);
+      enter();
+      return await api.getState(target, data);
     } catch (e) {
       snack.error(e);
     } finally {
-      setInProgress(inProgress - 1);
+      leave();
     }
-  }, [name, api, snack]);
+  }, [target, api, snack]);
   const setState = useCallback(async <T extends TJsonValue>(data: T) => {
     try {
-      setInProgress(inProgress + 1);
-      const response = await api.setState(name, data);
+      enter();
+      const response = await api.setState(target, data);
       return response?.data
     } catch (e) {
       snack.error(e);
     } finally {
-      setInProgress(inProgress - 1);
+      leave();
     }
-  }, [name, api, snack]);
+  }, [target, api, snack]);
   const getConfig = useCallback(async <T extends TJsonValue>(data?: T) => {
     try {
-      setInProgress(inProgress + 1);
-      const response = await api.getConfig(name, data);
+      enter();
+      const response = await api.getConfig(target, data);
       return response?.data
     } catch (e) {
       snack.error(e);
     } finally {
-      setInProgress(inProgress - 1);
+      leave();
     }
-  }, [name, api, snack]);
+  }, [target, api, snack]);
   const setConfig = useCallback(async <T extends TJsonValue>(data: T) => {
     try {
-      setInProgress(inProgress + 1);
-      const response = await api.setConfig(name, data);
+      enter();
+      const response = await api.setConfig(target, data);
       return response?.data
     } catch (e) {
       snack.error(e);
     } finally {
-      setInProgress(inProgress - 1);
+      leave();
     }
-  }, [name, api, snack]);
+  }, [target, api, snack]);
   const getInfo = useCallback(async <T extends TJsonValue>(data?: T) => {
     try {
-      setInProgress(inProgress + 1);
-      const response = await api.getInfo(name, data);
+      enter();
+      const response = await api.getInfo(target, data);
       return response?.data
     } catch (e) {
       snack.error(e);
     } finally {
-      setInProgress(inProgress - 1);
+      leave();
     }
-  }, [name, api, snack]);
+  }, [target, api, snack]);
 
-  return { getState, setState, getConfig, setConfig, getInfo, inProgress } as const;
+  return { request, getState, setState, getConfig, setConfig, getInfo, inProgress } as const;
 };
 
 export function useModuleConfig<T = unknown>(

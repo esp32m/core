@@ -1,7 +1,7 @@
 import { isNumber, isUndefined } from './is-type';
 
 type TNameOrValue = string | number;
-export type TEnum = { [key: TNameOrValue]: TNameOrValue };
+export type TEnum = { [key: string]: TNameOrValue };
 type TToNumberOptions = {
   throw?: true;
 };
@@ -13,7 +13,7 @@ type TBitmapOptions = {
 };
 
 class Tool<T extends TEnum> {
-  constructor(readonly enumType: T) {}
+  constructor(readonly enumType: T) { }
   contains(value: TNameOrValue) {
     if (isUndefined(value)) return false;
     const { enumType } = this;
@@ -31,6 +31,13 @@ class Tool<T extends TEnum> {
     }
     if (options?.throw)
       throw new RangeError(`value ${JSON.stringify(value)} is out of range`);
+  }
+  toName(value: TNameOrValue | undefined) {
+    if (isUndefined(value)) return undefined;
+    return this.enumType[value as keyof T];
+  }
+  names() {
+    return Object.keys(this.enumType).filter(k => Number.isNaN(Number(k)));
   }
   toOptions() {
     return (
@@ -52,9 +59,9 @@ class Tool<T extends TEnum> {
     const add = options?.missing
       ? (v: number) => result.push(this.enumType[v] || n)
       : (v: number) => {
-          const name = this.enumType[v];
-          if (name) result.push(name);
-        };
+        const name = this.enumType[v];
+        if (name) result.push(name);
+      };
     switch (typeof bitmap) {
       case 'bigint':
         while (bitmap && n < 64) {

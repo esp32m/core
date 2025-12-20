@@ -61,6 +61,8 @@ namespace esp32m {
         case 5387:  // wind direction, degrees
           _value = reg / 100.0;
           name = DIR;
+          if (_sensor)
+            _sensor->set(_value);
           break;
         case 5386:  // wind speed
           _value = reg / 10.0;

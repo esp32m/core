@@ -232,7 +232,7 @@ namespace esp32m {
       Status _status = Status::Initial;
       std::mutex _mutex;
       std::map<std::string, std::map<int, Subscription *> > _subscriptions;
-      void setState(Status state);
+      void setStatus(Status state);
 
       bool _enabled = true, _configChanged = false;
       std::string _uri, _username, _password, _client, _certurl;
@@ -252,6 +252,7 @@ namespace esp32m {
       void prepareCfg(bool init);
       void publishBirth();
       const char *effectiveClient();
+      std::vector<HandlerFunction> findMatchingHandlers(std::string topicFilter);
       friend class mqtt::Subscription;
     };
 

@@ -18,8 +18,7 @@ namespace esp32m {
           if (data.isNull() || !data.size() || isError)
             return;
           std::string id = data["id"] | source;
-          auto doc =
-              new JsonDocument(); /* data.memoryUsage() + JSON_OBJECT_SIZE(1) */
+          auto doc = new JsonDocument();
           doc->set(data);
           doc->as<JsonObject>()["name"] = source;
           responses[id] = std::unique_ptr<JsonDocument>(doc);

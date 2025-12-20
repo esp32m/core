@@ -20,17 +20,17 @@ namespace esp32m {
 
   class EventSensor : public Event, public json::PropsContainer {
    public:
-    EventSensor(const Device &device, const char *sensor, const float value,
+    EventSensor(const Device& device, const char* sensor, const float value,
                 const JsonObjectConst props)
         : Event(Type),
           _device(device),
           _sensor(sensor),
           _props(props),
           _value(value) {}
-    const Device &device() const {
+    const Device& device() const {
       return _device;
     }
-    const char *sensor() const {
+    const char* sensor() const {
       return _sensor;
     }
     const JsonObjectConst props() const override {
@@ -39,21 +39,21 @@ namespace esp32m {
     float value() {
       return _value;
     }
-    static void publish(const Device &device, const char *sensor,
+    static void publish(const Device& device, const char* sensor,
                         const float value, const JsonObjectConst props) {
       EventSensor ev(device, sensor, value, props);
       ev.Event::publish();
     }
-    static bool is(Event &ev) {
+    static bool is(Event& ev) {
       return ev.is(Type);
     }
 
    private:
-    const Device &_device;
-    const char *_sensor;
+    const Device& _device;
+    const char* _sensor;
     const JsonObjectConst _props;
     const float _value;
-    constexpr static const char *Type = "sensor";
+    constexpr static const char* Type = "sensor";
     ;
   };
 
@@ -63,7 +63,7 @@ namespace esp32m {
       None = 0,
       HasSensors = 1,
     };
-    Device(const Device &) = delete;
+    Device(const Device&) = delete;
     void setReinitDelay(unsigned int delay) {
       _reinitDelay = delay;
     }
@@ -71,8 +71,8 @@ namespace esp32m {
       return (_flags & Flags::HasSensors) != 0;
     }
     /* these must be called only from within pollSensors() */
-    void sensor(const char *sensor, const float value);
-    void sensor(const char *sensor, const float value,
+    void sensor(const char* sensor, const float value);
+    void sensor(const char* sensor, const float value,
                 const JsonObjectConst props);
 
     void setSensorsPollInterval(int intervalMs) {
@@ -84,9 +84,9 @@ namespace esp32m {
 
    protected:
     Flags _flags = Flags::None;
-    Device(){};
+    Device() {};
     void init(const Flags flags);
-    void handleEvent(Event &ev) override;
+    void handleEvent(Event& ev) override;
     virtual bool initSensors() {
       return true;
     }
@@ -121,33 +121,33 @@ namespace esp32m {
 
     enum class StateClass { Undefined, Measurement, Total, TotalIncreasing };
 
-    Sensor *find(std::string uid);
-    Sensor *find(Device *device, const char *id);
+    Sensor* find(std::string uid);
+    Sensor* find(Device* device, const char* id);
     int nextGroup();
 
     class Changed : public Event {
      public:
-      Changed(const Changed &) = delete;
-      const Sensor *sensor() const {
+      Changed(const Changed&) = delete;
+      const Sensor* sensor() const {
         return _sensor;
       }
-      static void publish(const Sensor *sensor) {
+      static void publish(const Sensor* sensor) {
         Changed ev(sensor);
         ev.Event::publish();
       }
-      static bool is(Event &ev, Changed **changed) {
+      static bool is(Event& ev, Changed** changed) {
         if (ev.is(Type)) {
           if (changed)
-            *changed = (Changed *)&ev;
+            *changed = (Changed*)&ev;
           return true;
         }
         return false;
       }
 
      private:
-      Changed(const Sensor *sensor) : Event(Type), _sensor(sensor) {}
-      const Sensor *_sensor;
-      constexpr static const char *Type = "sensor-changed";
+      Changed(const Sensor* sensor) : Event(Type), _sensor(sensor) {}
+      const Sensor* _sensor;
+      constexpr static const char* Type = "sensor-changed";
     };
 
     class Group {
@@ -155,18 +155,18 @@ namespace esp32m {
       Group(int id) : _id(id) {}
       struct Iterator {
        public:
-        typedef std::map<std::string, Sensor *>::iterator Inner;
+        typedef std::map<std::string, Sensor*>::iterator Inner;
         Iterator(int id);
-        bool operator==(const Iterator &other) const {
+        bool operator==(const Iterator& other) const {
           return _inner == other._inner;
         }
-        bool operator!=(const Iterator &other) const {
+        bool operator!=(const Iterator& other) const {
           return _inner != other._inner;
         }
-        Sensor *operator*() const {
+        Sensor* operator*() const {
           return _inner->second;
         }
-        Iterator &operator++() {
+        Iterator& operator++() {
           next();
           return *this;
         }
@@ -191,18 +191,18 @@ namespace esp32m {
      public:
       struct Iterator {
        public:
-        typedef std::map<std::string, Sensor *>::iterator Inner;
+        typedef std::map<std::string, Sensor*>::iterator Inner;
         Iterator(Inner inner) : _inner(inner) {}
-        bool operator==(const Iterator &other) const {
+        bool operator==(const Iterator& other) const {
           return _inner == other._inner;
         }
-        bool operator!=(const Iterator &other) const {
+        bool operator!=(const Iterator& other) const {
           return _inner != other._inner;
         }
-        Sensor *operator*() const {
+        Sensor* operator*() const {
           return _inner->second;
         }
-        Iterator &operator++() {
+        Iterator& operator++() {
           _inner++;
           return *this;
         }
@@ -217,18 +217,18 @@ namespace esp32m {
 
     class GroupChanged : public Event {
      public:
-      GroupChanged(const GroupChanged &) = delete;
-      const Group &group() const {
+      GroupChanged(const GroupChanged&) = delete;
+      const Group& group() const {
         return _group;
       }
       static void publish(int group) {
         GroupChanged ev(group);
         ev.Event::publish();
       }
-      static bool is(Event &ev, GroupChanged **changed) {
+      static bool is(Event& ev, GroupChanged** changed) {
         if (ev.is(Type)) {
           if (changed)
-            *changed = (GroupChanged *)&ev;
+            *changed = (GroupChanged*)&ev;
           return true;
         }
         return false;
@@ -237,19 +237,19 @@ namespace esp32m {
      private:
       GroupChanged(int group) : Event(Type), _group(group) {}
       Group _group;
-      constexpr static const char *Type = "sensor-group-changed";
+      constexpr static const char* Type = "sensor-group-changed";
     };
 
     enum EmitFlags { None = 0, Periodically = 1 << 0, OnChange = 1 << 1 };
 
     ENUM_FLAG_OPERATORS(EmitFlags)
     struct QueueItem {
-      const Sensor *sensor;
+      const Sensor* sensor;
     };
 
     class StateEmitter : public AppObject {
      public:
-      StateEmitter(const StateEmitter &) = delete;
+      StateEmitter(const StateEmitter&) = delete;
       StateEmitter(EmitFlags flags = EmitFlags::Periodically |
                                      EmitFlags::OnChange);
       void setInterval(int intervalMs) {
@@ -268,9 +268,9 @@ namespace esp32m {
       };
 
      protected:
-      void handleEvent(Event &ev) override;
-      virtual void emit(std::vector<const Sensor *> sensors) = 0;
-      virtual bool filter(const Sensor *sensor) {
+      void handleEvent(Event& ev) override;
+      virtual void emit(std::vector<const Sensor*> sensors) = 0;
+      virtual bool filter(const Sensor* sensor) {
         return true;
       }
 
@@ -286,23 +286,41 @@ namespace esp32m {
 
   }  // namespace sensor
 
-  class Sensor {
+  namespace ComponentType {
+    constexpr const char* Sensor = "sensor";
+    constexpr const char* Switch = "switch";
+    constexpr const char* BinarySensor = "binary_sensor";
+  }  // namespace ComponentType
+
+  class Component {
+   public:
+    virtual const char* component() const = 0;
+    bool isComponent(const char* type) const {
+      return type && !strcmp(component(), type);
+    }
+  };
+
+  class Sensor : public Component {
    public:
     int precision = -1;
     int group = 0;
     bool disabled = false;
     sensor::StateClass stateClass = sensor::StateClass::Undefined;
-    const char *unit = nullptr;
-    const char *name = nullptr;
-    Sensor(Device *device, const char *type, const char *id = nullptr);
-    Sensor(const Sensor &) = delete;
-    const char *type() const {
+    const char* unit = nullptr;
+    const char* name = nullptr;
+    Sensor(Device* device, const char* type, const char* id = nullptr);
+    Sensor(const Sensor&) = delete;
+    virtual ~Sensor();
+    const char* type() const {
       return _type;
+    }
+    const char* component() const override {
+      return "sensor";
     }
     /**
      * @return sensor identifier that is unique in its device scope
      */
-    const char *id() const {
+    const char* id() const {
       if (!_id.empty())
         return _id.c_str();
       return _type;
@@ -316,14 +334,14 @@ namespace esp32m {
       uid += id();
       return uid;
     }
-    Device *device() const {
+    Device* device() const {
       return _device;
     }
-    bool is(const char *t) const {
+    bool is(const char* t) const {
       return t && !strcmp(type(), t);
     }
     template <typename T>
-    void set(T value, bool *changed = nullptr) {
+    void set(T value, bool* changed = nullptr) {
       if constexpr (std::is_same_v<T, float>)
         if (precision >= 0)
           value = roundTo(value, precision);
@@ -349,16 +367,36 @@ namespace esp32m {
       return _props ? _props->as<JsonObjectConst>()
                     : json::null<JsonObjectConst>();
     }
-    void setProps(JsonDocument *props) {
+    void setProps(JsonDocument* props) {
       _props.reset(props);
     }
 
    private:
-    Device *_device;
-    const char *_type;
+    Device* _device;
+    const char* _type;
     std::string _id;
     JsonDocument _value;
     std::unique_ptr<JsonDocument> _props;
+  };
+
+  class Switch : public Sensor {
+   public:
+    Switch(Device* device, const char* name, const char* id = nullptr)
+        : Sensor(device, name, id) {}
+    Switch(const Switch&) = delete;
+    const char* component() const override {
+      return "switch";
+    }
+  };
+
+  class BinarySensor : public Sensor {
+   public:
+    BinarySensor(Device* device, const char* name, const char* id = nullptr)
+        : Sensor(device, name, id) {}
+    BinarySensor(const BinarySensor&) = delete;
+    const char* component() const override {
+      return "binary_sensor";
+    }
   };
 
 }  // namespace esp32m

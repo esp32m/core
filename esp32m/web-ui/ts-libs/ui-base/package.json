@@ -12,17 +12,17 @@
         }
     },
     "devDependencies": {
-        "@types/node": "^22.14.1",
-        "@types/react": "^19.1.2",
+        "@types/node": "^25.0.3",
+        "@types/react": "^19.2.7",
         "@types/react-router-dom": "^5.3.3",
-        "typescript": "^5.8.3"
+        "typescript": "^5.9.3"
     },
     "dependencies": {
-        "@mui/material": "^7.0.2",
+        "@mui/material": "^7.3.6",
         "@ts-libs/log": "*",
         "@ts-libs/redux": "*",
         "@ts-libs/tools": "*",
-        "react": "^19.1.0",
-        "react-dom": "^19.1.0"
+        "react": "^19.2.3",
+        "react-dom": "^19.2.3"
     }
 }

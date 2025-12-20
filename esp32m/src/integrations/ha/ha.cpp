@@ -5,9 +5,9 @@ namespace esp32m {
   namespace integrations {
     namespace ha {
 
-      const char *stateClasses[] = {"measurement", "total", "total_increasing"};
+      const char* stateClasses[] = {"measurement", "total", "total_increasing"};
 
-      JsonDocument *describeSensor(Sensor *sensor) {
+      JsonDocument* describeSensor(Sensor* sensor) {
         auto uid = sensor->uid();
         auto id = sensor->id();
         auto name = sensor->name;
@@ -31,6 +31,8 @@ namespace esp32m {
             unit = "V";
           else if (sensor->is("current"))
             unit = "A";
+          else if (sensor->is("power"))
+            unit = "W";
           else if (sensor->is("apparent_power"))
             unit = "VA";
           else if (sensor->is("reactive_power"))
@@ -42,7 +44,7 @@ namespace esp32m {
         }
         auto group = sensor->group;
 
-        JsonDocument *doc = new JsonDocument(
+        JsonDocument* doc = new JsonDocument(
             /*JSON_OBJECT_SIZE(8 + (group > 0 ? 1 : 0) + (unit ? 1 : 0) +
                              (precision >= 0 ? 1 : 0) + (name ? 1 : 0) +
                              (stateClass >= 0 ? 1 : 0)) +
@@ -53,23 +55,33 @@ namespace esp32m {
         root["id"] = uid;
         root["name"] = sensor->device()->name();
         root["componentId"] = id;
-        root["component"] = "sensor";
+        root["component"] = sensor->component();
         if (group > 0)
           root["group"] = group;
         root["state_class"] = "measurement";
         auto config = root["config"].to<JsonObject>();
         if (name)
           config["name"] = name;
-        config["device_class"] = sensor->type();
+        if (sensor->type() && strlen(sensor->type()) > 0)
+          config["device_class"] = sensor->type();
+        /*
+                if (sensor->isComponent(ComponentType::BinarySensor)) {
+                  config["payload_on"] = "1";
+                  config["payload_off"] = "0";
+                }
+        */
         if (unit)
           config["unit_of_measurement"] = unit;
         if (precision >= 0)
           config["suggested_display_precision"] = precision;
         if (stateClass >= 0)
           config["state_class"] = stateClasses[stateClass];
-        config["value_template"] = string_printf("{{value_json.%s}}", id);
+        if (sensor->isComponent(ComponentType::BinarySensor)) {
+          config["value_template"] = string_printf("{{ 'ON' if value_json.%s else 'OFF' }}", id);
+        } else
+          config["value_template"] = string_printf("{{value_json.%s}}", id);
         return doc;
       }
     }  // namespace ha
-  }    // namespace integrations
+  }  // namespace integrations
 }  // namespace esp32m

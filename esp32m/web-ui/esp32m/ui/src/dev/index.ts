@@ -31,6 +31,7 @@ export * from './soil5';
 export * from './fan';
 export * from './ahtxx';
 export * from './md-host';
+export * from './tm601awlcor';
 
 export * from './shared';
 export * from './types';

@@ -1,4 +1,4 @@
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
+import { List, RowComponentProps } from 'react-window';
 import { Divider } from '@mui/material';
 
 import { TTasksState, Name } from './types';
@@ -35,9 +35,8 @@ const ColStack = styled('span')({
   width: '6em',
 });
 
-const Row = ({ data, index, style }: ListChildComponentProps) => {
-  const item = index < 0 ? ['Id', 'Name', 'CPU', 'Stack'] : data[index];
-
+const Row = ({ data, index, style }: RowComponentProps<{ data: Array<any> }>) => {
+  const item = data[index];
   return (
     <div style={style}>
       <ColNumber>{item[0]}</ColNumber>
@@ -60,17 +59,23 @@ export const content = () => {
   ]);
   data.sort((a, b) => b[2] - a[2]);
   const gp = {
-    itemSize: 30,
-    itemCount: data.length,
-    itemData: data,
+    rowHeight: 30,
+    rowCount: data.length,
     width: '100%',
     height: 300,
+    rowComponent: Row,
+    rowProps: { data: data },
   };
   return (
     <CardBox title="Tasks">
-      <Row data={null} index={-1} style={{ fontWeight: 'bold' }} />
+      <div style={{ fontWeight: 'bold' }}>
+        <ColNumber>"Id"</ColNumber>
+        <ColName>"Name"</ColName>
+        <ColTime>"CPU"</ColTime>
+        <ColStack>"Stack"</ColStack>
+      </div>
       <Divider style={{ marginBottom: 7 }} />
-      <List {...gp}>{Row}</List>
+      <List {...gp} />
     </CardBox>
   );
 };

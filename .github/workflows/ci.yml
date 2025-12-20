@@ -19,6 +19,7 @@ jobs:
         with:
           repository: espressif/esp-idf
           path: esp-idf
+          ref: v5.5.1
           submodules: true
       - name: Install ESP-IDF
         run: ./esp-idf/install.sh

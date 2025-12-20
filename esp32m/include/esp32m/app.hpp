@@ -237,6 +237,7 @@ namespace esp32m {
     JsonDocument *getState(RequestContext &ctx) override;
     bool setConfig(RequestContext &ctx) override;
     JsonDocument *getConfig(RequestContext &ctx) override;
+    JsonDocument *getInfo(RequestContext &ctx) override;
     void handleEvent(Event &ev) override;
     bool handleRequest(Request &req) override;
 

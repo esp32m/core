@@ -1,5 +1,3 @@
-/// <reference types="node" />
-/// <reference types="node" />
 import Sftp from 'ssh2-sftp-client';
 import rl from 'readline';
 type TProjectConfig = {

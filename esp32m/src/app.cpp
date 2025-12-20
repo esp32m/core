@@ -368,6 +368,19 @@ namespace esp32m {
     }
   }
 
+  JsonDocument *App::getInfo(RequestContext &ctx) {
+    auto doc = new JsonDocument(); 
+    JsonObject info = doc->to<JsonObject>();
+
+    info["name"] = _name;
+    if (_version)
+      info["version"] = _version;
+    info["built"] = __DATE__ " " __TIME__;
+    info["sdk"] = esp_get_idf_version();
+    info["size"] = _sketchSize;
+    return doc;
+  }
+
   JsonDocument *App::getState(RequestContext &ctx) {
     /*size_t size = JSON_OBJECT_SIZE(
         1 + 8);  // root: name, time, uptime, version, built, sdk, size, space*/

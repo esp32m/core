@@ -10,8 +10,15 @@ namespace esp32m {
 
     FlowSensor::FlowSensor(const char *name, io::IPin *pin)
         : _name(name),
-          _sensorFlow(this, "flow"),
-          _sensorConsumption(this, "consumption") {
+          _sensorFlow(this, "volume_flow_rate", "flow"),
+          _sensorConsumption(this, "water", "consumption") {
+      auto group = sensor::nextGroup();
+      _sensorConsumption.group = group;
+      _sensorConsumption.stateClass = sensor::StateClass::Total;
+      _sensorConsumption.unit = "m³";
+      _sensorFlow.group = group;
+      _sensorFlow.unit = "m³/h";
+      _sensorFlow.stateClass = sensor::StateClass::Measurement;
       Device::init(Flags::HasSensors);
       _pin = pin;
     }

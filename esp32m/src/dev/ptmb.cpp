@@ -7,13 +7,15 @@
 
 namespace esp32m {
   namespace dev {
-    Ptmb::Ptmb(uint8_t addr, const char *name)
+    Ptmb::Ptmb(uint8_t addr, const char* name)
         : _name(name ? name : "PTMB"), _addr(addr), _sensor(this, "pressure") {
+      _sensor.unit = "bar"; // contrary to documentation, the unit looks like bar or ATM
+      _sensor.stateClass = sensor::StateClass::Measurement;
       Device::init(Flags::HasSensors);
     }
 
     bool Ptmb::initSensors() {
-      modbus::Master &mb = modbus::Master::instance();
+      modbus::Master& mb = modbus::Master::instance();
       if (mb.isRunning())
         ESP_ERROR_CHECK_WITHOUT_ABORT(mb.stop());
       delay(500);
@@ -23,8 +25,8 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    JsonDocument *Ptmb::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
+    JsonDocument* Ptmb::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -32,8 +34,8 @@ namespace esp32m {
       return doc;
     }
 
-    bool Ptmb::setConfig(RequestContext &ctx) {
-      modbus::Master &mb = modbus::Master::instance();
+    bool Ptmb::setConfig(RequestContext& ctx) {
+      modbus::Master& mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
       int16_t regs[5] = {};
@@ -42,7 +44,7 @@ namespace esp32m {
         return false;
       bool changed = false;
       auto v = regs[0];
-      auto cfg=ctx.data.as<JsonObjectConst>();
+      auto cfg = ctx.data.as<JsonObjectConst>();
       if (json::from(cfg["unit"], v, &changed))
         mb.request(_addr, modbus::Command::WriteRegister, 0x02, 1, &v);
       v = regs[1];
@@ -57,17 +59,17 @@ namespace esp32m {
       return changed;
     }
 
-    JsonDocument *Ptmb::getConfig(RequestContext &ctx) {
-      modbus::Master &mb = modbus::Master::instance();
+    JsonDocument* Ptmb::getConfig(RequestContext& ctx) {
+      modbus::Master& mb = modbus::Master::instance();
       if (!mb.isRunning())
         return nullptr;
       int16_t regs[3] = {};
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
       auto res = mb.request(_addr, modbus::Command::ReadHolding, 0x02, 3, regs);
       if (res == ESP_OK) {
         json::to(root, "unit", regs[0]);
-        json::to(root, "decimals", regs[2]);
+        json::to(root, "decimals", regs[1]);
       }
 
       res = mb.request(_addr, modbus::Command::ReadHolding, 0x05, 1, regs);
@@ -81,7 +83,7 @@ namespace esp32m {
     }
 
     bool Ptmb::pollSensors() {
-      modbus::Master &mb = modbus::Master::instance();
+      modbus::Master& mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
       int16_t values[2] = {};
@@ -110,7 +112,7 @@ namespace esp32m {
       return true;
     }
 
-    Ptmb *usePtmb(uint8_t addr, const char *name) {
+    Ptmb* usePtmb(uint8_t addr, const char* name) {
       return new Ptmb(addr, name);
     }
 

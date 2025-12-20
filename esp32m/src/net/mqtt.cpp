@@ -22,25 +22,46 @@ namespace esp32m {
         _mqtt->unsubscribe(this);
       }
 
-      void StatePublisher::emit(std::vector<const Sensor *> sensors) {
-        auto &mqtt = Mqtt::instance();
-        if (mqtt.isReady()) {
-          for (auto sensor : sensors) {
-            /*size_t docsize = JSON_OBJECT_SIZE(1) +
-            sensor->get().memoryUsage(); if (sensor->precision >= 0) docsize +=
-            JSON_STRING_SIZE(16);*/
-            auto doc = new JsonDocument(); /* docsize */
+      void StatePublisher::emit(std::vector<const Sensor*> sensors) {
+        auto& mqtt = Mqtt::instance();
+        if (!mqtt.isReady())
+          return;
+        // first publish non-grouped sensors and remove them from the list
+        for (auto it = sensors.begin(); it != sensors.end();)
+          if ((*it)->group == 0) {
+            auto doc = new JsonDocument();
             auto root = doc->to<JsonObject>();
-            sensor->to(root);
-            publish(sensor->device()->name(), root);
+            (*it)->to(root);
+            publish((*it)->device()->name(), root);
             delete doc;
-          }
+            it = sensors.erase(it);
+          } else
+            ++it;
+        // now publish grouped sensors
+        while (!sensors.empty()) {
+          auto group = sensors.front()->group;
+          auto device = sensors.front()->device();
+
+          auto doc = new JsonDocument();
+          auto root = doc->to<JsonObject>();
+          sensor::All all;
+          // we have to publish all sensors in the group, otherwise HA gets confused and complains about missing sensors
+          for (auto sensor : all)
+            if (sensor->device() == device && sensor->group == group)
+              sensor->to(root);
+          publish(device->name(), root);
+          delete doc;
+          for (auto it = sensors.begin(); it != sensors.end();)
+            if ((*it)->device() == device && (*it)->group == group) {
+              it = sensors.erase(it);
+            } else
+              ++it;
         }
       }
 
-      esp_err_t StatePublisher::publish(const char *name,
+      esp_err_t StatePublisher::publish(const char* name,
                                         JsonVariantConst state) {
-        auto &mqtt = Mqtt::instance();
+        auto& mqtt = Mqtt::instance();
         if (mqtt.isReady()) {
           auto topic = string_printf("esp32m/%s/%s/state",
                                      App::instance().hostname(), name);
@@ -52,8 +73,8 @@ namespace esp32m {
         return ESP_OK;
       }
 
-      void StatePublisher::handleEvent(Event &ev) {
-        EventStateChanged *stc;
+      void StatePublisher::handleEvent(Event& ev) {
+        EventStateChanged* stc;
         if (EventStateChanged::is(ev, &stc)) {
           auto state = stc->state();
           auto obj = stc->object();
@@ -81,7 +102,7 @@ namespace esp32m {
              (_status == Status::Ready || _status == Status::Connected);
     }
 
-    void Mqtt::setState(Status status) {
+    void Mqtt::setStatus(Status status) {
       Status prev;
       {
         std::lock_guard guard(_mutex);
@@ -95,7 +116,7 @@ namespace esp32m {
       xTaskNotifyGive(_task);
     }
 
-    bool Mqtt::handleRequest(Request &req) {
+    bool Mqtt::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("clear-cert-cache")) {
@@ -107,23 +128,23 @@ namespace esp32m {
       return false;
     }
 
-    void Mqtt::handleEvent(Event &ev) {
+    void Mqtt::handleEvent(Event& ev) {
       JsonObject cr;
       JsonObjectConst ca;
       DoneReason reason;
-      sleep::Event *slev;
+      sleep::Event* slev;
       if (EventInit::is(ev, 0)) {
-        xTaskCreate([](void *self) { ((Mqtt *)self)->run(); }, "m/mqtt", 4096,
+        xTaskCreate([](void* self) { ((Mqtt*)self)->run(); }, "m/mqtt", 4096,
                     this, tskIDLE_PRIORITY, &_task);
         prepareCfg(true);
         _handle = esp_mqtt_client_init(&_cfg);
         esp_mqtt_client_register_event(
             _handle, MQTT_EVENT_ANY,
-            [](void *handler_args, esp_event_base_t base, int32_t event_id,
-               void *event_data) {
-              ((Mqtt *)handler_args)->handle(event_id, event_data);
+            [](void* handler_args, esp_event_base_t base, int32_t event_id,
+               void* event_data) {
+              ((Mqtt*)handler_args)->handle(event_id, event_data);
             },
-            (void *)this);
+            (void*)this);
         auto name = App::instance().hostname();
         if (asprintf(&_broadcastTopic, "esp32m/broadcast/%s/", name) < 0)
           _broadcastTopic = nullptr;
@@ -141,14 +162,14 @@ namespace esp32m {
         if (_status != Status::Ready)
           slev->block();
       } else if (isConnected()) {
-        Broadcast *b = nullptr;
+        Broadcast* b = nullptr;
         if (Broadcast::is(ev, &b)) {
           // char *ds = json::allocSerialize(b->data());
           std::string ds;
           serializeJson(b->data(), ds);
           size_t tl = strlen(_broadcastTopic) + strlen(b->source()) + 1 +
                       strlen(b->name()) + 1;
-          char *topic = (char *)malloc(tl);
+          char* topic = (char*)malloc(tl);
           snprintf(topic, tl, "%s%s/%s", _broadcastTopic, b->source(),
                    b->name());
           publish(topic, ds.c_str());
@@ -176,7 +197,7 @@ namespace esp32m {
           case Status::Initial:
             _timer = 0;
             if (net::isDnsAvailable() && !_uri.empty()) {
-              setState(Status::Connecting);
+              setStatus(Status::Connecting);
               logI("connecting to %s", _uri.c_str());
               /*ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_mqtt_client_set_uri(_handle, _cfg.broker.address.uri));*/
@@ -193,7 +214,7 @@ namespace esp32m {
           case Status::Connecting:
             if (millis() - _timer > _timeout * 1000) {
               logW("timeout connecting to %s", _uri.c_str());
-              setState(Status::Initial);
+              setStatus(Status::Initial);
             }
             break;
           case Status::Connected: {
@@ -203,26 +224,26 @@ namespace esp32m {
             std::map<std::string, int> toSubscribe;
             {
               std::lock_guard guard(_mutex);
-              for (auto const &[topic, map] : _subscriptions) {
+              for (auto const& [topic, map] : _subscriptions) {
                 int qos = 0;
-                for (auto const &[id, sub] : map)
+                for (auto const& [id, sub] : map)
                   if (sub->qos() > qos)
                     qos = sub->qos();
                 toSubscribe[topic] = qos;
               }
             }
-            for (auto const &[topic, qos] : toSubscribe) {
+            for (auto const& [topic, qos] : toSubscribe) {
               esp_task_wdt_reset();
               this->intSubscribe(topic, qos);
             }
-            setState(Status::Ready);
+            setStatus(Status::Ready);
             _timer = 0;
           } break;
           case Status::Disconnecting:
             break;
           case Status::Disconnected:
             logI("disconnected");
-            setState(Status::Initial);
+            setStatus(Status::Initial);
             break;
           default:
             break;
@@ -230,14 +251,14 @@ namespace esp32m {
       }
     }
 
-    const char *Mqtt::effectiveClient() {
+    const char* Mqtt::effectiveClient() {
       if (_client.empty())
         return App::instance().hostname();
       return _client.c_str();
     }
 
-    JsonDocument *Mqtt::getState(RequestContext &ctx) {
-      char *client = (char *)effectiveClient();
+    JsonDocument* Mqtt::getState(RequestContext& ctx) {
+      char* client = (char*)effectiveClient();
       /*size_t size = JSON_OBJECT_SIZE(5 + 1) + JSON_STRING_SIZE(_uri.size()) +
                     JSON_STRING_SIZE(strlen(client));*/
       auto doc = new JsonDocument(); /* size */
@@ -253,7 +274,7 @@ namespace esp32m {
       return doc;
     }
 
-    JsonDocument *Mqtt::getConfig(RequestContext &ctx) {
+    JsonDocument* Mqtt::getConfig(RequestContext& ctx) {
       /*size_t size =
           JSON_OBJECT_SIZE(1 + 8) +  // mqtt: enabled, uri, username, password,
                                      // client, cert_url, keepalive, timeout
@@ -292,7 +313,7 @@ namespace esp32m {
                       errors.dump();*/
         }
         if (_cert) {
-          _cert->getData((void **)&_cfg.broker.verification.certificate);
+          _cert->getData((void**)&_cfg.broker.verification.certificate);
           // _cfg.broker.verification.skip_cert_common_name_check = true;
           // printf("got cert size %d", size);
           // printf("%s", (const char *)_cfg.broker.verification.certificate);
@@ -306,7 +327,7 @@ namespace esp32m {
         setBirth(topic.c_str(), "online");
     }
 
-    bool Mqtt::setConfig(RequestContext &ctx) {
+    bool Mqtt::setConfig(RequestContext& ctx) {
       bool changed = false;
       auto ca = ctx.data.as<JsonObjectConst>();
       json::from(ca["enabled"], _enabled, &changed);
@@ -327,7 +348,7 @@ namespace esp32m {
       return changed;
     }
 
-    bool Mqtt::publish(const char *topic, const char *message, int qos,
+    bool Mqtt::publish(const char* topic, const char* message, int qos,
                        bool retain) {
       if (!_handle || !isConnected() || !topic || !message)
         return false;
@@ -338,7 +359,7 @@ namespace esp32m {
         _pubcnt++;
       return id >= 0;
     }
-    bool Mqtt::enqueue(const char *topic, const char *message, int qos,
+    bool Mqtt::enqueue(const char* topic, const char* message, int qos,
                        bool retain, bool store) {
       if (!_handle || !isConnected() || !topic || !message)
         return false;
@@ -350,7 +371,7 @@ namespace esp32m {
       return id >= 0;
     }
 
-    void Mqtt::setLwt(const char *topic, const char *message, int qos,
+    void Mqtt::setLwt(const char* topic, const char* message, int qos,
                       bool retain) {
       _lwt.set(topic, message, qos, retain);
       _cfg.session.last_will = {
@@ -362,7 +383,7 @@ namespace esp32m {
       _configChanged = true;
     }
 
-    void Mqtt::setBirth(const char *topic, const char *message, int qos,
+    void Mqtt::setBirth(const char* topic, const char* message, int qos,
                         bool retain) {
       _birth.set(topic, message, qos, retain);
       if (isReady())
@@ -385,10 +406,10 @@ namespace esp32m {
       return false;
     }
 
-    Subscription *Mqtt::subscribe(const char *topic, int qos) {
+    Subscription* Mqtt::subscribe(const char* topic, int qos) {
       return this->subscribe(topic, nullptr, qos);
     }
-    Subscription *Mqtt::subscribe(const char *topic, HandlerFunction handler,
+    Subscription* Mqtt::subscribe(const char* topic, HandlerFunction handler,
                                   int qos) {
       if (!topic)
         return nullptr;
@@ -398,7 +419,7 @@ namespace esp32m {
       bool sendSubscribe;
       {
         std::lock_guard guard(_mutex);
-        auto &subs = _subscriptions[t];
+        auto& subs = _subscriptions[t];
         sendSubscribe = subs.size() == 0 && isConnected();
         subs[id] = sub;
       }
@@ -407,7 +428,7 @@ namespace esp32m {
       return sub;
     }
 
-    void Mqtt::unsubscribe(Subscription *sub) {
+    void Mqtt::unsubscribe(Subscription* sub) {
       if (!sub)
         return;
       bool sendUnsubscribe = false;
@@ -430,18 +451,18 @@ namespace esp32m {
         esp_mqtt_client_unsubscribe(_handle, sub->topic().c_str());
     }
 
-    esp_err_t Mqtt::handle(int32_t event_id, void *event_data) {
+    esp_err_t Mqtt::handle(int32_t event_id, void* event_data) {
       esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
       switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_ERROR:
           logE("error %i", event->error_handle->error_type);
           break;
         case MQTT_EVENT_CONNECTED:
-          setState(Status::Connected);
+          setStatus(Status::Connected);
           _timer = 0;
           break;
         case MQTT_EVENT_DISCONNECTED:
-          setState(Status::Disconnected);
+          setStatus(Status::Disconnected);
           break;
         case MQTT_EVENT_SUBSCRIBED:
           break;
@@ -453,17 +474,17 @@ namespace esp32m {
           _recvcnt++;
           Incoming ev(topic, payload);
           ev.publish();
-          std::vector<HandlerFunction> handlers;
-          {
+          std::vector<HandlerFunction> handlers = findMatchingHandlers(topic);
+          /*{
             std::lock_guard guard(_mutex);
             auto it = _subscriptions.find(topic);
             if (it != _subscriptions.end())
-              for (auto const &[id, sub] : it->second) {
+              for (auto const& [id, sub] : it->second) {
                 auto fn = sub->_function;
                 if (fn)
                   handlers.push_back(fn);
               }
-          }
+          }*/
           for (auto fn : handlers) fn(topic, payload);
         } break;
         default:
@@ -472,22 +493,62 @@ namespace esp32m {
       return 0;
     }
 
+    bool mqttTopicMatchesFilter(const std::string& filter,
+                                const std::string& topic) {
+      size_t fi = 0, ti = 0;
+      while (fi < filter.size() && ti < topic.size()) {
+        if (filter[fi] == '#') {
+          return fi + 1 == filter.size();
+        } else if (filter[fi] == '+') {
+          // Skip to next level
+          while (ti < topic.size() && topic[ti] != '/') ti++;
+          fi++;
+          if (ti < topic.size() && topic[ti] == '/')
+            ti++;
+          if (fi < filter.size() && filter[fi] == '/')  // ← Add this
+            fi++;
+        } else {
+          if (filter[fi] != topic[ti])
+            return false;
+          fi++;
+          ti++;
+        }
+      }
+      return fi == filter.size() && ti == topic.size();
+    }
+
+    std::vector<HandlerFunction> Mqtt::findMatchingHandlers(std::string topic) {
+      std::lock_guard guard(_mutex);
+      std::vector<HandlerFunction> handlers;
+      for (const auto& [topicFilter, subsById] : _subscriptions) {
+        if (mqttTopicMatchesFilter(topicFilter, topic)) {
+          for (const auto& [id, sub] : subsById) {
+            auto fn = sub->_function;
+            if (fn) {
+              handlers.push_back(fn);
+            }
+          }
+        }
+      }
+      return handlers;
+    }
+
     void Mqtt::disconnect() {
       if (_status == Status::Disconnecting || _status == Status::Initial ||
           _status == Status::Disconnected)
         return;
-      setState(Status::Disconnecting);
+      setStatus(Status::Disconnecting);
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mqtt_client_stop(_handle));
-      setState(Status::Disconnected);  // we only get MQTT_EVENT_DISCONNECTED on
-                                       // network error or server disconnect
+      setStatus(Status::Disconnected);  // we only get MQTT_EVENT_DISCONNECTED
+                                        // on network error or server disconnect
     }
 
-    Mqtt &Mqtt::instance() {
+    Mqtt& Mqtt::instance() {
       static Mqtt i;
       return i;
     }
 
-    Mqtt *useMqtt() {
+    Mqtt* useMqtt() {
       return &Mqtt::instance();
     }
   }  // namespace net

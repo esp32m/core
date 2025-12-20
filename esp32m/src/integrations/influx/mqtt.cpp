@@ -7,10 +7,10 @@ namespace esp32m {
   namespace integrations {
     namespace influx {
 
-      size_t serializeProps(const JsonObjectConst props, char **buf) {
+      size_t serializeProps(const JsonObjectConst props, char** buf) {
         if (props) {
           auto size = measureJson(props);
-          char *bptr = *buf = (char *)malloc(size);
+          char* bptr = *buf = (char*)malloc(size);
 
           for (JsonPairConst kv : props) {
             if (!size)
@@ -24,8 +24,8 @@ namespace esp32m {
             size -= l;
             if (!size)
               break;
-            if (kv.value().is<const char *>())
-              l = strlcpy(bptr, kv.value().as<const char *>(), size);
+            if (kv.value().is<const char*>())
+              l = strlcpy(bptr, kv.value().as<const char*>(), size);
             else
               l = serializeJson(kv.value(), bptr, size);
             bptr += l;
@@ -37,7 +37,7 @@ namespace esp32m {
         return 0;
       }
 
-      void Mqtt::handleEvent(Event &ev) {
+      void Mqtt::handleEvent(Event& ev) {
         if (EventInit::is(ev, 0)) {
           auto name = App::instance().hostname();
           if (asprintf(&_sensorsTopic, "esp32m/sensor/%s", name) < 0)
@@ -46,10 +46,11 @@ namespace esp32m {
         sensor::StateEmitter::handleEvent(ev);
       }
 
-      void Mqtt::emit(std::vector<const Sensor *> sensors) {
+      void Mqtt::emit(std::vector<const Sensor*> sensors) {
         for (auto sensor : sensors) {
           auto value = sensor->get();
-          if (!value.is<float>())
+          if (!(value.is<float>() ||
+                ((sensor->isComponent(ComponentType::Switch) || sensor->isComponent(ComponentType::BinarySensor)) && value.is<bool>())))
             continue;
           char *devProps, *props;
           auto unitName = App::instance().hostname();
@@ -58,16 +59,20 @@ namespace esp32m {
           auto dpl = serializeProps(device->props(), &devProps);
           auto pl = serializeProps(sensor->props(), &props);
           auto name = sensor->type();
+          if (!name || !strlen(name))
+            name = "value";
           auto unl = strlen(unitName);
           auto dnl = strlen(devName);
           auto snl = sensor->name ? strlen(sensor->name) : 0;
+          auto idl= sensor->id()!=name ? strlen(sensor->id()) : 0;
           auto dl = 12 /* "esp32m,unit=" */ + unl + 8 /* ",device=" */ + dnl +
                     (dpl ? (1 /* comma */ + dpl) : 0) +
                     (pl ? (1 /* comma */ + pl) : 0) +
                     (snl ? (8 /* ",sensor=" */ + snl) : 0) + 1 /*space*/ +
+                    (idl ? (4 /* ",id=" */ + idl) : 0) + 1 /*space*/ +
                     strlen(name) + 1 /*=*/ + (16 + 1 /*value*/) + 1 /*null*/;
-          char *s = (char *)malloc(dl);
-          char *sp = s;
+          char* s = (char*)malloc(dl);
+          char* sp = s;
           auto l =
               snprintf(sp, dl, "esp32m,unit=%s,device=%s", unitName, devName);
           sp += l;
@@ -87,8 +92,18 @@ namespace esp32m {
             sp += l;
             dl -= l;
           }
+          if (idl && dl) {
+            l = snprintf(sp, dl, ",id=%s", sensor->id());
+            sp += l;
+            dl -= l;
+          }
           if (dl) {
-            l = snprintf(sp, dl, " %s=%.16g", name, value.as<float>());
+            if (value.is<float>())
+              l = snprintf(sp, dl, " %s=%.16g", name, value.as<float>());
+            else if (value.is<bool>())
+              l = snprintf(sp, dl, " %s=%d", name, value.as<bool>() ? 1 : 0);
+            else
+              l = snprintf(sp, dl, " %s=%d", name, value.as<int>());
             sp += l;
             dl -= l;
           }

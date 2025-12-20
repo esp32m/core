@@ -32,7 +32,7 @@ namespace esp32m {
       uint8_t _addr;
       bool _value = false;
       unsigned long _stamp = 0;
-      Sensor _sensor;
+      BinarySensor _sensor;
     };
 
     Ztsyux *useZtsyux(uint8_t addr = 1, const char *name = nullptr);

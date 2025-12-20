@@ -167,8 +167,8 @@ namespace esp32m {
 
       eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
       eth_esp32_emac_config_t emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
-      emac_config.smi_mdc_gpio_num = 23;
-      emac_config.smi_mdio_gpio_num = 18;
+      emac_config.smi_gpio.mdc_num = 23;
+      emac_config.smi_gpio.mdio_num = 18;
       esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&emac_config, &mac_config);
       eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
       phy_config.phy_addr = 0;

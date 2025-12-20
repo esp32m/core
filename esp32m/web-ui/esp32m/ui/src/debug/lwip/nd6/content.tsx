@@ -1,13 +1,14 @@
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
+import { List, RowComponentProps } from 'react-window';
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../../../backend';
 import { Name, NeighState, TDest, TNd6State, TNeigh, TPrefix } from './types';
+import { data } from 'react-router';
 
 const NeighRow = ({
   data,
   index,
   style,
-}: ListChildComponentProps<ReadonlyArray<TNeigh>>) => {
+}: RowComponentProps<{ data: ReadonlyArray<TNeigh> }>) => {
   const [ifname, lladdr, nexthop, state/*, isrouter, counter, rit, rflags*/] =
     data[index];
 
@@ -21,15 +22,16 @@ const NeighRow = ({
 const Neighs = ({ neighs }: { neighs: ReadonlyArray<TNeigh> }) => {
   if (!neighs?.length) return null;
   const gp = {
-    itemSize: 30,
-    itemCount: neighs.length,
-    itemData: neighs,
+    rowHeight: 30,
+    rowCount: neighs.length,
+    rowProps: { data: neighs },
     width: '100%',
     height: 200,
+    rowComponent: NeighRow,
   };
   return (
     <CardBox title="Neighbors">
-      <List {...gp}>{NeighRow}</List>
+      <List {...gp} />
     </CardBox>
   );
 };
@@ -38,7 +40,7 @@ const DestRow = ({
   data,
   index,
   style,
-}: ListChildComponentProps<ReadonlyArray<TDest>>) => {
+}: RowComponentProps<{ data: ReadonlyArray<TDest> }>) => {
   const [dest, nexthop, pmtu, age] = data[index];
 
   return (
@@ -51,15 +53,16 @@ const DestRow = ({
 const Dests = ({ dests }: { dests: ReadonlyArray<TDest> }) => {
   if (!dests?.length) return null;
   const gp = {
-    itemSize: 30,
-    itemCount: dests.length,
-    itemData: dests,
+    rowHeight: 30,
+    rowCount: dests.length,
+    rowProps: { data: dests },
     width: '100%',
     height: 200,
+    rowComponent: DestRow,
   };
   return (
     <CardBox title="Destinations">
-      <List {...gp}>{DestRow}</List>
+      <List {...gp} />
     </CardBox>
   );
 };
@@ -68,7 +71,7 @@ const PrefixRow = ({
   data,
   index,
   style,
-}: ListChildComponentProps<ReadonlyArray<TPrefix>>) => {
+}: RowComponentProps<{ data: ReadonlyArray<TPrefix> }>) => {
   const [prefix, ifname, it] = data[index];
 
   return <div style={style}>{`${ifname} ${prefix} ${it}`}</div>;
@@ -77,15 +80,16 @@ const PrefixRow = ({
 const Prefixes = ({ prefixes }: { prefixes: ReadonlyArray<TPrefix> }) => {
   if (!prefixes?.length) return null;
   const gp = {
-    itemSize: 30,
-    itemCount: prefixes.length,
-    itemData: prefixes,
+    rowHeight: 30,
+    rowCount: prefixes.length,
+    rowProps: { data: prefixes },
     width: '100%',
     height: 200,
+    rowComponent: PrefixRow,
   };
   return (
     <CardBox title="Prefixes">
-      <List {...gp}>{PrefixRow}</List>
+      <List {...gp} />
     </CardBox>
   );
 };

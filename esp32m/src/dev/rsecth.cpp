@@ -13,17 +13,21 @@ namespace esp32m {
           _moisture(this, "moisture"),
           _temperature(this, "temperature"),
           _conductivity(this, "conductivity"),
-          _salinity(this, "salinity"),
-          _tds(this, "tds") {
+          _salinity(this, "", "salinity"),
+          _tds(this, "", "tds") {
       Device::init(Flags::HasSensors);
       auto group = sensor::nextGroup();
       _moisture.group = group;
       _moisture.precision = 1;
+      _moisture.unit = "%";
       _temperature.group = group;
       _temperature.precision = 1;
       _conductivity.group = group;
+      _conductivity.unit = "µS/cm";
       _salinity.group = group;
+      _salinity.unit = "ppt";
       _tds.group = group;
+      _tds.unit = "ppm";
     }
 
     bool Rsecth::initSensors() {

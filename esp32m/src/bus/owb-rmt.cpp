@@ -163,6 +163,7 @@ namespace esp32m {
 
           ESP_CHECK_RETURN(_rx->enable());
           ESP_CHECK_RETURN(_tx->enable());
+          // ESP_CHECK_RETURN(gpio_od_enable(pin())); // looking into the future - IDF 6.0
           _ready = true;
         }
         return ESP_OK;

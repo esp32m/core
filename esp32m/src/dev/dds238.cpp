@@ -11,6 +11,7 @@ namespace esp32m {
           _energyExp(this, "energy", "energy_exp"),
           _voltage(this, "voltage"),
           _current(this, "current"),
+          _powerActive(this, "power"),
           _powerApparent(this, "apparent_power"),
           _powerReactive(this, "reactive_power"),
           _powerFactor(this, "power_factor"),
@@ -29,10 +30,18 @@ namespace esp32m {
       _voltage.precision = 2;
       _current.group = group;
       _current.precision = 2;
+      _powerActive.group = group;
+      _powerActive.unit = "kW";
+      _powerActive.precision = 2;
+      _powerActive.stateClass = sensor::StateClass::Measurement;
       _powerApparent.group = group;
+      _powerApparent.unit = "kVA";
       _powerApparent.precision = 2;
+      _powerApparent.stateClass = sensor::StateClass::Measurement;
       _powerReactive.group = group;
+      _powerReactive.unit = "kvar";
       _powerReactive.precision = 2;
+      _powerReactive.stateClass = sensor::StateClass::Measurement;
       _powerFactor.group = group;
       _powerFactor.precision = 2;
       _frequency.group = group;
@@ -93,7 +102,8 @@ namespace esp32m {
       _energyImp.set(_ie, &changed);
       _voltage.set(_v, &changed);
       _current.set(_i, &changed);
-      _powerApparent.set(_ap, &changed);
+      _powerActive.set(_ap, &changed);
+      _powerApparent.set(_ap/_pf, &changed);
       _powerReactive.set(_rap, &changed);
       _powerFactor.set(_pf, &changed);
       _frequency.set(_f, &changed);

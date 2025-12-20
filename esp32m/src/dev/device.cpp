@@ -12,21 +12,21 @@ namespace esp32m {
   class EventPollSensors : public Event {
    public:
     EventPollSensors() : Event(Type) {}
-    static bool is(Event &ev) {
+    static bool is(Event& ev) {
       return ev.is(Type);
     }
 
    private:
-    constexpr static const char *Type = "poll-sensors";
+    constexpr static const char* Type = "poll-sensors";
   };
 
   class EventPollSensorsTime : public Event {
    public:
     EventPollSensorsTime() : Event(Type) {}
-    static bool is(Event &ev, EventPollSensorsTime **pste) {
+    static bool is(Event& ev, EventPollSensorsTime** pste) {
       bool result = ev.is(Type);
       if (result && pste)
-        *pste = (EventPollSensorsTime *)&ev;
+        *pste = (EventPollSensorsTime*)&ev;
       return result;
     }
     void record(unsigned long next) {
@@ -39,7 +39,7 @@ namespace esp32m {
 
    private:
     unsigned long _next = ULONG_MAX;
-    constexpr static const char *Type = "poll-sensors-time";
+    constexpr static const char* Type = "poll-sensors-time";
   };
 
   void Device::init(Flags flags) {
@@ -48,10 +48,10 @@ namespace esp32m {
       setupSensorPollTask();
   }
 
-  void Device::handleEvent(Event &ev) {
+  void Device::handleEvent(Event& ev) {
     if ((_flags & Flags::HasSensors) == 0)
       return;
-    EventPollSensorsTime *pste;
+    EventPollSensorsTime* pste;
     if (EventPollSensorsTime::is(ev, &pste))
       pste->record(nextSensorsPollTime());
     else if (EventPollSensors::is(ev) && shouldPollSensors()) {
@@ -63,12 +63,12 @@ namespace esp32m {
     }
   }
 
-  void Device::sensor(const char *sensor, const float value) {
+  void Device::sensor(const char* sensor, const float value) {
     if (!isnan(value))
       EventSensor::publish(*this, sensor, value, json::null<JsonObjectConst>());
   };
 
-  void Device::sensor(const char *sensor, const float value,
+  void Device::sensor(const char* sensor, const float value,
                       const JsonObjectConst props) {
     if (!isnan(value))
       EventSensor::publish(*this, sensor, value, props);
@@ -82,8 +82,8 @@ namespace esp32m {
       xTaskNotifyGive(task);
     else
       xTaskCreate(
-          [](void *) {
-            EventManager::instance().subscribe([](Event &ev) {
+          [](void*) {
+            EventManager::instance().subscribe([](Event& ev) {
               if (EventInited::is(ev) && task)
                 xTaskNotifyGive(task);
             });
@@ -131,16 +131,16 @@ namespace esp32m {
   namespace sensor {
 
     std::mutex _sensorsMutex;
-    std::map<std::string, Sensor *> _sensors;
+    std::map<std::string, Sensor*> _sensors;
     int _groupCounter = 0;
 
-    Sensor *find(std::string uid) {
+    Sensor* find(std::string uid) {
       std::lock_guard lock(_sensorsMutex);
       auto it = _sensors.find(uid);
       return it == _sensors.end() ? nullptr : it->second;
     }
 
-    Sensor *find(Device *device, const char *id) {
+    Sensor* find(Device* device, const char* id) {
       auto uid = string_printf("%s_%s", device->name(), id);
       return find(uid);
     }
@@ -176,14 +176,14 @@ namespace esp32m {
 
     StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {}
 
-    void StateEmitter::handleEvent(Event &ev) {
+    void StateEmitter::handleEvent(Event& ev) {
       union {
-        sensor::GroupChanged *gc;
-        sensor::Changed *sc;
+        sensor::GroupChanged* gc;
+        sensor::Changed* sc;
       };
       bool changed = false;
       if (EventInited::is(ev))
-        xTaskCreate([](void *self) { ((StateEmitter *)self)->run(); }, "m/stem",
+        xTaskCreate([](void* self) { ((StateEmitter*)self)->run(); }, "m/stem",
                     4096, this, 1, &_task);
       else if (sensor::GroupChanged::is(ev, &gc)) {
         for (auto sensor : gc->group())
@@ -205,7 +205,7 @@ namespace esp32m {
     }
 
     void StateEmitter::run() {
-      std::vector<const Sensor *> sensors;
+      std::vector<const Sensor*> sensors;
       esp_task_wdt_add(NULL);
       for (;;) {
         esp_task_wdt_reset();
@@ -222,7 +222,7 @@ namespace esp32m {
         } else {
           std::lock_guard guard(_queueMutex);
           if (_queue.size()) {
-            for (auto const &kv : _queue) sensors.push_back(kv.second.sensor);
+            for (auto const& kv : _queue) sensors.push_back(kv.second.sensor);
             _queue.clear();
           }
         }
@@ -245,12 +245,20 @@ namespace esp32m {
 
   }  // namespace sensor
 
-  Sensor::Sensor(Device *device, const char *type, const char *id)
+  Sensor::Sensor(Device* device, const char* type, const char* id)
       : _device(device), _type(type) {
     std::lock_guard lock(sensor::_sensorsMutex);
     if (id)
       _id = id;
     sensor::_sensors[uid()] = this;
+  }
+
+  Sensor::~Sensor() {
+    std::lock_guard lock(sensor::_sensorsMutex);
+    auto uid = this->uid();
+    auto it = sensor::_sensors.find(uid);
+    if (it != sensor::_sensors.end())
+      sensor::_sensors.erase(it);
   }
 
 }  // namespace esp32m

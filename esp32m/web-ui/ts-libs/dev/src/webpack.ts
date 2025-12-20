@@ -49,13 +49,13 @@ function ToMode(v: string | undefined): Mode | undefined {
 function findModuleRule(rules: ModuleOptions['rules'], loader: string) {
   return Array.isArray(rules)
     ? rules.find(
-        (r) =>
-          r != '...' &&
-          r &&
-          (r.loader == loader ||
-            (Array.isArray(r.use) &&
-              r.use.some((u) => u == loader || (u as any)['loader'] == loader)))
-      )
+      (r) =>
+        r != '...' &&
+        r &&
+        (r.loader == loader ||
+          (Array.isArray(r.use) &&
+            r.use.some((u) => u == loader || (u as any)['loader'] == loader)))
+    )
     : undefined;
 }
 
@@ -65,6 +65,14 @@ const expressViewsFixLoader = {
   options: {
     search: 'require(mod).__express',
     replace: 'function() { throw "views are not implemented"; }',
+  },
+};
+const muiLicenseFixLoader = {
+  test: /Watermark\.js$/,
+  loader: 'string-replace-loader',
+  options: {
+    search: 'function getLicenseErrorMessage(licenseStatus) {',
+    replace: 'function getLicenseErrorMessage(licenseStatus) { return ""; } function _getLicenseErrorMessage(licenseStatus) {',
   },
 };
 const ssdpOptionsFixLoader = {
@@ -83,6 +91,12 @@ const bindingsFixLoader = {
     replace: 'opts.module_root = __dirname; //',
   },
 };
+
+const cssLoader = {
+  test: /\.css$/i,
+  use: ['style-loader', 'css-loader'],
+};
+
 /*const nodeGypFixLoader = {
   test: /node-gyp-build\.js$/,
   loader: 'string-replace-loader',
@@ -91,6 +105,7 @@ const bindingsFixLoader = {
     replace: "path.join(__dirname, 'prebuilds'",
   },
 };*/
+
 const serialportFixLoaders = [
   {
     test: /load-bindings\.js$/,
@@ -184,7 +199,7 @@ export class WebpackConfigBuilder {
   }
   private findModule(name: string, tester?: (path: string) => boolean) {
     let curdir = this.dir;
-    for (;;) {
+    for (; ;) {
       const dir = path.resolve(curdir, `./node_modules/${name}`);
       if (existsSync(dir) && (!tester || tester(dir))) return dir;
       const parent = path.resolve(curdir, '..');
@@ -239,7 +254,9 @@ export class WebpackConfigBuilder {
       built.push(ssdpOptionsFixLoader);
       built.push(inlineJsonLoader);
     }
+    built.push(muiLicenseFixLoader);
     built.push(bindingsFixLoader);
+    built.push(cssLoader);
     built.push(...serialportFixLoaders);
     const url = findModuleRule(rules, 'url-loader');
     if (!url && this.hasWebTargets()) built.push(inlineImageLoader);
@@ -270,17 +287,17 @@ export class WebpackConfigBuilder {
     const alias: Record<string, any> = this.hasNodeTarget()
       ? { 'node-fetch': 'node-fetch/lib/index.js' }
       : {
-          os: false,
-          fs: false,
-          path: false,
-          express: false,
-          ws: false,
-          winston: false,
-          debug: false,
-          'express-ws': false,
-          'node-localstorage': false,
-          'redux-persist-node-storage': false,
-        };
+        os: false,
+        fs: false,
+        path: false,
+        express: false,
+        ws: false,
+        winston: false,
+        debug: false,
+        'express-ws': false,
+        'node-localstorage': false,
+        'redux-persist-node-storage': false,
+      };
     //    const fallback=this.hasNodeTarget()?{}:{crypto: require.resolve('crypto-browserify')};
     if (this.package.dependencies?.['puppeteer'])
       alias['pkg-dir'] = '@ts-libs/stubs';
@@ -388,9 +405,9 @@ export class WebpackConfigBuilder {
             : undefined,
         devServer = this.hasWebTargets()
           ? {
-              historyApiFallback: true,
-              port: 9000,
-            }
+            historyApiFallback: true,
+            port: 9000,
+          }
           : undefined,
       } = this.baseConfig;
       const inferred = { devtool, devServer };
