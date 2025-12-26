@@ -258,7 +258,7 @@ namespace esp32m {
 
       Response *_pendingResponse = nullptr;
       std::unique_ptr<ApInfo> _connect;
-      Sensor _rssi;
+      dev::Sensor _rssi;
 
       std::unique_ptr<JsonDocument> _delayedConfig;
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/io/pins.hpp"
 
@@ -44,10 +44,10 @@ namespace esp32m {
       esp_err_t measure(float *temperature, float *humidity);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       const char *_name;
       io::pin::IDigital *_reset = nullptr;
-      esp_err_t init(I2C *i2c, io::IPin *resetPin = nullptr,
+      esp_err_t init(i2c::MasterDev *i2c, io::IPin *resetPin = nullptr,
                      const char *name = nullptr);
 
      private:
@@ -65,7 +65,7 @@ namespace esp32m {
   namespace dev {
     class Sht3x : public virtual Device, public virtual sht3x::Core {
      public:
-      Sht3x(I2C *i2c, io::IPin *resetPin = nullptr, const char *name = nullptr);
+      Sht3x(i2c::MasterDev *i2c, io::IPin *resetPin = nullptr, const char *name = nullptr);
       Sht3x(const Sht3x &) = delete;
 
      protected:
@@ -75,6 +75,7 @@ namespace esp32m {
 
      private:
       uint64_t _stamp = 0;
+      Sensor _temperature, _humidity;
     };
 
     Sht3x *useSht3x(uint8_t addr = sht3x::DefaultAddress,

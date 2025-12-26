@@ -7,7 +7,7 @@
 #include "esp32m/events/request.hpp"
 #include "esp32m/events/response.hpp"
 
-#include "esp32m/bus/i2c.hpp"
+// #include "esp32m/bus/i2c.hpp"
 #include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/bus/scanner/i2c.hpp"
 

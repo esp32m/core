@@ -101,7 +101,8 @@ namespace esp32m {
       ESP_ERROR_CHECK(esp_console_cmd_register(&request_cmd));
       ESP_ERROR_CHECK_WITHOUT_ABORT(esp_console_start_repl(_repl));
     }
-    esp_err_t Console::wsSend(uint32_t cid, const char *text) {
+    
+    esp_err_t Console::sendTo(uint32_t cid, const char *text) {
       printf("%s\r\n", text);
       return ESP_OK;
     }

@@ -1253,10 +1253,10 @@ namespace esp32m {
     }
 
     bool OpenthermMaster::pollSensors() {
-      sensor("tboiler", _hvac.tBoiler);
+      /*sensor("tboiler", _hvac.tBoiler);
       sensor("rm", _hvac.relMod);
       sensor("chp", _hvac.chPressure);
-      sensor("bfc", _hvac.bfCurrent);
+      sensor("bfc", _hvac.bfCurrent);*/
       return true;
     }
 

@@ -38,6 +38,7 @@ namespace esp32m {
       uint32_t _mv = 0;
       float _value = NAN;
       unsigned long _stamp = 0;
+      Sensor _moisture;
     };
 
     MoistureSensor *useMoistureSensor(const char *name, io::IPin *pin);

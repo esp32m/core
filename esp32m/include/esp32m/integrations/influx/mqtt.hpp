@@ -3,7 +3,7 @@
 namespace esp32m {
   namespace integrations {
     namespace influx {
-      class Mqtt : public sensor::StateEmitter {
+      class Mqtt : public dev::StateEmitter {
        public:
         const char *name() const override {
           return "influx-mqtt";
@@ -16,7 +16,7 @@ namespace esp32m {
 
        protected:
         void handleEvent(Event &ev) override;
-        void emit(std::vector<const Sensor *> sensors) override;
+        void emit(std::vector<const dev::Component *> sensors) override;
 
        private:
         Mqtt(){};

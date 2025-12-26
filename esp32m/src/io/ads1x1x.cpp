@@ -31,7 +31,7 @@ namespace esp32m {
       static const int ConfigModeOsSingle = 0x8000;
     }  // namespace ads1x1x
 
-    Ads1x1x::Ads1x1x(I2C *i2c, ads1x1x::Variant v) : _i2c(i2c), _variant(v) {
+    Ads1x1x::Ads1x1x(i2c::MasterDev *i2c, ads1x1x::Variant v) : _i2c(i2c), _variant(v) {
       _i2c->setEndianness(Endian::Big);
       _gain = ads1x1x::Gain::TwoThirds;
       if (_variant == ads1x1x::Variant::Ads101x) {

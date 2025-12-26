@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/logging.hpp"
 
@@ -33,7 +33,7 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C *i2c, const char *name = nullptr);
+      Core(i2c::MasterDev *i2c, const char *name = nullptr);
       Core(const Core &) = delete;
       const char *name() const override {
         return _name ? _name : "MLX90614";
@@ -44,7 +44,7 @@ namespace esp32m {
       esp_err_t getAmbientTemperature(float &value);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       esp_err_t readTemp(Register reg, float &temp);
 
      private:
@@ -59,7 +59,7 @@ namespace esp32m {
   namespace dev {
     class Mlx90614 : public virtual Device, public virtual mlx90614::Core {
      public:
-      Mlx90614(I2C *i2c);
+      Mlx90614(i2c::MasterDev *i2c);
       Mlx90614(const Mlx90614 &) = delete;
 
      protected:
@@ -69,6 +69,7 @@ namespace esp32m {
 
      private:
       unsigned long _stamp = 0;
+      Sensor _objectTemperature, _ambientTemperature;
     };
 
     Mlx90614 *useMlx90614(uint8_t addr = mlx90614::DefaultAddress);

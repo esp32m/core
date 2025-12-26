@@ -5,7 +5,7 @@
 namespace esp32m {
   namespace mlx90614 {
 
-    uint8_t crc8(uint8_t *addr, int len)
+    uint8_t crc8(uint8_t* addr, int len)
     // The PEC calculation includes all bits except the START, REPEATED START,
     // STOP, ACK, and NACK bits. The PEC is a CRC-8 with polynomial X8+X2+X1+1.
     {
@@ -23,7 +23,7 @@ namespace esp32m {
       return crc;
     }
 
-    Core::Core(I2C *i2c, const char *name) : _i2c(i2c), _name(name) {}
+    Core::Core(i2c::MasterDev* i2c, const char* name) : _i2c(i2c), _name(name) {}
 
     esp_err_t Core::init() {
       uint16_t id[4];
@@ -35,7 +35,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::getEmissivity(float &value) {
+    esp_err_t Core::getEmissivity(float& value) {
       value = NAN;
       uint16_t raw;
       ESP_CHECK_RETURN(read(Register::Emissivity, raw));
@@ -43,34 +43,33 @@ namespace esp32m {
         value = (float)raw / 65535;
       return ESP_OK;
     }
-    esp_err_t Core::getObjectTemperature(float &value) {
+    esp_err_t Core::getObjectTemperature(float& value) {
       return readTemp(Register::TObj1, value);
     }
-    esp_err_t Core::getAmbientTemperature(float &value) {
+    esp_err_t Core::getAmbientTemperature(float& value) {
       return readTemp(Register::Ta, value);
     }
 
-    esp_err_t Core::read(Register reg, uint16_t &value) {
-      std::lock_guard guard(_i2c->mutex());
+    esp_err_t Core::read(Register reg, uint16_t& value) {
       uint8_t data[3];
       ESP_CHECK_RETURN(_i2c->read(reg, data, sizeof(data)));
-      uint8_t addr = (uint8_t)(_i2c->addr() << 1);
+      uint8_t addr = (uint8_t)(_i2c->address() << 1);
       uint8_t crcbuf[5]{addr, reg, (uint8_t)(addr | 1), data[0], data[1]};
       auto pec = crc8(crcbuf, sizeof(crcbuf));
       if (pec != data[2]) {
         logW("crc mismatch: %x != %x", pec, data[2]);
         // return ESP_ERR_INVALID_CRC;
       }
-      value = fromEndian(Endian::Little, *(uint16_t *)data);
+      value = fromEndian(Endian::Little, *(uint16_t*)data);
       return ESP_OK;
     }
 
     esp_err_t Core::write(Register reg, uint16_t value) {
       uint8_t buffer[4];
 
-      buffer[0] = _i2c->addr() << 1;
+      buffer[0] = _i2c->address() << 1;
       buffer[1] = reg;
-      ((uint16_t *)buffer)[1] = toEndian(Endian::Little, value);
+      ((uint16_t*)buffer)[1] = toEndian(Endian::Little, value);
 
       uint8_t pec = crc8(buffer, 4);
 
@@ -78,12 +77,11 @@ namespace esp32m {
       buffer[1] = buffer[3];
       buffer[2] = pec;
 
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->write(reg, buffer, 3));
       return ESP_OK;
     }
 
-    esp_err_t Core::readTemp(Register reg, float &temp) {
+    esp_err_t Core::readTemp(Register reg, float& temp) {
       temp = NAN;
       uint16_t raw;
       ESP_CHECK_RETURN(read(reg, raw));
@@ -94,14 +92,23 @@ namespace esp32m {
 
   }  // namespace mlx90614
   namespace dev {
-    Mlx90614::Mlx90614(I2C *i2c)
-        : mlx90614::Core(i2c) { Device::init(Flags::HasSensors); }
+    Mlx90614::Mlx90614(i2c::MasterDev* i2c)
+        : mlx90614::Core(i2c),
+          _objectTemperature(this, "temperature", "object"),
+          _ambientTemperature(this, "temperature", "ambient") {
+      auto group = sensor::nextGroup();
+      _objectTemperature.group = group;
+      _objectTemperature.precision = 1;
+      _ambientTemperature.group = group;
+      _ambientTemperature.precision = 1;
+      Device::init(Flags::HasSensors);
+    }
 
-    JsonDocument *Mlx90614::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(6) */
+    JsonDocument* Mlx90614::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(6) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
-      arr.add(_i2c->addr());
+      arr.add(_i2c->address());
       float value;
       getAmbientTemperature(value);
       arr.add(value);
@@ -112,19 +119,22 @@ namespace esp32m {
 
     bool Mlx90614::pollSensors() {
       float value;
+      bool changed=false;
       ESP_CHECK_RETURN_BOOL(getAmbientTemperature(value));
-      sensor("ta", value);
+      _ambientTemperature.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getObjectTemperature(value));
-      sensor("tobj1", value);
+      _objectTemperature.set(value, &changed);
       _stamp = millis();
+      if (changed)
+        sensor::GroupChanged::publish(_ambientTemperature.group);
       return true;
     }
     bool Mlx90614::initSensors() {
       return Core::init() == ESP_OK;
     }
 
-    Mlx90614 *useMlx90614(uint8_t addr) {
-      return new Mlx90614(new I2C(addr));
+    Mlx90614* useMlx90614(uint8_t addr) {
+      return new Mlx90614(i2c::MasterDev::create(addr));
     }
 
   }  // namespace dev

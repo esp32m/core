@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/io/pins.hpp"
 
 namespace esp32m {
@@ -24,7 +24,7 @@ namespace esp32m {
 
     class Pca95x5 : public pin::ITxFinalizer, public IPins {
      public:
-      Pca95x5(I2C *i2c, pca95x5::Bits bits = pca95x5::Bits::Sixteen);
+      Pca95x5(i2c::MasterDev *i2c, pca95x5::Bits bits = pca95x5::Bits::Sixteen);
       Pca95x5(const Pca95x5 &) = delete;
       const char *name() const override {
         return "PCA95x5";
@@ -42,7 +42,7 @@ namespace esp32m {
       IPin *newPin(int id) override;
 
      private:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       pca95x5::Bits _bits;
       uint16_t _input = 0xFFFF, _output = 0x0, _config = 0xFFFF, _targetOutput=0;
       esp_err_t init();

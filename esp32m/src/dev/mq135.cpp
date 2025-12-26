@@ -6,9 +6,11 @@ namespace esp32m {
   namespace dev {
 
     Mq135::Mq135(io::IPin *pin, const char *name)
-        : _name(name) {
+        : _name(name), _sensor(this, "volatile_organic_compounds_parts", "voc") {
       Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
+      _sensor.unit = "ppm";
+      _sensor.precision = 2;
     }
 
     bool Mq135::initSensors() {
@@ -36,7 +38,7 @@ namespace esp32m {
       if (err == ESP_OK) {
         _value = (float)raw / _divisor;
         _stamp = millis();
-        sensor("value", _value);
+        _sensor.set(_value);
       }
       return true;
     }

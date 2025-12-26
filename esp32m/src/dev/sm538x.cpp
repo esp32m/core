@@ -76,7 +76,6 @@ namespace esp32m {
       }
       if (name && !isnan(_value)) {
         _stamp = millis();
-        sensor(name, _value);
       }
       return true;
     }

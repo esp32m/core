@@ -48,18 +48,16 @@ namespace esp32m {
       _start = 0;
       _first = false;
       _dataValid = false;
-      std::lock_guard guard(_i2c->mutex());
       auto err = cmd(CmdReset);
       delay(10);
       return err;
     }
 
-    esp_err_t Core::init(I2C *i2c, io::IPin *resetPin, const char *name) {
+    esp_err_t Core::init(i2c::MasterDev* i2c, io::IPin* resetPin, const char* name) {
       _i2c.reset(i2c);
       _name = name ? name : "SHT3X";
       _i2c->setEndianness(Endian::Little);
-      _i2c->setErrSnooze(30000);
-      _reset = resetPin?resetPin->digital():nullptr;
+      _reset = resetPin ? resetPin->digital() : nullptr;
       if (_reset) {
         _reset->setDirection(true, true);
         _reset->setPull(true, false);
@@ -76,7 +74,6 @@ namespace esp32m {
     esp_err_t Core::setHeater(bool on) {
       if (!_i2c)
         return ESP_ERR_INVALID_STATE;
-      std::lock_guard guard(_i2c->mutex());
       return cmd(on ? CmdHeaterOn : CmdHeaterOff);
     }
 
@@ -113,7 +110,6 @@ namespace esp32m {
       _dataValid = false;
       if (!_start || isMeasuring())
         return ESP_ERR_INVALID_STATE;
-      std::lock_guard guard(_i2c->mutex());
       uint16_t c = toEndian(Endian::Big, CmdFetchData);
       ESP_CHECK_RETURN(_i2c->read(&c, sizeof(c), _data, sizeof(_data)));
       _first = false;
@@ -131,7 +127,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::getReadings(float *temperature, float *humidity) {
+    esp_err_t Core::getReadings(float* temperature, float* humidity) {
       if (!_dataValid)
         return ESP_ERR_INVALID_STATE;
       if (temperature)
@@ -141,7 +137,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::measure(float *temperature, float *humidity) {
+    esp_err_t Core::measure(float* temperature, float* humidity) {
       ESP_CHECK_RETURN(start());
       waitMeasured();
       ESP_CHECK_RETURN(read());
@@ -153,8 +149,13 @@ namespace esp32m {
 
   namespace dev {
 
-    Sht3x::Sht3x(I2C *i2c, io::IPin *resetPin, const char *name)
-    {
+    Sht3x::Sht3x(i2c::MasterDev* i2c, io::IPin* resetPin, const char* name)
+        : _temperature(this, "temperature"), _humidity(this, "humidity") {
+      auto group = sensor::nextGroup();
+      _temperature.group = group;
+      _temperature.precision = 2;
+      _humidity.group = group;
+      _humidity.precision = 0;
       Device::init(Flags::HasSensors);
       sht3x::Core::init(i2c, resetPin, name);
     }
@@ -168,14 +169,17 @@ namespace esp32m {
     bool Sht3x::pollSensors() {
       float t, h;
       ESP_CHECK_RETURN_BOOL(measure(&t, &h));
-      sensor("temperature", t);
-      sensor("humidity", h);
+      bool changed = false;
+      _temperature.set(t, &changed);
+      _humidity.set(h, &changed);
+      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);
       _stamp = millis();
       return true;
     }
 
-    JsonDocument *Sht3x::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
+    JsonDocument* Sht3x::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       float t, h;
@@ -186,8 +190,8 @@ namespace esp32m {
       return doc;
     }
 
-    Sht3x *useSht3x(uint8_t addr, io::IPin *resetPin, const char *name) {
-      return new Sht3x(new I2C(addr), resetPin, name);
+    Sht3x* useSht3x(uint8_t addr, io::IPin* resetPin, const char* name) {
+      return new Sht3x(i2c::MasterDev::create(addr), resetPin, name);
     }
 
   }  // namespace dev

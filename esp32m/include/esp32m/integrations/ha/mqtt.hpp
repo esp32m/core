@@ -82,7 +82,6 @@ namespace esp32m {
 
        protected:
         void handleEvent(Event& ev) override {
-          // EventStateChanged *evch;
           if (EventInited::is(ev)) {
             xTaskCreate([](void* self) { ((Mqtt*)self)->run(); }, "m/ha-mqtt",
                         4096, this, tskIDLE_PRIORITY, &_task);
@@ -182,13 +181,13 @@ namespace esp32m {
             const char* id = data["id"] | key.c_str();
             publishConfig(id, data);
           }
-          sensor::All sensors;
-          for (auto sensor : sensors)
-            if (!sensor->disabled) {
-              auto id = sensor->uid();
+          AllComponents components;
+          for (auto component : components)
+            if (!component->isDisabled()) {
+              auto id = component->uid();
               auto it = req.responses.find(id);
               if (it == req.responses.end()) {
-                auto doc = describeSensor(sensor);
+                auto doc = describeSensor(component);
                 json::check(this, doc, "describeSensor");
                 auto data = doc->as<JsonVariantConst>();
                 publishConfig(id.c_str(), data);
@@ -219,8 +218,6 @@ namespace esp32m {
         void requestState(bool changedOnly) {
           const size_t MaxStaticIdLength = 32;
           _stateRequested = millis();
-          /*StaticJsonDocument<JSON_OBJECT_SIZE(1) +
-                             JSON_STRING_SIZE(MaxStaticIdLength)>*/
           JsonDocument reqDoc;
           auto reqData = reqDoc.to<JsonObject>();
           auto& mqtt = net::Mqtt::instance();

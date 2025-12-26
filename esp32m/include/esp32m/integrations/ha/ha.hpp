@@ -2,18 +2,19 @@
 #include "esp32m/events/request.hpp"
 
 namespace esp32m {
+  using namespace dev;
   namespace integrations {
     namespace ha {
 
-      JsonDocument *describeSensor(Sensor *sensor);
+      JsonDocument* describeSensor(Component* component);
 
       class DescribeRequest : public Request {
        public:
-        DescribeRequest(const char *target)
+        DescribeRequest(const char* target)
             : Request(Name, 0, target, json::null<JsonVariantConst>(),
                       nullptr) {}
 
-        void respondImpl(const char *source, const JsonVariantConst data,
+        void respondImpl(const char* source, const JsonVariantConst data,
                          bool isError) override {
           if (data.isNull() || !data.size() || isError)
             return;
@@ -24,23 +25,23 @@ namespace esp32m {
           responses[id] = std::unique_ptr<JsonDocument>(doc);
         }
 
-        static void autoRespond(Request &req, Sensor &sensor) {
+        static void autoRespond(Request& req, Sensor& sensor) {
           auto doc = ha::describeSensor(&sensor);
           req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
           delete doc;
         }
 
-        constexpr static const char *Name = "ha-describe";
+        constexpr static const char* Name = "ha-describe";
 
         std::map<std::string, std::unique_ptr<JsonDocument> > responses;
       };
 
       class StateRequest : public Request {
        public:
-        StateRequest(const char *target, JsonVariantConst data)
+        StateRequest(const char* target, JsonVariantConst data)
             : Request(Name, 0, target, data, nullptr) {}
 
-        void respondImpl(const char *source, const JsonVariantConst data,
+        void respondImpl(const char* source, const JsonVariantConst data,
                          bool isError) override {
           if (data.isNull() || !data.size() || isError)
             return;
@@ -48,35 +49,34 @@ namespace esp32m {
           doc->set(data);
           response = std::unique_ptr<JsonDocument>(doc);
         }
-        static void autoRespond(Request &req, Sensor &sensor) {
-          auto id = req.data()["id"].as<const char *>();
+        static void autoRespond(Request& req, Sensor& sensor) {
+          auto id = req.data()["id"].as<const char*>();
           if (!id || sensor.uid() != id)
             return;
           auto value = sensor.get();
-          JsonDocument *doc = new JsonDocument(
-              /*JSON_OBJECT_SIZE(2) + value.memoryUsage()*/);
+          JsonDocument* doc = new JsonDocument();
           auto root = doc->to<JsonObject>();
           auto state = root["state"].to<JsonObject>();
           state[sensor.id()] = value;
           req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
           delete doc;
         }
-        constexpr static const char *Name = "ha-state";
+        constexpr static const char* Name = "ha-state";
 
         std::unique_ptr<JsonDocument> response;
       };
 
       class CommandRequest : public Request {
        public:
-        CommandRequest(const char *target, JsonVariantConst data)
+        CommandRequest(const char* target, JsonVariantConst data)
             : Request(Name, 0, target, data, nullptr) {}
 
-        void respondImpl(const char *source, const JsonVariantConst data,
+        void respondImpl(const char* source, const JsonVariantConst data,
                          bool isError) override {}
 
-        constexpr static const char *Name = "ha-command";
+        constexpr static const char* Name = "ha-command";
       };
 
     }  // namespace ha
-  }    // namespace integrations
+  }  // namespace integrations
 }  // namespace esp32m

@@ -29,6 +29,7 @@ namespace esp32m {
       int _divisor = 0;
       float _value = NAN;
       unsigned long _stamp = 0;
+      Sensor _sensor;
     };
 
     Mq135 *useMq135(io::IPin *pin, const char *name = nullptr);

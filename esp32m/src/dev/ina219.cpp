@@ -94,12 +94,11 @@ namespace esp32m {
       return _shunt * 0.001;
     }
 
-    Core::Core(I2C *i2c) : _i2c(i2c) {}
+    Core::Core(i2c::MasterDev* i2c) : _i2c(i2c) {}
 
     esp_err_t Core::sync(bool force) {
       if (!_settings._modified && !force)
         return ESP_OK;
-      std::lock_guard guard(_i2c->mutex());
       uint16_t config = 0;
       ESP_CHECK_RETURN(_i2c->read(Register::Config, config));
       if (_settings._config != config) {
@@ -126,7 +125,6 @@ namespace esp32m {
     }
 
     esp_err_t Core::reset() {
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->write(Register::Config, 1 << ShiftRst));
       ESP_CHECK_RETURN(_i2c->read(Register::Config, _settings._config));
       return ESP_OK;
@@ -138,47 +136,59 @@ namespace esp32m {
         logW("could not trigger conversion in this mode: %d", mode);
         return ESP_ERR_INVALID_STATE;
       }
-      return _i2c->writeSafe(Register::Config, _settings._config);
+      return _i2c->write(Register::Config, _settings._config);
     }
 
-    esp_err_t Core::getBusVoltage(float &value) {
+    esp_err_t Core::getBusVoltage(float& value) {
       ESP_CHECK_RETURN(sync());
       int16_t raw = 0;
-      ESP_CHECK_RETURN(_i2c->readSafe(Register::Bus, raw));
+      ESP_CHECK_RETURN(_i2c->read(Register::Bus, raw));
       value = (raw >> 3) * 0.004;
       return ESP_OK;
     }
 
-    esp_err_t Core::getShuntVoltage(float &value) {
+    esp_err_t Core::getShuntVoltage(float& value) {
       ESP_CHECK_RETURN(sync());
       int16_t raw = 0;
-      ESP_CHECK_RETURN(_i2c->readSafe(Register::Shunt, raw));
+      ESP_CHECK_RETURN(_i2c->read(Register::Shunt, raw));
       value = raw / 100000.0;
       return ESP_OK;
     }
 
-    esp_err_t Core::getCurrent(float &value) {
+    esp_err_t Core::getCurrent(float& value) {
       ESP_CHECK_RETURN(sync());
       int16_t raw = 0;
-      ESP_CHECK_RETURN(_i2c->readSafe(Register::Current, raw));
+      ESP_CHECK_RETURN(_i2c->read(Register::Current, raw));
       value = raw * _lsbI;
       return ESP_OK;
     }
 
-    esp_err_t Core::getPower(float &value) {
+    esp_err_t Core::getPower(float& value) {
       ESP_CHECK_RETURN(sync());
       int16_t raw = 0;
-      ESP_CHECK_RETURN(_i2c->readSafe(Register::Power, raw));
+      ESP_CHECK_RETURN(_i2c->read(Register::Power, raw));
       value = raw * _lsbP;
       return ESP_OK;
     }
   }  // namespace ina219
 
   namespace dev {
-    Ina219::Ina219(uint8_t address)
-        : ina219::Core(new I2C(address)) { Device::init(Flags::HasSensors); }
 
-    Ina219::Ina219(I2C *i2c) : ina219::Core(i2c) { Device::init(Flags::HasSensors); }
+    Ina219::Ina219(i2c::MasterDev* i2c)
+        : ina219::Core(i2c),
+          _voltage(this, "voltage"),
+          _current(this, "current"),
+          _power(this, "power") {
+      Device::init(Flags::HasSensors);
+      auto group = sensor::nextGroup();
+      _voltage.group = group;
+      _voltage.precision = 2;
+      _current.group = group;
+      _current.precision = 4;
+      _power.group = group;
+      _power.precision = 4;
+      _power.unit = "W";
+    }
 
     bool Ina219::initSensors() {
       return sync(true) == ESP_OK;
@@ -186,22 +196,24 @@ namespace esp32m {
 
     bool Ina219::pollSensors() {
       float value;
+      bool changed = false;
       ESP_CHECK_RETURN_BOOL(getBusVoltage(value));
-      sensor("voltage", value);
-      ESP_CHECK_RETURN_BOOL(getShuntVoltage(value));
-      sensor("shuntVoltage", value);
+      _voltage.set(value, &changed);
+      //      ESP_CHECK_RETURN_BOOL(getShuntVoltage(value));
       ESP_CHECK_RETURN_BOOL(getCurrent(value));
-      sensor("current", value);
+      _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getPower(value));
-      sensor("power", value);
+      _power.set(value, &changed);
+      if (changed)
+        sensor::GroupChanged::publish(_voltage.group);
       return true;
     }
 
-    JsonDocument *Ina219::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(5) */
+    JsonDocument* Ina219::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(5) */
       JsonObject root = doc->to<JsonObject>();
       float value;
-      root["addr"] = _i2c->addr();
+      root["addr"] = _i2c->address();
       if (getBusVoltage(value) == ESP_OK)
         root["voltage"] = value;
       if (getShuntVoltage(value) == ESP_OK)
@@ -214,7 +226,7 @@ namespace esp32m {
     }
 
     void useIna219(uint8_t addr) {
-      new Ina219(addr);
+      new Ina219(i2c::MasterDev::create(addr));
     }
   }  // namespace dev
 }  // namespace esp32m

@@ -22,10 +22,11 @@
 #include "esp32m/log/console.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/logging.hpp"
+#include "esp32m/debug/crashguard.hpp"
 
 namespace esp32m {
 
-  App *_appInstance = nullptr;
+  App* _appInstance = nullptr;
 
   void EventDone::publish(DoneReason reason) {
     EventDone ev(reason);
@@ -33,9 +34,9 @@ namespace esp32m {
   }
 
   AppObject::AppObject() {
-    _subscription = EventManager::instance().subscribe([this](Event &ev) {
-      Request *req;
-      EventDescribe *ed;
+    _subscription = EventManager::instance().subscribe([this](Event& ev) {
+      Request* req;
+      EventDescribe* ed;
       if (Request::is(ev, interactiveName(), &req))
         handleRequest(*req);
       else if (EventDescribe::is(ev, &ed)) {
@@ -45,7 +46,7 @@ namespace esp32m {
     });
   };
 
-  bool AppObject::handleRequest(Request &req) {
+  bool AppObject::handleRequest(Request& req) {
     if (handleInfoRequest(req))
       return true;
     if (handleConfigRequest(req))
@@ -55,12 +56,12 @@ namespace esp32m {
     return false;
   };
 
-  bool AppObject::handleInfoRequest(Request &req) {
-    const char *name = req.name();
-    const char *iname = interactiveName();
+  bool AppObject::handleInfoRequest(Request& req) {
+    const char* name = req.name();
+    const char* iname = interactiveName();
     if (!strcmp(name, KeyInfoGet)) {
       RequestContext ctx(req, req.data());
-      JsonDocument *info = getInfo(ctx);
+      JsonDocument* info = getInfo(ctx);
       if (info) {
         json::check(this, info, "getInfo()");
         req.respond(iname, *info, false);
@@ -71,12 +72,12 @@ namespace esp32m {
     return false;
   }
 
-  bool AppObject::handleStateRequest(Request &req) {
-    const char *name = req.name();
-    const char *iname = interactiveName();
+  bool AppObject::handleStateRequest(Request& req) {
+    const char* name = req.name();
+    const char* iname = interactiveName();
     if (!strcmp(name, KeyStateGet)) {
       RequestContext ctx(req, req.data());
-      JsonDocument *state = getState(ctx);
+      JsonDocument* state = getState(ctx);
       if (state) {
         json::check(this, state, "getState()");
         req.respond(iname, *state, false);
@@ -98,9 +99,9 @@ namespace esp32m {
     return false;
   }
 
-  bool AppObject::handleConfigRequest(Request &req) {
-    const char *name = req.name();
-    const char *cname = interactiveName();
+  bool AppObject::handleConfigRequest(Request& req) {
+    const char* name = req.name();
+    const char* cname = interactiveName();
     JsonVariantConst reqData = req.data();
     bool internalRequest = !req.origin();
     if (!strcmp(name, Config::KeyConfigGet)) {
@@ -109,7 +110,7 @@ namespace esp32m {
       if (internalRequest && !_configured)
         return true;
       RequestContext ctx(req, reqData);
-      JsonDocument *config = getConfig(ctx);
+      JsonDocument* config = getConfig(ctx);
       if (config) {
         json::check(this, config, "getConfig()");
         req.respond(cname, *config, false);
@@ -135,7 +136,7 @@ namespace esp32m {
 
   static uint32_t sketchSize() {
     esp_image_metadata_t data;
-    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t* running = esp_ota_get_running_partition();
     if (!running)
       return 0;
     const esp_partition_pos_t running_pos = {
@@ -147,7 +148,7 @@ namespace esp32m {
     return data.image_len;
   }
 
-  App::Init::Init(const char *name, const char *version) {
+  App::Init::Init(const char* name, const char* version) {
     if (_appInstance) {
       _appInstance->logger().log(log::Level::Warning,
                                  "app already initialized");
@@ -172,7 +173,7 @@ namespace esp32m {
     _appInstance->_maxInitLevel = maxInitLevel;
   }
 
-  void App::Init::setConfigStore(config::Store *store) {
+  void App::Init::setConfigStore(config::Store* store) {
     _appInstance->_config.reset(new Config(store));
   }
 
@@ -195,7 +196,7 @@ namespace esp32m {
     _appInstance->_defaultHostname = hostname;
   }
 
-  App::App(const char *name, const char *version)
+  App::App(const char* name, const char* version)
       : _version(version), _props("app") {
     _name = name;
     _hostname = name;
@@ -243,6 +244,9 @@ namespace esp32m {
 #if CONFIG_ESP32M_LOG_HOOK_UART
     log::hookUartLogger();
 #endif
+#if CONFIG_ESP32M_CRASH_GUARD
+    debug::CrashGuard::instance();
+#endif
   }
 
   bool App::initialized() {
@@ -256,7 +260,7 @@ namespace esp32m {
     esp_restart();
   }
 
-  App &App::instance() {
+  App& App::instance() {
     if (!_appInstance)
       abort();
     return *_appInstance;
@@ -267,7 +271,7 @@ namespace esp32m {
       return;
     logI("starting %s %s", _hostname.c_str(), _version ? _version : "");
 
-    DIR *dir = opendir("/");
+    DIR* dir = opendir("/");
     if (dir) {
       /* root already mounted */
       logI("root found");
@@ -288,16 +292,16 @@ namespace esp32m {
       evt.publish();
       _curInitLevel++;
     }
-    xTaskCreate([](void *self) { ((App *)self)->run(); }, "m/app", 5120, this,
+    xTaskCreate([](void* self) { ((App*)self)->run(); }, "m/app", 5120, this,
                 tskIDLE_PRIORITY, &_task);
     EventInited inited;
     inited.publish();
     logI("initialization complete");
   }
 
-  void App::handleEvent(Event &ev) {
+  void App::handleEvent(Event& ev) {
     if (config::Changed::is(ev)) {
-      if (((config::Changed *)&ev)->saveNow()) {
+      if (((config::Changed*)&ev)->saveNow()) {
         _config->save();
         _configDirty = 0;
       } else
@@ -315,7 +319,7 @@ namespace esp32m {
     setHostname(_defaultHostname.c_str());
   }
 
-  bool App::handleRequest(Request &req) {
+  bool App::handleRequest(Request& req) {
     if (AppObject::handleRequest(req))
       return true;
     if (req.is("restart")) {
@@ -341,7 +345,7 @@ namespace esp32m {
         }*/
         auto doc = new JsonDocument(); /* size */
         auto root = doc->to<JsonObject>();
-        for (auto &e : ev.descriptors) {
+        for (auto& e : ev.descriptors) {
           root[e.first] = e.second;
         }
         req.respond(root, false);
@@ -368,8 +372,8 @@ namespace esp32m {
     }
   }
 
-  JsonDocument *App::getInfo(RequestContext &ctx) {
-    auto doc = new JsonDocument(); 
+  JsonDocument* App::getInfo(RequestContext& ctx) {
+    auto doc = new JsonDocument();
     JsonObject info = doc->to<JsonObject>();
 
     info["name"] = _name;
@@ -381,7 +385,7 @@ namespace esp32m {
     return doc;
   }
 
-  JsonDocument *App::getState(RequestContext &ctx) {
+  JsonDocument* App::getState(RequestContext& ctx) {
     /*size_t size = JSON_OBJECT_SIZE(
         1 + 8);  // root: name, time, uptime, version, built, sdk, size, space*/
     auto doc = new JsonDocument(); /* size */
@@ -400,7 +404,7 @@ namespace esp32m {
     return doc;
   }
 
-  JsonDocument *App::getConfig(RequestContext &ctx) {
+  JsonDocument* App::getConfig(RequestContext& ctx) {
     /*size_t size = JSON_OBJECT_SIZE(4)  // hostname, udplog: enabled, host
                   + JSON_STRING_SIZE(_hostname.size());
     if (_udpLogger)
@@ -419,7 +423,7 @@ namespace esp32m {
     return doc;
   }
 
-  bool App::setConfig(RequestContext &ctx) {
+  bool App::setConfig(RequestContext& ctx) {
     JsonObjectConst root = ctx.data.as<JsonObjectConst>();
     std::string next = _hostname;
     bool changed = false;
@@ -454,7 +458,7 @@ namespace esp32m {
     return changed;
   }
 
-  void App::setHostname(const char *hostname) {
+  void App::setHostname(const char* hostname) {
     std::string next(hostname ? hostname : _name.c_str());
     std::string prev = _hostname;
     if (next != prev) {

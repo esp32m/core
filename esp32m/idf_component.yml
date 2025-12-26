@@ -2,7 +2,7 @@ description: ESP32 Manager Core
 version: 0.5.0
 url: https://esp32m.com
 dependencies:
-  idf: ">=5.1"
+  idf: ">=5.5"
   espressif/esp-modbus:
     public: true
     version: "^2.1.1"

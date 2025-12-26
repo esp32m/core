@@ -12,6 +12,7 @@
 #include "esp32m/net/net.hpp"
 
 namespace esp32m {
+  using namespace dev;
   namespace net {
 
     namespace mqtt {
@@ -22,11 +23,11 @@ namespace esp32m {
         _mqtt->unsubscribe(this);
       }
 
-      void StatePublisher::emit(std::vector<const Sensor*> sensors) {
+      void StatePublisher::emit(std::vector<const Component*> components) {
         auto& mqtt = Mqtt::instance();
         if (!mqtt.isReady())
           return;
-        // first publish non-grouped sensors and remove them from the list
+        /*// first publish non-grouped sensors and remove them from the list
         for (auto it = sensors.begin(); it != sensors.end();)
           if ((*it)->group == 0) {
             auto doc = new JsonDocument();
@@ -44,11 +45,11 @@ namespace esp32m {
 
           auto doc = new JsonDocument();
           auto root = doc->to<JsonObject>();
-          sensor::All all;
-          // we have to publish all sensors in the group, otherwise HA gets confused and complains about missing sensors
-          for (auto sensor : all)
-            if (sensor->device() == device && sensor->group == group)
-              sensor->to(root);
+          AllComponents all;
+          // confused and complains about missing sensors
+          // we have to publish all sensors in the group, otherwise HA gets
+        confused and complains about missing sensors for (auto sensor : all) if
+        (sensor->device() == device && sensor->group == group) sensor->to(root);
           publish(device->name(), root);
           delete doc;
           for (auto it = sensors.begin(); it != sensors.end();)
@@ -56,32 +57,53 @@ namespace esp32m {
               it = sensors.erase(it);
             } else
               ++it;
+        }*/
+        while (!components.empty()) {
+          auto device = components.front()->device();
+
+          auto doc = new JsonDocument();
+          auto root = doc->to<JsonObject>();
+          AllComponents all;
+          // we have to publish all sensors in the group, otherwise HA gets
+          // confused and complains about missing sensors
+          bool retain = false;
+          for (auto component : all)
+            if (component->device() == device) {
+              component->exportState(root);
+              retain |= component->shouldRetainState();
+            }
+          publish(device->name(), root, retain);
+          delete doc;
+          for (auto it = components.begin(); it != components.end();)
+            if ((*it)->device() == device) {
+              it = components.erase(it);
+            } else
+              ++it;
         }
       }
 
       esp_err_t StatePublisher::publish(const char* name,
-                                        JsonVariantConst state) {
+                                        JsonVariantConst state, bool retain) {
         auto& mqtt = Mqtt::instance();
         if (mqtt.isReady()) {
           auto topic = string_printf("esp32m/%s/%s/state",
                                      App::instance().hostname(), name);
           std::string payload;
           serializeJson(state, payload);
-          //          auto payload = json::serialize(state);
-          return mqtt.publish(topic.c_str(), payload.c_str());
+          return mqtt.publish(topic.c_str(), payload.c_str(), 1, retain);
         }
         return ESP_OK;
       }
 
       void StatePublisher::handleEvent(Event& ev) {
-        EventStateChanged* stc;
+        /*EventStateChanged* stc;
         if (EventStateChanged::is(ev, &stc)) {
           auto state = stc->state();
           auto obj = stc->object();
           if (!state.isUnbound() && obj)
             publish(obj->name(), state);
-        }
-        sensor::StateEmitter::handleEvent(ev);
+        }*/
+        StateEmitter::handleEvent(ev);
       }
     }  // namespace mqtt
 

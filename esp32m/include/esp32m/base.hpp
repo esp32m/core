@@ -8,6 +8,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -22,19 +23,30 @@ namespace esp32m {
   void delayUs(uint32_t us);
   long map(long x, long in_min, long in_max, long out_min, long out_max);
 
-  const char *makeTaskName(const char *name);
-  bool strEndsWith(const char *str, const char *suffix);
+  const char* makeTaskName(const char* name);
+  bool strEndsWith(const char* str, const char* suffix);
 
-  std::string string_printf(const char *format, va_list args);
-  std::string string_printf(const char *format, ...);
+  std::string string_printf(const char* format, va_list args);
+  std::string string_printf(const char* format, ...);
 
   float roundTo(float value, int precision);
-  std::string roundToString(float value, int precision);
+  template <typename T>
+  std::string roundToString(T value, int precision) {
+    return string_printf("%.*f", precision, value);
+  }
 
   class INamed {
    public:
-    virtual const char *name() const = 0;
+    virtual const char* name() const = 0;
   };
+
+  namespace stream {
+    class Reader {
+     public:
+      virtual ~Reader() = default;
+      virtual size_t read(uint8_t* buf, size_t size) = 0;
+    };
+  }  // namespace stream
 
   template <typename F>
   bool waitState(F state, int ms) {
@@ -45,16 +57,16 @@ namespace esp32m {
         delay(1);
     return false;
   }
-  
-  // credits to
+
+/*  // credits to
   // https://codereview.stackexchange.com/questions/173929/modern-c-singleton-template
   template <typename T>
   class Singleton {
    public:
-    static T &instance();
+    static T& instance();
 
-    Singleton(const Singleton &) = delete;
-    Singleton &operator=(const Singleton) = delete;
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton) = delete;
 
    protected:
     struct token {};
@@ -62,28 +74,28 @@ namespace esp32m {
   };
 
   template <typename T>
-  T &Singleton<T>::instance() {
+  T& Singleton<T>::instance() {
     static T instance{token{}};
     return instance;
-  }
+  }*/
 
   namespace locks {
     class Guard {
      public:
-      Guard(const char *name);
+      Guard(const char* name);
       Guard(gpio_num_t pin);
       ~Guard();
 
      private:
-      std::mutex *_lock;
+      std::mutex* _lock;
     };
-    std::mutex &get(const char *name);
-    std::mutex *find(const char *name);
+    std::mutex& get(const char* name);
+    std::mutex* find(const char* name);
 
-    std::mutex &get(gpio_num_t pin);
-    std::mutex *find(gpio_num_t pin);
+    std::mutex& get(gpio_num_t pin);
+    std::mutex* find(gpio_num_t pin);
 
-    std::mutex &uart(uart_port_t pin);
+    std::mutex& uart(uart_port_t pin);
   }  // namespace locks
 
   enum Endian { Little, Big };
@@ -107,38 +119,38 @@ namespace esp32m {
     template <typename T>
     struct swap_bytes<T, 2> {
       inline T operator()(T val) {
-        return ((((val) >> 8) & 0xff) | (((val)&0xff) << 8));
+        return ((((val) >> 8) & 0xff) | (((val) & 0xff) << 8));
       }
     };
 
     template <typename T>
     struct swap_bytes<T, 4> {
       inline T operator()(T val) {
-        return ((((val)&0xff000000) >> 24) | (((val)&0x00ff0000) >> 8) |
-                (((val)&0x0000ff00) << 8) | (((val)&0x000000ff) << 24));
+        return ((((val) & 0xff000000) >> 24) | (((val) & 0x00ff0000) >> 8) |
+                (((val) & 0x0000ff00) << 8) | (((val) & 0x000000ff) << 24));
       }
     };
 
     template <typename T>
     struct swap_bytes<T, 8> {
       inline T operator()(T val) {
-        return ((((val)&0xff00000000000000ull) >> 56) |
-                (((val)&0x00ff000000000000ull) >> 40) |
-                (((val)&0x0000ff0000000000ull) >> 24) |
-                (((val)&0x000000ff00000000ull) >> 8) |
-                (((val)&0x00000000ff000000ull) << 8) |
-                (((val)&0x0000000000ff0000ull) << 24) |
-                (((val)&0x000000000000ff00ull) << 40) |
-                (((val)&0x00000000000000ffull) << 56));
+        return ((((val) & 0xff00000000000000ull) >> 56) |
+                (((val) & 0x00ff000000000000ull) >> 40) |
+                (((val) & 0x0000ff0000000000ull) >> 24) |
+                (((val) & 0x000000ff00000000ull) >> 8) |
+                (((val) & 0x00000000ff000000ull) << 8) |
+                (((val) & 0x0000000000ff0000ull) << 24) |
+                (((val) & 0x000000000000ff00ull) << 40) |
+                (((val) & 0x00000000000000ffull) << 56));
       }
     };
 
     template <>
     struct swap_bytes<float, 4> {
       inline float operator()(float val) {
-        uint32_t *p32 = (uint32_t *)&val;
+        uint32_t* p32 = (uint32_t*)&val;
         uint32_t mem = swap_bytes<uint32_t, sizeof(uint32_t)>()(*p32);
-        float *pf = (float *)&mem;
+        float* pf = (float*)&mem;
         return *pf;
       }
     };
@@ -146,9 +158,9 @@ namespace esp32m {
     template <>
     struct swap_bytes<double, 8> {
       inline double operator()(double val) {
-        uint64_t *p64 = (uint64_t *)&val;
+        uint64_t* p64 = (uint64_t*)&val;
         uint64_t mem = swap_bytes<uint64_t, sizeof(uint64_t)>()(*p64);
-        double *pd = (double *)&mem;
+        double* pd = (double*)&mem;
         return *pd;
       }
     };

@@ -321,7 +321,7 @@ namespace esp32m {
     Sensor &Dsts::getSensor(const dsts::Probe &probe) {
       std::string id("_");
       id += probe.codestr();
-      auto sensor = sensor::find(this, id.c_str());
+      auto sensor = (Sensor*)Component::find(this, id.c_str());
       if (!sensor) {
         std::string id(
             "_");  // prefix because HA doesn't like ids starting with numbers
@@ -330,7 +330,7 @@ namespace esp32m {
         sensor->precision = 2;
         sensor->group = _sensorGroup;
         if (probe.name)
-          sensor->name = probe.name;
+          sensor->setTitle(probe.name);
         auto props = new JsonDocument(
             /*JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(strlen(probe.codestr()))*/);
         auto root = props->to<JsonObject>();

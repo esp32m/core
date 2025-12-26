@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/logging.hpp"
 
@@ -105,7 +105,7 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C* i2c, const char* name = nullptr, Type type = Type::Unknown);
+      Core(i2c::MasterDev* i2c, const char* name = nullptr, Type type = Type::Unknown);
       Core(const Core&) = delete;
       const char* name() const override;
       Type type() const {
@@ -136,7 +136,7 @@ namespace esp32m {
       esp_err_t getWatts(float& value);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
 
      private:
       const char* _name;
@@ -162,7 +162,7 @@ namespace esp32m {
   namespace dev {
     class Ina : public virtual Device, public virtual ina::Core {
      public:
-      Ina(I2C* i2c);
+      Ina(i2c::MasterDev* i2c);
       Ina(const Ina&) = delete;
 
      protected:

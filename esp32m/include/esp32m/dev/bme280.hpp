@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 
 namespace esp32m {
@@ -107,7 +107,7 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C *i2c, const char *name);
+      Core(i2c::MasterDev *i2c, const char *name);
       Core(const Core &) = delete;
       const char *name() const override {
         return _name;
@@ -126,7 +126,7 @@ namespace esp32m {
       esp_err_t read(float *temperature, float *pressure, float *humidity);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
 
      private:
       const char *_name;
@@ -147,7 +147,7 @@ namespace esp32m {
   namespace dev {
     class Bme280 : public virtual Device, public virtual bme280::Core {
      public:
-      Bme280(I2C *i2c, const char *name);
+      Bme280(i2c::MasterDev *i2c, const char *name);
       Bme280(const Bme280 &) = delete;
 
      protected:

@@ -57,9 +57,16 @@ namespace esp32m {
         return;
       logI("state changed: %s -> %s", toString(_state), toString(state));
       _state = state;
-      JsonDocument doc;
-      doc.set(serialized(toString(state)));
-      EventStateChanged::publish(this, doc);
+      switch (state) {
+        case State::On:
+          _switch.set(true);
+          break;
+        case State::Off:
+          _switch.set(false);
+          break;
+        default:
+          _switch.resetState();
+      }
       if (isPersistent())
         config::Changed::publish(this);
     }
@@ -163,16 +170,16 @@ namespace esp32m {
     }
 
     JsonDocument *Relay::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
+      JsonDocument *doc = new JsonDocument(); 
       JsonObject info = doc->to<JsonObject>();
       info["state"] = toString(refreshState());
       return doc;
     }
 
     esp_err_t Relay::turn(const char *action) {
-      if (!strcmp(action, "on"))
+      if (!strcmp(action, "on") || !strcmp(action, "ON"))
         return turn(true);
-      if (!strcmp(action, "off"))
+      if (!strcmp(action, "off") || !strcmp(action, "OFF"))
         return turn(false);
       logW("unrecognized action: %s", action);
       return ESP_FAIL;
@@ -195,8 +202,8 @@ namespace esp32m {
     bool Relay::handleRequest(Request &req) {
       if (AppObject::handleRequest(req))
         return true;
-      if (req.is(integrations::ha::DescribeRequest::Name)) {
-        JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(6) */
+      /*if (req.is(integrations::ha::DescribeRequest::Name)) {
+        JsonDocument *doc = new JsonDocument(); 
         auto root = doc->to<JsonObject>();
         root["component"] = "switch";
         auto config = root["config"].to<JsonObject>();
@@ -207,7 +214,7 @@ namespace esp32m {
         req.respond(name(), doc->as<JsonVariantConst>());
         delete doc;
         return true;
-      } else if (req.is(integrations::ha::CommandRequest::Name)) {
+      } else*/ if (req.is(integrations::ha::CommandRequest::Name)) {
         auto state = req.data().as<const char *>();
         if (state)
           turn(state);

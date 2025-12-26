@@ -3,7 +3,9 @@
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <atomic>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -29,33 +31,53 @@ namespace esp32m {
 
   class Ui : public virtual AppObject {
    public:
-    Ui(ui::Transport *transport);
-    Ui(const Ui &) = delete;
-    ~Ui();
-    const char *name() const override {
+    Ui(const Ui&) = delete;
+    const char* name() const override {
       return "ui";
     }
-    ui::Transport *transport() const {
-      return _transport;
+
+    void addTransport(ui::Transport* transport) {
+      std::lock_guard<std::mutex> guard(_transportsMutex);
+      _transports.emplace_back(transport);
+
+      std::vector<ui::Transport*> snapshot;
+      snapshot.reserve(_transports.size());
+      for (auto& t : _transports) snapshot.push_back(t.get());
+      _transportsView.store(
+          std::make_shared<const std::vector<ui::Transport*> >(
+              std::move(snapshot)),
+          std::memory_order_release);
     }
-    std::vector<ui::Asset> &assets() {
+
+    std::vector<std::unique_ptr<ui::Asset> >& assets() {
       return _assets;
     }
-    void addAsset(const char *uri, const char *contentType,
-                  const uint8_t *start, const uint8_t *end,
-                  const char *contentEncoding, const char *etag);
-    const ui::Auth &auth() const {
+    void addAsset(ui::Asset* asset) {
+      _assets.emplace_back(asset);
+    }
+    void addAsset(const char* uri, const char* contentType,
+                  const uint8_t* start, const uint8_t* end,
+                  const char* contentEncoding, const char* etag) {
+      ui::AssetInfo info =
+          ui::AssetInfo{uri, contentType, contentEncoding, etag};
+
+      addAsset(new ui::MemoryAsset(info, start, end - start));
+    }
+
+    const ui::Auth& auth() const {
       return _auth;
     }
 
-    static Ui &instance();
+    static Ui& instance() {
+      static Ui instance;
+      return instance;
+    }
 
    protected:
     //    bool handleRequest(Request &req) override;
-    void handleEvent(Event &ev) override;
-    void wsSend(const char *text);
-    esp_err_t wsSend(uint32_t cid, const char *text);
-    bool setConfig(RequestContext &ctx) override {
+    void handleEvent(Event& ev) override;
+    void broadcast(const char* text);
+    bool setConfig(RequestContext& ctx) override {
       JsonObjectConst root = ctx.data.as<JsonObjectConst>();
       auto auth = root["auth"];
       bool changed = false;
@@ -66,11 +88,8 @@ namespace esp32m {
       }
       return changed;
     }
-    JsonDocument *getConfig(RequestContext &ctx) override {
-      /*size_t size = JSON_OBJECT_SIZE(4)  // auth: enabled, username, password
-                    + JSON_STRING_SIZE(_auth.username.size()) +
-                    JSON_STRING_SIZE(_auth.password.size());*/
-      auto doc = new JsonDocument(); /* size */
+    JsonDocument* getConfig(RequestContext& ctx) override {
+      auto doc = new JsonDocument();
       auto root = doc->to<JsonObject>();
       if (!_auth.empty()) {
         auto auth = root["auth"].to<JsonObject>();
@@ -82,15 +101,24 @@ namespace esp32m {
     }
 
    private:
-    std::mutex _mutex, _sendMutex;
+    Ui() {
+      _transportsView.store(
+          std::make_shared<const std::vector<ui::Transport*> >(),
+          std::memory_order_release);
+    }
+
+    mutable std::mutex _transportsMutex;
     ui::Auth _auth;
-    TaskHandle_t _task;
-    ui::Transport *_transport;
-    std::map<uint32_t, std::unique_ptr<ui::Client> > _clients;
-    std::vector<ui::Asset> _assets;
+    TaskHandle_t _task = nullptr;
+    std::vector<std::unique_ptr<ui::Transport> > _transports;
+    std::atomic<std::shared_ptr<const std::vector<ui::Transport*> > >
+        _transportsView;
+    std::vector<std::unique_ptr<ui::Asset> > _assets;
     void run();
-    void incoming(uint32_t cid, JsonDocument *json);
-    void sessionClosed(uint32_t cid);
+    void notifyIncoming() {
+      if (_task)
+        xTaskNotifyGive(_task);
+    }
     friend class ui::Req;
     friend class ui::Transport;
   };

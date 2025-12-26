@@ -34,9 +34,9 @@ namespace esp32m {
       _standby = value;
       _modified = true;
     }
-    void Settings::getOversampling(Oversampling *pressure,
-                                   Oversampling *temperature,
-                                   Oversampling *humidity) const {
+    void Settings::getOversampling(Oversampling* pressure,
+                                   Oversampling* temperature,
+                                   Oversampling* humidity) const {
       if (pressure)
         *pressure = _ovsPressure;
       if (temperature)
@@ -52,12 +52,11 @@ namespace esp32m {
       _ovsHumidity = humidity;
     }
 
-    Core::Core(I2C *i2c, const char *name) : _i2c(i2c) {
+    Core::Core(i2c::MasterDev* i2c, const char* name) : _i2c(i2c) {
       _name = name;
       _i2c->setEndianness(Endian::Little);
-      _i2c->setErrSnooze(30000);
       uint8_t id = 0;
-      if (_i2c->readSafe(Register::Id, id) == ESP_OK)
+      if (_i2c->read(Register::Id, id) == ESP_OK)
         _id = (ChipId)id;
       if (!_name)
         switch (_id) {
@@ -119,7 +118,6 @@ namespace esp32m {
     }
 
     esp_err_t Core::sync(bool force) {
-      std::lock_guard guard(_i2c->mutex());
       return syncUnsafe(force);
     }
 
@@ -161,7 +159,6 @@ namespace esp32m {
     }
 
     esp_err_t Core::measure() {
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(syncUnsafe());
       uint8_t ctrl = 0;
       ESP_CHECK_RETURN(_i2c->read(Register::Ctrl, ctrl));
@@ -172,9 +169,8 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::isMeasuring(bool &busy) {
+    esp_err_t Core::isMeasuring(bool& busy) {
       static const uint8_t regs[2] = {Register::Status, Register::Ctrl};
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(syncUnsafe());
       uint8_t status[2];
       ESP_CHECK_LOGW_RETURN(_i2c->read(regs, 2, &status, 2),
@@ -185,7 +181,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    int32_t Core::compTemperature(int32_t adcT, int32_t &fineT) {
+    int32_t Core::compTemperature(int32_t adcT, int32_t& fineT) {
       int32_t var1, var2;
 
       var1 =
@@ -248,12 +244,11 @@ namespace esp32m {
       return v_x1_u32r >> 12;
     }
 
-    esp_err_t Core::readFixed(int32_t *temperature, uint32_t *pressure,
-                              uint32_t *humidity) {
+    esp_err_t Core::readFixed(int32_t* temperature, uint32_t* pressure,
+                              uint32_t* humidity) {
       int32_t adc_pressure;
       int32_t adc_temp;
       uint8_t data[8];
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(syncUnsafe());
       bool hum = _id == ChipId::Bme280 && humidity;
       size_t size = hum ? 8 : 6;
@@ -275,7 +270,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::read(float *temperature, float *pressure, float *humidity) {
+    esp_err_t Core::read(float* temperature, float* pressure, float* humidity) {
       int32_t fixed_temperature;
       uint32_t fixed_pressure;
       uint32_t fixed_humidity;
@@ -292,7 +287,7 @@ namespace esp32m {
 
   namespace dev {
 
-    Bme280::Bme280(I2C *i2c, const char *name)
+    Bme280::Bme280(i2c::MasterDev* i2c, const char* name)
         : bme280::Core(i2c, name),
           _temperature(this, "temperature"),
           _pressure(this, "atmospheric_pressure"),
@@ -305,7 +300,6 @@ namespace esp32m {
       _pressure.unit = "mmHg";
       _humidity.group = group;
       _humidity.precision = 0;
-      _humidity.disabled = chipId() != bme280::ChipId::Bme280;
       Device::init(Flags::HasSensors);
     }
 
@@ -320,20 +314,22 @@ namespace esp32m {
       bool changed = false;
       _temperature.set(t, &changed);
       _pressure.set(p / 133.322F, &changed);
-      if (chipId() == bme280::ChipId::Bme280)
+      _humidity.setDisabled(chipId() != bme280::ChipId::Bme280);
+
+      if (!_humidity.isDisabled())
         _humidity.set(h, &changed);
       if (changed)
         sensor::GroupChanged::publish(_temperature.group);
       return true;
     }
 
-    JsonDocument *Bme280::getState(RequestContext &ctx) {
+    JsonDocument* Bme280::getState(RequestContext& ctx) {
       float t, p, h;
       if (read(&t, &p, &h) != ESP_OK)
         return nullptr;
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       JsonObject root = doc->to<JsonObject>();
-      root["addr"] = _i2c->addr();
+      root["addr"] = _i2c->address();
       root["temperature"] = t;
       root["pressure"] = p;
       if (chipId() == bme280::ChipId::Bme280)
@@ -341,8 +337,8 @@ namespace esp32m {
       return doc;
     }
 
-    void useBme280(const char *name, uint8_t addr) {
-      new Bme280(new I2C(addr), name);
+    void useBme280(const char* name, uint8_t addr) {
+      new Bme280(i2c::MasterDev::create(addr), name);
     }
 
   }  // namespace dev

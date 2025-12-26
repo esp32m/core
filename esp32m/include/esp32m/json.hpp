@@ -112,7 +112,7 @@ namespace esp32m {
 
     class PropsContainer {
      public:
-      virtual const JsonObjectConst props() const {
+      virtual JsonObjectConst props() const {
         return null<JsonObjectConst>();
       }
     };

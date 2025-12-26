@@ -26,11 +26,11 @@ namespace esp32m {
           _consumption(this, "water") {
       auto group = sensor::nextGroup();
       _consumption.group = group;
-      _consumption.stateClass = sensor::StateClass::Total;
+      _consumption.stateClass = StateClass::Total;
       _consumption.unit = "m³";
       _flow.group = group;
       _flow.unit = "m³/h";
-      _flow.stateClass = sensor::StateClass::Measurement;
+      _flow.stateClass = StateClass::Measurement;
       Device::init(Flags::HasSensors);
     }
 

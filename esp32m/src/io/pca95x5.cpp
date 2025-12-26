@@ -60,7 +60,7 @@ namespace esp32m {
       }
     }  // namespace pca95x5
 
-    Pca95x5::Pca95x5(I2C *i2c, pca95x5::Bits bits) : _i2c(i2c), _bits(bits) {
+    Pca95x5::Pca95x5(i2c::MasterDev *i2c, pca95x5::Bits bits) : _i2c(i2c), _bits(bits) {
       init();
     }
 
@@ -68,28 +68,27 @@ namespace esp32m {
       switch (_bits) {
         case pca95x5::Bits::Eight: {
           uint8_t v8;
-          auto result = _i2c->readSafe((uint8_t)reg, v8);
+          auto result = _i2c->read((uint8_t)reg, v8);
           if (result == ESP_OK)
             value = v8;
         } break;
         case pca95x5::Bits::Sixteen:
-          return _i2c->readSafe((uint8_t)reg << 1, value);
+          return _i2c->read((uint8_t)reg << 1, value);
       }
       return ESP_FAIL;
     }
     esp_err_t Pca95x5::write(pca95x5::Register reg, uint16_t value) {
       switch (_bits) {
         case pca95x5::Bits::Eight:
-          return _i2c->writeSafe((uint8_t)reg, (uint8_t)value);
+          return _i2c->write((uint8_t)reg, (uint8_t)value);
         case pca95x5::Bits::Sixteen:
-          return _i2c->writeSafe((uint8_t)reg << 1, value);
+          return _i2c->write((uint8_t)reg << 1, value);
       }
       return ESP_FAIL;
     }
 
     esp_err_t Pca95x5::init() {
       IPins::init(_bits == pca95x5::Bits::Eight ? 8 : 16);
-      _i2c->setErrSnooze(10000);
       _i2c->setEndianness(Endian::Little);
       ESP_CHECK_RETURN(read(pca95x5::Register::Input, _input));
       ESP_CHECK_RETURN(read(pca95x5::Register::Output, _output));
@@ -169,7 +168,7 @@ namespace esp32m {
     }
 
     Pca95x5 *usePca95x5(uint8_t addr) {
-      return new Pca95x5(new I2C(addr));
+      return new Pca95x5(i2c::MasterDev::create(addr));
     }
 
   }  // namespace io

@@ -7,7 +7,7 @@ namespace esp32m {
   namespace fs {
 
     Littlefs::Littlefs() {
-      _label = "spiffs";
+      _label = "fs";
       init();
     }
 

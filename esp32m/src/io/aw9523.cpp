@@ -139,7 +139,7 @@ namespace esp32m {
 
     }  // namespace aw9523
 
-    Aw9523::Aw9523(I2C *i2c) : _i2c(i2c) {
+    Aw9523::Aw9523(i2c::MasterDev *i2c) : _i2c(i2c) {
       init();
     }
 
@@ -147,7 +147,6 @@ namespace esp32m {
       _i2c->setEndianness(Endian::Little);
       ESP_CHECK_RETURN(reset(true));
       uint8_t id;
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->read(aw9523::Register::ChipId, id));
       if (id != 0x23) {
         loge("AW9523 chip not detected");
@@ -179,7 +178,6 @@ namespace esp32m {
         delayUs(20);
         ESP_CHECK_RETURN(_rst->write(true));
       } else {
-        std::lock_guard guard(_i2c->mutex());
         ESP_CHECK_RETURN(_i2c->write(aw9523::Register::Rst, (uint8_t)0));
       }
       return ESP_OK;
@@ -197,7 +195,6 @@ namespace esp32m {
         reg = 0x2C + pin - 12;
       else
         return ESP_ERR_INVALID_ARG;
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->write(reg, (uint8_t)(255 * value)));
       return ESP_OK;
     }
@@ -234,7 +231,6 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::setPinMode(int pin, aw9523::PinMode pm) {
-      std::lock_guard guard(_i2c->mutex());
       uint16_t mode = _mode;
       uint16_t cfg = _cfg;
       uint16_t mask = 1 << pin;
@@ -262,13 +258,11 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::readInput() {
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->read(aw9523::Register::InP0, _input));
       return ESP_OK;
     }
 
     esp_err_t Aw9523::writeOutput() {
-      std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(_i2c->write(aw9523::Register::OutP0, _out));
       return ESP_OK;
     }
@@ -285,14 +279,13 @@ namespace esp32m {
       return updateGcr(gcr);
     }
     esp_err_t Aw9523::updateGcr(uint16_t gcr) {
-      std::lock_guard guard(_i2c->mutex());
       if (gcr != _gcr)
         ESP_CHECK_RETURN(_i2c->write(aw9523::Register::Gcr, _gcr = gcr));
       return ESP_OK;
     }
 
     Aw9523 *useAw9523(uint8_t addr) {
-      return new Aw9523(new I2C(addr));
+      return new Aw9523(i2c::MasterDev::create(addr));
     }
 
   }  // namespace io

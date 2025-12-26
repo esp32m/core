@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/io/pins.hpp"
 
@@ -79,10 +79,10 @@ namespace esp32m {
       bool isTouched(int num);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       io::pin::IDigital *_reset = nullptr;
       const char *_name;
-      esp_err_t init(I2C *i2c, io::IPin *resetPin = nullptr,
+      esp_err_t init(i2c::MasterDev *i2c, io::IPin *resetPin = nullptr,
                      const char *name = nullptr);
 
      private:
@@ -93,7 +93,7 @@ namespace esp32m {
   namespace dev {
     class Cap11xx : public virtual Device, public virtual cap11xx::Core {
      public:
-      Cap11xx(I2C *i2c, io::IPin *resetPin = nullptr,
+      Cap11xx(i2c::MasterDev *i2c, io::IPin *resetPin = nullptr,
               const char *name = nullptr);
       Cap11xx(const Cap11xx &) = delete;
 

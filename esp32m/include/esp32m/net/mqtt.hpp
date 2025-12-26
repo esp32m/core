@@ -149,7 +149,7 @@ namespace esp32m {
                           bool fromBuffer);
       };*/
 
-      class StatePublisher : public sensor::StateEmitter {
+      class StatePublisher : public dev::StateEmitter {
        public:
         StatePublisher(const StatePublisher &) = delete;
         const char *name() const override {
@@ -163,11 +163,11 @@ namespace esp32m {
 
        protected:
         void handleEvent(Event &ev) override;
-        void emit(std::vector<const Sensor *> sensors) override;
+        void emit(std::vector<const dev::Component *> components) override;
 
        private:
         StatePublisher() {}
-        esp_err_t publish(const char *name, JsonVariantConst state);
+        esp_err_t publish(const char *name, JsonVariantConst state, bool retain);
       };
 
     }  // namespace mqtt

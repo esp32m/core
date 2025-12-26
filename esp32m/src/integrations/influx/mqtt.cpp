@@ -4,6 +4,7 @@
 #include "esp32m/net/mqtt.hpp"
 
 namespace esp32m {
+using namespace dev;
   namespace integrations {
     namespace influx {
 
@@ -43,12 +44,12 @@ namespace esp32m {
           if (asprintf(&_sensorsTopic, "esp32m/sensor/%s", name) < 0)
             _sensorsTopic = nullptr;
         }
-        sensor::StateEmitter::handleEvent(ev);
+        dev::StateEmitter::handleEvent(ev);
       }
 
-      void Mqtt::emit(std::vector<const Sensor*> sensors) {
+      void Mqtt::emit(std::vector<const dev::Component*> sensors) {
         for (auto sensor : sensors) {
-          auto value = sensor->get();
+          auto value = sensor->getState();
           if (!(value.is<float>() ||
                 ((sensor->isComponent(ComponentType::Switch) || sensor->isComponent(ComponentType::BinarySensor)) && value.is<bool>())))
             continue;
@@ -63,7 +64,7 @@ namespace esp32m {
             name = "value";
           auto unl = strlen(unitName);
           auto dnl = strlen(devName);
-          auto snl = sensor->name ? strlen(sensor->name) : 0;
+          auto snl = sensor->title() ? strlen(sensor->title()) : 0;
           auto idl= sensor->id()!=name ? strlen(sensor->id()) : 0;
           auto dl = 12 /* "esp32m,unit=" */ + unl + 8 /* ",device=" */ + dnl +
                     (dpl ? (1 /* comma */ + dpl) : 0) +
@@ -88,7 +89,7 @@ namespace esp32m {
             dl -= l;
           }
           if (snl && dl) {
-            l = snprintf(sp, dl, ",sensor=%s", sensor->name);
+            l = snprintf(sp, dl, ",sensor=%s", sensor->title());
             sp += l;
             dl -= l;
           }

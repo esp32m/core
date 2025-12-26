@@ -8,7 +8,7 @@ namespace esp32m {
   namespace cap11xx {
     Core::Core() {}
 
-    esp_err_t Core::init(I2C *i2c, io::IPin *resetPin, const char *name) {
+    esp_err_t Core::init(i2c::MasterDev *i2c, io::IPin *resetPin, const char *name) {
       _i2c.reset(i2c);
       _name = name ? name : "CAP11xx";
       _reset = resetPin ? resetPin->digital() : nullptr;
@@ -94,16 +94,16 @@ namespace esp32m {
       return bits & (1 << num);
     }
     esp_err_t Core::read(Register reg, uint8_t &value) {
-      return _i2c->readSafe((uint8_t)reg, value);
+      return _i2c->read((uint8_t)reg, value);
     }
     esp_err_t Core::write(Register reg, uint8_t value) {
-      return _i2c->writeSafe((uint8_t)reg, value);
+      return _i2c->write((uint8_t)reg, value);
     }
 
   }  // namespace cap11xx
   namespace dev {
 
-    Cap11xx::Cap11xx(I2C *i2c, io::IPin *resetPin, const char *name) {
+    Cap11xx::Cap11xx(i2c::MasterDev *i2c, io::IPin *resetPin, const char *name) {
       Device::init(Flags::None);
       cap11xx::Core::init(i2c, resetPin, name);
     }
@@ -120,7 +120,7 @@ namespace esp32m {
     }
 
     Cap11xx *useCap11xx(uint8_t addr, io::IPin *resetPin, const char *name) {
-      return new Cap11xx(new I2C(addr), resetPin, name);
+      return new Cap11xx(i2c::MasterDev::create(addr), resetPin, name);
     }
 
   }  // namespace dev

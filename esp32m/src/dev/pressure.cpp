@@ -6,9 +6,11 @@ namespace esp32m {
   namespace dev {
 
     PressureSensor::PressureSensor(const char *name, io::IPin *pin)
-        : _name(name) {
+        : _name(name), _pressure(this, "pressure") {
       Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
+      _pressure.unit = "atm";
+      _pressure.precision = 3;
     }
 
     bool PressureSensor::initSensors() {
@@ -41,8 +43,7 @@ namespace esp32m {
         _raw = raw;
         _mv = mv;
         _stamp = millis();
-        sensor("pressure", _value);
-        sensor("voltage", _mv * _vdiv / 1000.0);
+        _pressure.set(_value);
       }
       return true;
     }

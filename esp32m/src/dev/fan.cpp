@@ -14,7 +14,7 @@ namespace esp32m {
       if (_tach && _tach->pcnt()) {
         _sensorRpm = new Sensor(this, "", "RPM");
         _sensorRpm->unit = "rpm";
-        _sensorRpm->stateClass = sensor::StateClass::Measurement;
+        _sensorRpm->stateClass = StateClass::Measurement;
       }
     }
     Fan::~Fan() {

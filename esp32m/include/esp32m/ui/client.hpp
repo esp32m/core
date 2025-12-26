@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <deque>
 #include <mutex>
 
@@ -10,6 +11,8 @@
 namespace esp32m {
   class Ui;
   namespace ui {
+    
+    class Transport;
 
     static bool requestsSame(JsonDocument *a, JsonDocument *b) {
       if (!a && !b)
@@ -28,16 +31,16 @@ namespace esp32m {
 
     class Client : public log::Loggable {
      public:
-      Client(esp32m::Ui *ui, uint32_t id);
+      Client(Transport *transport, uint32_t id);
       Client(const Client &) = delete;
       const char *name() const override {
         return _name.c_str();
       }
       void disconnected() {
-        _disconnected = true;
+        _disconnected.store(true, std::memory_order_release);
       }
       bool isDisconnected() const {
-        return _disconnected;
+        return _disconnected.load(std::memory_order_acquire);
       }
       bool enqueue(JsonDocument *req) {
         std::lock_guard<std::mutex> guard(_mutex);
@@ -45,7 +48,7 @@ namespace esp32m {
         // So the new Client will not be created, but the old one will be re-used.
         // But, this client already received disconnected() call and will be removed by the Ui thread
         // This is a hack to prevent removal, assuming that if we got a message for this client, it is not disconnected
-        _disconnected = false; 
+        _disconnected.store(false, std::memory_order_release);
         auto size = _requests.size();
         if (size > 3) {
           if (sameRequestInQueue(req)) {
@@ -76,7 +79,7 @@ namespace esp32m {
 
      private:
       std::string _name;
-      bool _disconnected = false;
+      std::atomic_bool _disconnected{false};
       std::deque<std::unique_ptr<JsonDocument> > _requests;
       std::mutex _mutex;
       bool sameRequestInQueue(JsonDocument *doc) {

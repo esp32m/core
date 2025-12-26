@@ -62,6 +62,7 @@ namespace esp32m {
       int _raw = 0;
       uint32_t _mv = 0;
       unsigned long _stamp = 0;
+      Sensor _pressure;
     };
 
     PressureSensor *usePressureSensor(const char *name, io::IPin *pin);

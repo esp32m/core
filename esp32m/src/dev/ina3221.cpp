@@ -1,6 +1,5 @@
 #include <math.h>
 
-#include "esp32m/bus/i2c.hpp"
 #include "esp32m/dev/ina3221.hpp"
 
 namespace esp32m {
@@ -135,20 +134,19 @@ namespace esp32m {
       }
     }
 
-    Core::Core(I2C *i2c) : _i2c(i2c) {}
+    Core::Core(i2c::MasterDev* i2c) : _i2c(i2c) {}
 
     esp_err_t Core::reset() {
       _settings._config.value = DefaultConfig;
       _settings._mask.value = DefaultMask;
       auto config = _settings._config;
       config.rst = 1;
-      return _i2c->writeSafe(Register::ConfigValue, config.value);
+      return _i2c->write(Register::ConfigValue, config.value);
     }
 
     esp_err_t Core::sync(bool force) {
       if (!force && !_settings._modified)
         return ESP_OK;
-      std::lock_guard guard(_i2c->mutex());
       uint16_t value = 0;
       ESP_CHECK_RETURN(_i2c->read(Register::ConfigValue, value));
       if (value != _settings._config.value)
@@ -190,7 +188,7 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::readShunt(Channel ch, float *voltage, float *current) {
+    esp_err_t Core::readShunt(Channel ch, float* voltage, float* current) {
       if (!voltage && !current)
         return ESP_ERR_INVALID_ARG;
       ESP_CHECK_RETURN(sync());
@@ -198,7 +196,7 @@ namespace esp32m {
       Register reg = ch == Channel::Sum
                          ? Register::ShuntVoltageSum
                          : (Register)(Register::ShuntVoltage1 + ch * 2);
-      ESP_CHECK_RETURN(_i2c->readSafe(reg, value));
+      ESP_CHECK_RETURN(_i2c->read(reg, value));
       float mvolts;
       uint16_t shunt = 0;
       if (ch == Channel::Sum) {
@@ -228,45 +226,41 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::readBus(Channel ch, float &voltage) {
+    esp_err_t Core::readBus(Channel ch, float& voltage) {
       ESP_CHECK_RETURN(sync());
       int16_t value = 0;
       ESP_CHECK_RETURN(
-          _i2c->readSafe((Register)(Register::BusVoltage1 + ch * 2), value));
+          _i2c->read((Register)(Register::BusVoltage1 + ch * 2), value));
       voltage = value * 0.001;
       return ESP_OK;
     }
   }  // namespace ina3221
 
   namespace dev {
-    JsonDocument/*<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>*/
-        Ina3221::_channelProps;
 
-    void Ina3221::staticInit() {
-      static bool inited = false;
-      if (inited)
-        return;
-      inited = true;
-      JsonArray root = _channelProps.to<JsonArray>();
-      JsonObject o = root.add<JsonObject>();
-      o["channel"] = 1;
-      o = root.add<JsonObject>();
-      o["channel"] = 2;
-      o = root.add<JsonObject>();
-      o["channel"] = 3;
-      o = root.add<JsonObject>();
-      o["channel"] = "sum";
-    }
+    Ina3221::Ina3221(i2c::MasterDev* i2c) : ina3221::Core(i2c) {
+      auto group = sensor::nextGroup();
+      char idbuf[16];
 
-    Ina3221::Ina3221(uint8_t address)
-        : ina3221::Core(new I2C(address)) {
+      for (ina3221::Channel ch = ina3221::Channel::First;
+           ch < ina3221::Channel::Max; ch++) {
+        snprintf(idbuf, sizeof(idbuf), "shunt-%d", ch + 1);
+        auto sv = _shuntVoltages[ch] = new Sensor(this, "voltage", idbuf);
+        sv->unit = "mV";
+        sv->precision = 2;
+        sv->group = group;
+        snprintf(idbuf, sizeof(idbuf), "bus-%d", ch + 1);
+        auto bv = _busVoltages[ch] = new Sensor(this, "voltage", idbuf);
+        bv->unit = "V";
+        bv->precision = 2;
+        bv->group = group;
+        snprintf(idbuf, sizeof(idbuf), "current-%d", ch + 1);
+        auto c = _currents[ch] = new Sensor(this, "current", idbuf);
+        c->unit = "mA";
+        c->precision = 2;
+        c->group = group;
+      }
       Device::init(Flags::HasSensors);
-      staticInit();
-    }
-
-    Ina3221::Ina3221(I2C *i2c) : ina3221::Core(i2c) {
-      Device::init(Flags::HasSensors);
-      staticInit();
     }
 
     bool Ina3221::initSensors() {
@@ -274,31 +268,35 @@ namespace esp32m {
     }
 
     bool Ina3221::pollSensors() {
+      bool changed = false;
       for (ina3221::Channel ch = ina3221::Channel::First;
-           ch <= ina3221::Channel::Max; ch++)
+           ch < ina3221::Channel::Max; ch++)
         if (settings().isEnabled(ch)) {
           float value;
           if (readBus(ch, value) != ESP_OK)
             return false;
-          sensor("voltage", value, _channelProps[ch]);
+          _busVoltages[ch]->set(value, &changed);
           float sv, si;
           if (readShunt(ch, &sv, &si) != ESP_OK)
             return false;
-          sensor("shunt-voltage", sv, _channelProps[ch]);
-          sensor("current", si, _channelProps[ch]);
+          _shuntVoltages[ch]->set(sv, &changed);
+          _currents[ch]->set(si, &changed);
         }
+      if (changed)
+        sensor::GroupChanged::publish(
+            _busVoltages[ina3221::Channel::First]->group);
       return true;
     }
 
-    JsonDocument *Ina3221::getState(RequestContext &ctx) {
+    JsonDocument* Ina3221::getState(RequestContext& ctx) {
       auto doc = new JsonDocument(
           /*JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(ina3221::Channel::Max + 1) +
           (ina3221::Channel::Max + 1) * JSON_ARRAY_SIZE(3)*/);
       JsonObject state = doc->to<JsonObject>();
-      state["addr"] = _i2c->addr();
+      state["addr"] = _i2c->address();
       auto c = state["channels"].to<JsonArray>();
       for (ina3221::Channel ch = ina3221::Channel::First;
-           ch <= ina3221::Channel::Max; ch++)
+           ch < ina3221::Channel::Max; ch++)
         if (settings().isEnabled(ch)) {
           auto a = c.add<JsonArray>();
           float value;
@@ -316,16 +314,16 @@ namespace esp32m {
           c.add(nullptr);
       return doc;
     }
-    void Ina3221::setState(RequestContext &ctx) {}
-    bool Ina3221::setConfig(RequestContext &ctx) {
+    void Ina3221::setState(RequestContext& ctx) {}
+    bool Ina3221::setConfig(RequestContext& ctx) {
       return false;
     }
-    JsonDocument *Ina3221::getConfig(RequestContext &ctx) {
+    JsonDocument* Ina3221::getConfig(RequestContext& ctx) {
       return nullptr;
     }
 
     void useIna3221(uint8_t address) {
-      new Ina3221(address);
+      new Ina3221(i2c::MasterDev::create(address));
     }
   }  // namespace dev
 }  // namespace esp32m

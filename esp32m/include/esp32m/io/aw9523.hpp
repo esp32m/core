@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/io/pins.hpp"
 
 namespace esp32m {
@@ -10,7 +10,7 @@ namespace esp32m {
     }
     class Aw9523 : public pin::ITxFinalizer, public IPins {
      public:
-      Aw9523(I2C *i2c);
+      Aw9523(i2c::MasterDev *i2c);
       Aw9523(const Aw9523 &) = delete;
       const char *name() const override {
         return "AW9523";
@@ -31,7 +31,7 @@ namespace esp32m {
       IPin *newPin(int id) override;
 
      private:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       io::pin::IDigital *_rst = nullptr;
       uint16_t _out, _cfg, _int, _mode, _input, _gcr;
       esp_err_t init();

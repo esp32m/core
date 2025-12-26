@@ -32,7 +32,7 @@ namespace esp32m {
       }
     }
 
-    Core::Core(I2C *i2c, const char *name, Type type)
+    Core::Core(i2c::MasterDev *i2c, const char *name, Type type)
         : _i2c(i2c), _name(name), _type(type) {}
 
     const char *Core::name() const {
@@ -51,7 +51,6 @@ namespace esp32m {
       }
     }
     esp_err_t Core::sync(bool force) {
-      std::lock_guard guard(_i2c->mutex());
       if (_type == Type::Unknown)
         ESP_CHECK_RETURN(detect());
       if (_type == Type::Unknown)
@@ -278,7 +277,6 @@ namespace esp32m {
     }
 
     esp_err_t Core::reset() {
-      std::lock_guard guard(_i2c->mutex());
       Config c = {};
       c.rst = 1;
       ESP_CHECK_RETURN(_i2c->write(Register::Conf, c.value));
@@ -330,11 +328,10 @@ namespace esp32m {
         logW("could not trigger measurement in continuous mode");
         return ESP_ERR_INVALID_STATE;
       }
-      return _i2c->writeSafe(Register::Conf, _config.value);
+      return _i2c->write(Register::Conf, _config.value);
     }
 
     esp_err_t Core::getBusRaw(uint16_t &value) {
-      std::lock_guard guard(_i2c->mutex());
       uint16_t raw = 0;
       ESP_CHECK_RETURN(_i2c->read(_regBus, raw));
       if (is3221() || _type == Type::Ina219)
@@ -351,7 +348,6 @@ namespace esp32m {
             (int16_t)(amps / 0.2);  // 2mOhm resistor, convert with Ohm's law
       } else {
         int16_t raw = 0;
-        std::lock_guard guard(_i2c->mutex());
         ESP_CHECK_RETURN(_i2c->read(_regShunt, raw));
         // logI("reg-shunt %i = %i, lsb: %u", _regShunt, raw, _lsbShunt);
         if (is3221())
@@ -391,7 +387,6 @@ namespace esp32m {
         value = sv * _shunt_mOhm / 1000;
       } else {
         int16_t raw = 0;
-        std::lock_guard guard(_i2c->mutex());
         ESP_CHECK_RETURN(_i2c->read(_regCurrent, raw));
         // logD("amps %i = %i, lsb: %u", _regCurrent, raw, _lsbCurrent);
         value = (float)raw * _lsbCurrent / 1000000 / 1000;
@@ -407,7 +402,6 @@ namespace esp32m {
         value = bv * sv * _shunt_mOhm / 1000;
       } else {
         uint16_t raw = 0;
-        std::lock_guard guard(_i2c->mutex());
         ESP_CHECK_RETURN(_i2c->read(Register::Power, raw));
         value = (float)raw * _lsbPower / 1000000 / 1000;
       }
@@ -418,7 +412,7 @@ namespace esp32m {
 
   namespace dev {
 
-    Ina::Ina(I2C *i2c)
+    Ina::Ina(i2c::MasterDev *i2c)
         : ina::Core(i2c),
           _voltage(this, "voltage"),
           _current(this, "current"),
@@ -438,7 +432,7 @@ namespace esp32m {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(7) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
-      arr.add(_i2c->addr());
+      arr.add(_i2c->address());
       arr.add(ina::type2name(type()));
       float value;
       getBusVolts(value);
@@ -457,15 +451,11 @@ namespace esp32m {
       bool changed = false;
       float value;
       ESP_CHECK_RETURN_BOOL(getBusVolts(value));
-      sensor("voltage", value);
       _voltage.set(value, &changed);
-      ESP_CHECK_RETURN_BOOL(getShuntVolts(value));
-      sensor("shuntVoltage", value);
+//      ESP_CHECK_RETURN_BOOL(getShuntVolts(value));
       ESP_CHECK_RETURN_BOOL(getAmps(value));
-      sensor("current", value);
       _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getWatts(value));
-      sensor("power", value);
       _power.set(value, &changed);
       _stamp = millis();
       if (changed)
@@ -478,7 +468,7 @@ namespace esp32m {
     }
 
     Ina *useIna(uint8_t addr) {
-      return new Ina(new I2C(addr));
+      return new Ina(i2c::MasterDev::create(addr));
     }
 
   }  // namespace dev

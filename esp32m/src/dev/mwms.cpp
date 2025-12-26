@@ -7,13 +7,14 @@
 namespace esp32m {
   namespace dev {
 
-    MicrowaveMotionSensor::MicrowaveMotionSensor(const char *name,
-                                                 io::IPin *pin)
-        : _name(name) {
+    MicrowaveMotionSensor::MicrowaveMotionSensor(const char* name,
+                                                 io::IPin* pin)
+        : _name(name), _motion(this, "", "motion") {
+      _motion.unit = "%";
       Device::init(Flags::HasSensors);
       _adc = pin ? pin->adc() : nullptr;
       _sampler = new io::Sampler(10, 2);
-      xTaskCreate([](void *self) { ((MicrowaveMotionSensor *)self)->run(); },
+      xTaskCreate([](void* self) { ((MicrowaveMotionSensor*)self)->run(); },
                   "m/mwms", 4096, this, tskIDLE_PRIORITY + 1, &_task);
     }
 
@@ -26,10 +27,9 @@ namespace esp32m {
       return _divisor != 0;
     }
 
-    JsonDocument *MicrowaveMotionSensor::getState(
-        RequestContext &ctx) {
+    JsonDocument* MicrowaveMotionSensor::getState(RequestContext& ctx) {
       std::lock_guard lock(_sampler->mutex());
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
+      JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(abs(0.5 - _sampler->avg() / _divisor) * 2);
@@ -45,7 +45,7 @@ namespace esp32m {
       }
       if (!isnan(value)) {
         _stamp = millis();
-        sensor("value", value);
+        _motion.set(value);
       }
       return true;
     }
@@ -61,8 +61,8 @@ namespace esp32m {
       }
     }
 
-    MicrowaveMotionSensor *useMicrowaveMotionSensor(const char *name,
-                                                    io::IPin *pin) {
+    MicrowaveMotionSensor* useMicrowaveMotionSensor(const char* name,
+                                                    io::IPin* pin) {
       return new MicrowaveMotionSensor(name, pin);
     }
   }  // namespace dev

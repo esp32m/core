@@ -101,7 +101,7 @@ namespace esp32m {
       return i;
     }
 
-    esp_err_t Mqtt::wsSend(uint32_t cid, const char *text) {
+    esp_err_t Mqtt::sendTo(uint32_t cid, const char *text) {
       printf("%s\r\n", text);
       return ESP_OK;
     }

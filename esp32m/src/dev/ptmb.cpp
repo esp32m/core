@@ -10,7 +10,7 @@ namespace esp32m {
     Ptmb::Ptmb(uint8_t addr, const char* name)
         : _name(name ? name : "PTMB"), _addr(addr), _sensor(this, "pressure") {
       _sensor.unit = "bar"; // contrary to documentation, the unit looks like bar or ATM
-      _sensor.stateClass = sensor::StateClass::Measurement;
+      _sensor.stateClass = StateClass::Measurement;
       Device::init(Flags::HasSensors);
     }
 

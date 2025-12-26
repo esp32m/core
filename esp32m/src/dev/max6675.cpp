@@ -7,7 +7,7 @@ namespace esp32m {
 
     Max6675::Max6675(const char *name, spi_host_device_t host)
         : _name(name ? name : "MAX6675"),
-          _host(host) { Device::init(Flags::HasSensors); }
+          _host(host), _temperature(this, "temperature") { Device::init(Flags::HasSensors); _temperature.precision = 1; }
 
     bool Max6675::initSensors() {
       spi_bus_config_t buscfg = {};
@@ -79,7 +79,7 @@ namespace esp32m {
           _value = res * 0.25;
           _stamp = millis();
         }  // else logW("sensor is not connected");
-        sensor("temperature", _value);
+        _temperature.set(_value);
       }
       return true;
     }

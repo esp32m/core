@@ -15,7 +15,7 @@ namespace esp32m {
 
      protected:
       void init(Ui* ui) override;
-      esp_err_t wsSend(uint32_t cid, const char* text) override;
+      esp_err_t sendTo(uint32_t cid, const char* text) override;
 
      private:
       Console();

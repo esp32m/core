@@ -18,18 +18,18 @@ namespace esp32m {
         SenseOff,
       };
       Relay(const char *name, io::pin::IDigital *pin)
-          : _name(name), _pinOn(pin), _pinOff(pin) {
+          : _name(name), _switch(this), _pinOn(pin), _pinOff(pin) {
         init();
       }
       Relay(const char *name, io::pin::IDigital *pinOn,
             io::pin::IDigital *pinOff)
-          : _name(name), _pinOn(pinOn), _pinOff(pinOff) {
+          : _name(name), _switch(this), _pinOn(pinOn), _pinOff(pinOff) {
         init();
       }
       Relay(const char *name, io::pin::IDigital *pinOn,
             io::pin::IDigital *pinOff, io::pin::IDigital *pinSenseOn,
             io::pin::IDigital *pinSenseOff)
-          : _name(name),
+          : _name(name), _switch(this),
             _pinOn(pinOn),
             _pinOff(pinOff),
             _pinSenseOn(pinSenseOn),
@@ -75,6 +75,7 @@ namespace esp32m {
 
      private:
       const char *_name;
+      Switch _switch;
       io::pin::IDigital *_pinOn, *_pinOff;
       io::pin::IDigital *_pinSenseOn = nullptr, *_pinSenseOff = nullptr;
       uint8_t _levels = 0;

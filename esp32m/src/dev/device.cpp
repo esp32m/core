@@ -63,16 +63,17 @@ namespace esp32m {
     }
   }
 
-  void Device::sensor(const char* sensor, const float value) {
-    if (!isnan(value))
-      EventSensor::publish(*this, sensor, value, json::null<JsonObjectConst>());
-  };
+  /*  void Device::sensor(const char* sensor, const float value) {
+      if (!isnan(value))
+        EventSensor::publish(*this, sensor, value,
+    json::null<JsonObjectConst>());
+    };
 
-  void Device::sensor(const char* sensor, const float value,
-                      const JsonObjectConst props) {
-    if (!isnan(value))
-      EventSensor::publish(*this, sensor, value, props);
-  };
+    void Device::sensor(const char* sensor, const float value,
+                        const JsonObjectConst props) {
+      if (!isnan(value))
+        EventSensor::publish(*this, sensor, value, props);
+    };*/
 
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;
@@ -128,107 +129,120 @@ namespace esp32m {
     return _sensorsReady;
   }
 
-  namespace sensor {
+  namespace dev {
 
-    std::mutex _sensorsMutex;
-    std::map<std::string, Sensor*> _sensors;
-    int _groupCounter = 0;
+    std::mutex _componentsMutex;
+    std::map<std::string, Component*> _components;
 
-    Sensor* find(std::string uid) {
-      std::lock_guard lock(_sensorsMutex);
-      auto it = _sensors.find(uid);
-      return it == _sensors.end() ? nullptr : it->second;
+    void Component::init(Device* device) {
+      _device = device;
+      std::lock_guard lock(_componentsMutex);
+      if (_components.find(uid()) != _components.end()) {
+        logW("component with uid %s already exists", uid().c_str());
+      }
+      _components[uid()] = this;
     }
 
-    Sensor* find(Device* device, const char* id) {
+    Component::~Component() {
+      if (!_device)
+        return;
+      std::lock_guard lock(_componentsMutex);
+      auto uid = this->uid();
+      auto it = _components.find(uid);
+      if (it != _components.end())
+        _components.erase(it);
+      _device = nullptr;
+    }
+
+
+    void Component::setState(JsonVariantConst value, bool* changed) {
+      if (!_device)
+        return;
+      JsonVariantConst oldValue = _device->getComponentState(id());
+      bool ch = oldValue != value;
+      if (ch) {
+        _device->setComponentState(id(), value);
+        if (changed)
+          *changed = true;
+        ComponentStateChanged::publish(this);
+      }
+    }
+
+    Component* Component::find(std::string uid) {
+      std::lock_guard lock(_componentsMutex);
+      auto it = _components.find(uid);
+      return it == _components.end() ? nullptr : it->second;
+    }
+
+    Component* Component::find(Device* device, const char* id) {
       auto uid = string_printf("%s_%s", device->name(), id);
       return find(uid);
     }
 
-    int nextGroup() {
-      std::lock_guard lock(_sensorsMutex);
-      return ++_groupCounter;
+    AllComponents::Iterator AllComponents::begin() const {
+      return AllComponents::Iterator(_components.begin());
     }
-
-    Group::Iterator::Iterator(int id) : _id(id) {
-      if (id < 0)
-        _inner = _sensors.end();
-      else {
-        _inner = _sensors.begin();
-        if (_inner->second->group != _id)
-          next();
-      }
-    }
-    void Group::Iterator::next() {
-      for (;;) {
-        _inner++;
-        if (_inner == _sensors.end() || _inner->second->group == _id)
-          break;
-      }
-    }
-
-    All::Iterator All::begin() const {
-      return All::Iterator(_sensors.begin());
-    }
-    All::Iterator All::end() const {
-      return All::Iterator(_sensors.end());
+    AllComponents::Iterator AllComponents::end() const {
+      return AllComponents::Iterator(_components.end());
     }
 
     StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {}
 
     void StateEmitter::handleEvent(Event& ev) {
       union {
-        sensor::GroupChanged* gc;
-        sensor::Changed* sc;
+        // sensor::GroupChanged* gc;
+        ComponentStateChanged* sc;
       };
       bool changed = false;
       if (EventInited::is(ev))
         xTaskCreate([](void* self) { ((StateEmitter*)self)->run(); }, "m/stem",
                     4096, this, 1, &_task);
-      else if (sensor::GroupChanged::is(ev, &gc)) {
+      else /*if (sensor::GroupChanged::is(ev, &gc)) {
         for (auto sensor : gc->group())
           if (!sensor->disabled && filter(sensor)) {
             std::lock_guard guard(_queueMutex);
             _queue[sensor->uid()].sensor = sensor;
             changed = true;
           }
-      } else if (sensor::Changed::is(ev, &sc)) {
-        auto sensor = sc->sensor();
-        if (!sensor->disabled && filter(sensor)) {
-          std::lock_guard guard(_queueMutex);
-          _queue[sensor->uid()].sensor = sensor;
-          changed = true;
+      } else */
+        if (ComponentStateChanged::is(ev, &sc)) {
+          auto component = sc->component();
+          if (!component->isDisabled() && filter(component)) {
+            std::lock_guard guard(_queueMutex);
+            _queue[component->uid()].component = component;
+            changed = true;
+          }
         }
-      }
       if (changed && _task && (_flags & EmitFlags::OnChange))
         xTaskNotifyGive(_task);
     }
 
     void StateEmitter::run() {
-      std::vector<const Sensor*> sensors;
+      std::vector<const Component*> components;
       esp_task_wdt_add(NULL);
       for (;;) {
         esp_task_wdt_reset();
         if ((_flags & EmitFlags::Periodically) && shouldEmit()) {
-          sensor::All all;
-          for (auto sensor : all)
-            if (!sensor->disabled && filter(sensor)) {
-              sensors.push_back(sensor);
+          AllComponents all;
+          for (auto component : all)
+            if (!component->isDisabled() && filter(component)) {
+              components.push_back(component);
               std::lock_guard guard(_queueMutex);
-              auto queued = _queue.find(sensor->uid());
+              auto queued = _queue.find(component->uid());
               if (queued != _queue.end())
                 _queue.erase(queued);
             }
         } else {
           std::lock_guard guard(_queueMutex);
           if (_queue.size()) {
-            for (auto const& kv : _queue) sensors.push_back(kv.second.sensor);
+            for (auto const& kv : _queue)
+              components.push_back(kv.second.component);
             _queue.clear();
           }
         }
-        if (sensors.size()) {
-          emit(sensors);
-          sensors.clear();
+        if (components.size()) {
+          emit(components);
+          components.clear();
         }
         auto current = _emittedAt = millis();
         auto sleepTime = nextTime() - current;
@@ -243,22 +257,32 @@ namespace esp32m {
       }
     }
 
+  }  // namespace dev
+
+  namespace sensor {
+    int _groupCounter = 0;
+    int nextGroup() {
+      // std::lock_guard lock(_componentsMutex);
+      return ++_groupCounter;
+    }
+
+    /* Group::Iterator::Iterator(int id) : _id(id) {
+       if (id < 0)
+         _inner = dev::_components.end();
+       else {
+         _inner = dev::_components.begin();
+         if (_inner->second->group != _id)
+           next();
+       }
+     }
+
+     void Group::Iterator::next() {
+       for (;;) {
+         _inner++;
+         if (_inner == dev::_components.end() || _inner->second->group == _id)
+           break;
+       }
+     }*/
   }  // namespace sensor
-
-  Sensor::Sensor(Device* device, const char* type, const char* id)
-      : _device(device), _type(type) {
-    std::lock_guard lock(sensor::_sensorsMutex);
-    if (id)
-      _id = id;
-    sensor::_sensors[uid()] = this;
-  }
-
-  Sensor::~Sensor() {
-    std::lock_guard lock(sensor::_sensorsMutex);
-    auto uid = this->uid();
-    auto it = sensor::_sensors.find(uid);
-    if (it != sensor::_sensors.end())
-      sensor::_sensors.erase(it);
-  }
 
 }  // namespace esp32m

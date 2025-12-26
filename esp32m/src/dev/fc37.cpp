@@ -5,7 +5,7 @@
 namespace esp32m {
   namespace dev {
 
-    Fc37::Fc37(io::IPin *pin) : _sensor(this, "rain") {
+    Fc37::Fc37(io::IPin *pin) : _sensor(this, "moisture", "rain") {
       Device::init(Flags::HasSensors);
       _sensor.unit = "%";
       _sensor.precision = 1;
@@ -37,7 +37,7 @@ namespace esp32m {
       if (err == ESP_OK) {
         _value = (float)raw / _divisor;
         _stamp = millis();
-        sensor("value", _value);
+        _sensor.set(_value);
       }
       return true;
     }

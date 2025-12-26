@@ -1,6 +1,6 @@
 #pragma once
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/io/pins.hpp"
 #include "esp32m/logging.hpp"
 
@@ -62,7 +62,7 @@ namespace esp32m {
 
     class Ads1x1x : public virtual IPins {
      public:
-      Ads1x1x(I2C *i2c, ads1x1x::Variant v);
+      Ads1x1x(i2c::MasterDev *i2c, ads1x1x::Variant v);
       Ads1x1x(const Ads1x1x &) = delete;
       const char *name() const override {
         switch (_variant) {
@@ -94,7 +94,7 @@ namespace esp32m {
       }
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
       IPin *newPin(int id) override;
 
      private:

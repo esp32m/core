@@ -4,7 +4,7 @@
 #include <math.h>
 #include <memory>
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 
 namespace esp32m {
@@ -54,7 +54,7 @@ namespace esp32m {
 
     enum Channel { First, Second, Third, Sum, Max = Sum };
 
-    inline Channel operator++(Channel &d, int) {
+    inline Channel operator++(Channel& d, int) {
       d = static_cast<Channel>((static_cast<int>(d) + 1));
       return d;
     };
@@ -119,21 +119,21 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C *i2c);
-      Core(const Core &) = delete;
-      const char *name() const override {
+      Core(i2c::MasterDev* i2c);
+      Core(const Core&) = delete;
+      const char* name() const override {
         return "INA3221";
       }
-      Settings &settings() {
+      Settings& settings() {
         return _settings;
       }
       esp_err_t sync(bool force = false);
       esp_err_t reset();
-      esp_err_t readShunt(Channel ch, float *voltage, float *current);
-      esp_err_t readBus(Channel ch, float &voltage);
+      esp_err_t readShunt(Channel ch, float* voltage, float* current);
+      esp_err_t readBus(Channel ch, float& voltage);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
 
      private:
       Settings _settings;
@@ -145,23 +145,27 @@ namespace esp32m {
   namespace dev {
     class Ina3221 : public virtual Device, public virtual ina3221::Core {
      public:
-      Ina3221(uint8_t address = ina3221::DefaultAddress);
-      Ina3221(I2C *i2c);
-      Ina3221(const Ina3221 &) = delete;
-      const char *name() const override {
+      Ina3221(i2c::MasterDev* i2c);
+      Ina3221(const Ina3221&) = delete;
+      const char* name() const override {
         return "INA3221";
       }
 
      protected:
       bool pollSensors() override;
       bool initSensors() override;
-      JsonDocument *getState(RequestContext &ctx) override;
-      void setState(RequestContext &ctx) override;
-      bool setConfig(RequestContext &ctx) override;
-      JsonDocument *getConfig(RequestContext &ctx) override;
-      static JsonDocument/*<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>*/
+      JsonDocument* getState(RequestContext& ctx) override;
+      void setState(RequestContext& ctx) override;
+      bool setConfig(RequestContext& ctx) override;
+      JsonDocument* getConfig(RequestContext& ctx) override;
+      static JsonDocument /*<JSON_ARRAY_SIZE(4) + JSON_OBJECT_SIZE(1) * 4>*/
           _channelProps;
       static void staticInit();
+
+     private:
+      Sensor* _shuntVoltages[ina3221::Channel::Max];
+      Sensor* _busVoltages[ina3221::Channel::Max];
+      Sensor* _currents[ina3221::Channel::Max];
     };
 
     void useIna3221(uint8_t address = ina3221::DefaultAddress);

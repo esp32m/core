@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "esp32m/bus/i2c.hpp"
+#include "esp32m/bus/i2c/master.hpp"
 #include "esp32m/device.hpp"
 #include "esp32m/logging.hpp"
 
@@ -77,24 +77,24 @@ namespace esp32m {
 
     class Core : public virtual log::Loggable {
      public:
-      Core(I2C *i2c);
-      Core(const Core &) = delete;
-      const char *name() const override {
+      Core(i2c::MasterDev* i2c);
+      Core(const Core&) = delete;
+      const char* name() const override {
         return "INA219";
       }
-      Settings &settings() {
+      Settings& settings() {
         return _settings;
       }
       esp_err_t reset();
       esp_err_t sync(bool force = false);
       esp_err_t measure();
-      esp_err_t getBusVoltage(float &value);
-      esp_err_t getShuntVoltage(float &value);
-      esp_err_t getCurrent(float &value);
-      esp_err_t getPower(float &value);
+      esp_err_t getBusVoltage(float& value);
+      esp_err_t getShuntVoltage(float& value);
+      esp_err_t getCurrent(float& value);
+      esp_err_t getPower(float& value);
 
      protected:
-      std::unique_ptr<I2C> _i2c;
+      std::unique_ptr<i2c::MasterDev> _i2c;
 
      private:
       Settings _settings;
@@ -107,14 +107,16 @@ namespace esp32m {
   namespace dev {
     class Ina219 : public virtual Device, public virtual ina219::Core {
      public:
-      Ina219(uint8_t addr = ina219::DefaultAddress);
-      Ina219(I2C *i2c);
-      Ina219(const Ina219 &) = delete;
+      Ina219(i2c::MasterDev* i2c);
+      Ina219(const Ina219&) = delete;
 
      protected:
-      JsonDocument *getState(RequestContext &ctx) override;
+      JsonDocument* getState(RequestContext& ctx) override;
       bool pollSensors() override;
       bool initSensors() override;
+
+     private:
+      Sensor _voltage, _current, _power;
     };
 
     void useIna219(uint8_t addr = ina219::DefaultAddress);

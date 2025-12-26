@@ -34,6 +34,7 @@ namespace esp32m {
       int _divisor = 0;
       unsigned long _stamp = 0;
       void run();
+      Sensor _motion;
     };
 
     MicrowaveMotionSensor *useMicrowaveMotionSensor(const char *name,

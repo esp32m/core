@@ -4,6 +4,7 @@
 namespace esp32m {
   namespace fs {
     Spiffs::Spiffs() {
+      _label = "fs";
       init();
     }
 

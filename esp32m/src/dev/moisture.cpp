@@ -6,8 +6,10 @@ namespace esp32m {
   namespace dev {
 
     MoistureSensor::MoistureSensor(const char *name, io::IPin *pin)
-        :  _name(name) {
+        :  _name(name), _moisture(this, "moisture") {
       Device::init(Flags::HasSensors);
+      _moisture.precision = 1;
+      _moisture.unit = "%";
       _adc = pin ? pin->adc() : nullptr;
     }
 
@@ -39,7 +41,7 @@ namespace esp32m {
       if (err == ESP_OK) {
         _value = 1.0 - ((float)raw / _divisor);
         _stamp = millis();
-        sensor("value", _value);
+        _moisture.set(_value);
       }
       return true;
     }

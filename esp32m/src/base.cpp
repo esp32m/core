@@ -4,6 +4,8 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <cstdarg>
+#include <cstdio>
 #include <math.h>
 #include <map>
 
@@ -47,18 +49,18 @@ namespace esp32m {
     return (delta * dividend + (divisor / 2)) / divisor + out_min;
   }
 
-  const char *makeTaskName(const char *name) {
+  const char* makeTaskName(const char* name) {
     if (!name)
       return "m/generic";
     size_t l = strlen(name) + 3;
     if (l > CONFIG_FREERTOS_MAX_TASK_NAME_LEN)
       l = CONFIG_FREERTOS_MAX_TASK_NAME_LEN;
-    char *buf = (char *)calloc(l, 1);
+    char* buf = (char*)calloc(l, 1);
     snprintf(buf, l, "m/%s", name);
     return buf;
   }
 
-  bool strEndsWith(const char *str, const char *suffix) {
+  bool strEndsWith(const char* str, const char* suffix) {
     if (!str || !suffix)
       return false;
     size_t lenstr = strlen(str);
@@ -68,20 +70,40 @@ namespace esp32m {
     return strncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
   }
 
-  std::string string_printf(const char *format, va_list args) {
-    size_t sz = vsnprintf(nullptr, 0, format, args);
-    size_t bufsize = sz + 1;
-    char *buf = (char *)malloc(bufsize);
-    std::string result;
-    if (buf) {
-      vsnprintf(buf, bufsize, format, args);
-      result = buf;
-      free(buf);
+  std::string string_printf(const char* format, va_list args) {
+    if (!format)
+      return std::string();
+
+    va_list args_len;
+    va_copy(args_len, args);
+    const int required = vsnprintf(nullptr, 0, format, args_len);
+    va_end(args_len);
+
+    if (required < 0)
+      return std::string();
+
+    const size_t requiredSize = static_cast<size_t>(required) + 1;  // incl '\0'
+
+    // Fast path: avoid heap allocation for small formatted strings.
+    char stackBuf[128];
+    if (requiredSize <= sizeof(stackBuf)) {
+      va_list args_print;
+      va_copy(args_print, args);
+      vsnprintf(stackBuf, sizeof(stackBuf), format, args_print);
+      va_end(args_print);
+      return std::string(stackBuf, static_cast<size_t>(required));
     }
+
+    std::string result;
+    result.resize(static_cast<size_t>(required));
+    va_list args_print;
+    va_copy(args_print, args);
+    vsnprintf(&result[0], requiredSize, format, args_print);
+    va_end(args_print);
     return result;
   }
 
-  std::string string_printf(const char *format, ...) {
+  std::string string_printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
     std::string result = string_printf(format, args);
@@ -114,24 +136,13 @@ namespace esp32m {
     return (int)(value * f + 0.5) / f;
   }
 
-  std::map<int, std::string> precisionFormats;
-  std::string roundToString(float value, int precision) {
-    auto it = precisionFormats.find(precision);
-    std::string fmt;
-    if (it == precisionFormats.end())
-      fmt = precisionFormats[precision] = string_printf("%%.%df", precision);
-    else
-      fmt = it->second;
-    return string_printf(fmt.c_str(), value);
-  }
-
   namespace locks {
 
     std::map<gpio_num_t, std::mutex> _gpio_locks;
     std::map<std::string, std::mutex> _locks;
     std::map<uart_port_t, std::mutex> _uart_locks;
 
-    Guard::Guard(const char *name) : _lock(find(name)) {
+    Guard::Guard(const char* name) : _lock(find(name)) {
       if (_lock)
         _lock->lock();
     }
@@ -144,35 +155,35 @@ namespace esp32m {
         _lock->unlock();
     }
 
-    std::mutex &get(const char *name) {
+    std::mutex& get(const char* name) {
       auto it = _locks.find(name);
       if (it != _locks.end())
         return it->second;
       return _locks[name];
     }
 
-    std::mutex *find(const char *name) {
+    std::mutex* find(const char* name) {
       auto it = _locks.find(name);
       if (it != _locks.end())
         return &it->second;
       return nullptr;
     }
 
-    std::mutex &get(gpio_num_t pin) {
+    std::mutex& get(gpio_num_t pin) {
       auto it = _gpio_locks.find(pin);
       if (it != _gpio_locks.end())
         return it->second;
       return _gpio_locks[pin];
     }
 
-    std::mutex *find(gpio_num_t pin) {
+    std::mutex* find(gpio_num_t pin) {
       auto it = _gpio_locks.find(pin);
       if (it != _gpio_locks.end())
         return &it->second;
       return nullptr;
     }
 
-    std::mutex &uart(uart_port_t port) {
+    std::mutex& uart(uart_port_t port) {
       auto it = _uart_locks.find(port);
       if (it != _uart_locks.end())
         return it->second;

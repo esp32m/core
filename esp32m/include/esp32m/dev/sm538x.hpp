@@ -22,7 +22,7 @@ namespace esp32m {
       bool pollSensors() override;
       bool initSensors() override;
       JsonDocument *getState(RequestContext &ctx) override;
-      const JsonObjectConst props() const override {
+      JsonObjectConst props() const override {
         return _props.as<JsonObjectConst>();
       }
 
