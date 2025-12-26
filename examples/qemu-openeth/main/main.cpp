@@ -22,5 +22,7 @@ extern "C" void app_main()
   dev::useEsp32();
   net::useOpenethEthernet();
   net::useInterfaces();
-  initUi(new Ui(new ui::Httpd()));
+  auto &ui = Ui::instance();
+  ui.addTransport(new ui::Httpd());
+  initUi(&ui);
 }

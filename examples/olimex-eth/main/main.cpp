@@ -23,5 +23,7 @@ extern "C" void app_main()
   net::useWifi();
   net::useOlimexEthernet();
   net::useInterfaces();
-  initUi(new Ui(new ui::Httpd()));
+  auto &ui = Ui::instance();
+  ui.addTransport(new ui::Httpd());
+  initUi(&ui);
 }
