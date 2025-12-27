@@ -85,19 +85,20 @@ namespace esp32m {
         // Quick validity check. If you only want to know whether "something" is
         // there, you could skip this call and just use
         // esp_core_dump_image_get().
-        ESP_CHECK_RETURN(esp_core_dump_image_check());
+        auto err = esp_core_dump_image_check();
+        if (err != ESP_OK)
+          return err;
 
         size_t addr = 0, size = 0;
         ESP_CHECK_RETURN(esp_core_dump_image_get(&addr, &size));
 
         // Sanity: make sure image lives inside the partition.
-        if (addr < part->address) {
+        if (addr < part->address)
           return ESP_ERR_INVALID_SIZE;
-        }
+
         const size_t rel = addr - part->address;
-        if (rel + size > part->size) {
+        if (rel + size > part->size)
           return ESP_ERR_INVALID_SIZE;
-        }
 
         _info.part = part;
         _info.addr = addr;

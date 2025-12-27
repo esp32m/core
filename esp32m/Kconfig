@@ -163,4 +163,8 @@ menu "ESP32 Manager configuration"
 
     endmenu
 
+    config ESP32M_CRASH_GUARD
+        bool "Enable crash guard"
+        default n
+
 endmenu

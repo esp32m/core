@@ -1,5 +1,6 @@
 #include "esp32m/ui/httpd.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/net/net.hpp"
 #include "esp32m/logging.hpp"
 #include "esp32m/net/mdns.hpp"
 #include "esp32m/net/wifi.hpp"
@@ -181,6 +182,7 @@ namespace esp32m {
 
     void Httpd::init(Ui* ui) {
       Transport::init(ui);
+      net::useNetif();
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_start(&_server, &_config)) ==
           ESP_OK) {
         httpd_uri_t uh = {.uri = UriWs,

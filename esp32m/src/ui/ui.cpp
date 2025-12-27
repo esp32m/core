@@ -91,9 +91,9 @@ namespace esp32m {
       for (auto& [cid, client] : _clients)
         if (!client->isDisconnected())
           ids.push_back(cid);
-      _clientIdsView.store(std::make_shared<const std::vector<uint32_t>>(
-                               std::move(ids)),
-                           std::memory_order_release);
+      _clientIdsView.store(
+          std::make_shared<const std::vector<uint32_t> >(std::move(ids)),
+          std::memory_order_release);
     }
 
     void Transport::process() {
@@ -186,9 +186,6 @@ namespace esp32m {
     if (EventInit::is(ev, 0)) {
       if (!ui::_errors.size())
         ui::_errors.add("busy");
-      auto transports = _transportsView.load(std::memory_order_acquire);
-      for (auto* transport : *transports)
-        transport->init(this);
       xTaskCreate([](void* self) { ((Ui*)self)->run(); }, "m/ui", 1024 * 6,
                   this, tskIDLE_PRIORITY, &_task);
       return;
@@ -226,17 +223,17 @@ namespace esp32m {
 
   void Ui::broadcast(const char* text) {
     auto transports = _transportsView.load(std::memory_order_acquire);
-    for (auto* transport : *transports)
-      transport->broadcast(text);
+    for (auto* transport : *transports) transport->broadcast(text);
   }
 
   void Ui::run() {
     esp_task_wdt_add(NULL);
+    auto transports = _transportsView.load(std::memory_order_acquire);
+    for (auto* transport : *transports) transport->init(this);
     for (;;) {
       esp_task_wdt_reset();
-      auto transports = _transportsView.load(std::memory_order_acquire);
-      for (auto* transport : *transports)
-        transport->process();
+      transports = _transportsView.load(std::memory_order_acquire);
+      for (auto* transport : *transports) transport->process();
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
     }
   }
