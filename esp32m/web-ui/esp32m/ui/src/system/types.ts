@@ -28,7 +28,7 @@ export const enum ChipFeatures {
   EmbPsram = 1 << 7,
 }
 
-export const enum ResetReason {
+export enum ResetReason {
   Unknown = 1,
   PowerOn,
   Ext,

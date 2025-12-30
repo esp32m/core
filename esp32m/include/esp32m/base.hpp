@@ -29,6 +29,10 @@ namespace esp32m {
   std::string string_printf(const char* format, va_list args);
   std::string string_printf(const char* format, ...);
 
+  void hex_encode(char* dst, size_t dst_len, const uint8_t* src,
+                  size_t src_len);
+  std::string hex_encode(const uint8_t* src, size_t src_len);
+
   float roundTo(float value, int precision);
   template <typename T>
   std::string roundToString(T value, int precision) {
@@ -58,26 +62,27 @@ namespace esp32m {
     return false;
   }
 
-/*  // credits to
-  // https://codereview.stackexchange.com/questions/173929/modern-c-singleton-template
-  template <typename T>
-  class Singleton {
-   public:
-    static T& instance();
+  /*  // credits to
+    //
+    https://codereview.stackexchange.com/questions/173929/modern-c-singleton-template
+    template <typename T>
+    class Singleton {
+     public:
+      static T& instance();
 
-    Singleton(const Singleton&) = delete;
-    Singleton& operator=(const Singleton) = delete;
+      Singleton(const Singleton&) = delete;
+      Singleton& operator=(const Singleton) = delete;
 
-   protected:
-    struct token {};
-    Singleton() {}
-  };
+     protected:
+      struct token {};
+      Singleton() {}
+    };
 
-  template <typename T>
-  T& Singleton<T>::instance() {
-    static T instance{token{}};
-    return instance;
-  }*/
+    template <typename T>
+    T& Singleton<T>::instance() {
+      static T instance{token{}};
+      return instance;
+    }*/
 
   namespace locks {
     class Guard {

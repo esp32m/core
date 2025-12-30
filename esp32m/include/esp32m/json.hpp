@@ -110,6 +110,9 @@ namespace esp32m {
     bool check(log::Loggable *l, JsonDocument *doc, const char *msg);
     void dump(log::Loggable *l, JsonVariantConst v, const char *msg);
 
+    void saveToFile(const char *path, JsonVariantConst v);
+    std::unique_ptr<JsonDocument> loadFromFile(const char *path);
+
     class PropsContainer {
      public:
       virtual JsonObjectConst props() const {

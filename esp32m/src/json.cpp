@@ -1,8 +1,10 @@
 #include "esp32m/json.hpp"
 #include "esp32m/logging.hpp"
 
+#include <errno.h>
 #include <esp_heap_caps.h>
 #include <math.h>
+#include <stdio.h>
 
 namespace esp32m {
   namespace json {
@@ -118,35 +120,6 @@ namespace esp32m {
       return result;
     }
 
-    /*size_t measure(const JsonVariantConst v) {
-      size_t result = 0;
-      if (v.is<JsonArray>() || v.is<JsonArrayConst>()) {
-        JsonArrayConst a = v.as<JsonArrayConst>();
-        result += JSON_ARRAY_SIZE(a.size());
-        for (JsonVariantConst i : a) result += measure(i);
-      } else if (v.is<JsonObject>() || v.is<JsonObjectConst>()) {
-        JsonObjectConst o = v.as<JsonObjectConst>();
-        result += JSON_OBJECT_SIZE(o.size());
-        for (JsonPairConst kv : o)
-          result += JSON_STRING_SIZE(strlen(kv.key().c_str())) + 1 +
-                    measure(kv.value());
-      } else if (v.is<const char *>()) {
-        const char *c = v.as<const char *>();
-        result += JSON_STRING_SIZE(strlen(c)) + 1;
-      }
-      return result;
-    }*/
-
-    /*void checkSetResult(esp_err_t err, JsonDocument **result) {
-      if (err == ESP_OK)
-        return;
-      JsonDocument *doc = *result;
-      if (!doc)
-        doc = *result = new JsonDocument();
-      JsonObject root = doc->to<JsonObject>();
-      root["error"] = err;
-    }*/
-
     void to(JsonObject target, const char *key, const float value) {
       if (isnan(value))
         return;
@@ -216,6 +189,93 @@ namespace esp32m {
       l->logger().logf(log::Level::Debug, "%s: %s", msg, data.c_str());
       /*if (data)
         free(data);*/
+    }
+
+    void saveToFile(const char *path, JsonVariantConst v) {
+      if (!path || !*path) {
+        logw("saveToFile: empty path");
+        return;
+      }
+      FILE *f = fopen(path, "wb");
+      if (!f) {
+        logw("saveToFile: failed to open %s: %s", path, strerror(errno));
+        return;
+      }
+
+      std::string data;
+      serializeJson(v, data);
+
+      if (!data.empty()) {
+        auto written = fwrite(data.data(), 1, data.size(), f);
+        if (written != data.size())
+          logw("saveToFile: short write to %s: %d/%d", path, (int)written,
+               (int)data.size());
+      }
+
+      if (fclose(f) != 0)
+        logw("saveToFile: failed to close %s: %s", path, strerror(errno));
+    }
+
+    std::unique_ptr<JsonDocument> loadFromFile(const char *path) {
+      if (!path || !*path) {
+        logw("loadFromFile: empty path");
+        return nullptr;
+      }
+      FILE *f = fopen(path, "rb");
+      if (!f) {
+        logw("loadFromFile: failed to open %s: %s", path, strerror(errno));
+        return nullptr;
+      }
+
+      if (fseek(f, 0, SEEK_END) != 0) {
+        logw("loadFromFile: fseek failed for %s: %s", path, strerror(errno));
+        fclose(f);
+        return nullptr;
+      }
+      long size = ftell(f);
+      if (size < 0) {
+        logw("loadFromFile: ftell failed for %s: %s", path, strerror(errno));
+        fclose(f);
+        return nullptr;
+      }
+      if (fseek(f, 0, SEEK_SET) != 0) {
+        logw("loadFromFile: fseek(set) failed for %s: %s", path,
+             strerror(errno));
+        fclose(f);
+        return nullptr;
+      }
+      if (size == 0) {
+        fclose(f);
+        return nullptr;
+      }
+
+      // +1 just to allow optional NUL-termination for debugging/logging.
+      size_t len = (size_t)size;
+      char *buf = (char *)heap_caps_malloc(len + 1, MALLOC_CAP_8BIT);
+      if (!buf) {
+        logw("loadFromFile: OOM reading %s (%d bytes)", path, (int)len);
+        fclose(f);
+        return nullptr;
+      }
+
+      size_t read = fread(buf, 1, len, f);
+      fclose(f);
+      if (read != len) {
+        logw("loadFromFile: short read from %s: %d/%d", path, (int)read,
+             (int)len);
+        free(buf);
+        return nullptr;
+      }
+      buf[len] = 0;
+
+      DeserializationError err;
+      JsonDocument *doc = parse(buf, (int)len, &err);
+      free(buf);
+      if (!doc) {
+        logw("loadFromFile: JSON parse error %s in %s", err.c_str(), path);
+        return nullptr;
+      }
+      return std::unique_ptr<JsonDocument>(doc);
     }
 
   }  // namespace json

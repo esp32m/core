@@ -3,7 +3,6 @@
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -43,10 +42,8 @@ namespace esp32m {
       std::vector<ui::Transport*> snapshot;
       snapshot.reserve(_transports.size());
       for (auto& t : _transports) snapshot.push_back(t.get());
-      _transportsView.store(
-          std::make_shared<const std::vector<ui::Transport*> >(
-              std::move(snapshot)),
-          std::memory_order_release);
+        _transportsView = std::make_shared<const std::vector<ui::Transport*> >(
+          std::move(snapshot));
     }
 
     std::vector<std::unique_ptr<ui::Asset> >& assets() {
@@ -102,17 +99,19 @@ namespace esp32m {
 
    private:
     Ui() {
-      _transportsView.store(
-          std::make_shared<const std::vector<ui::Transport*> >(),
-          std::memory_order_release);
+      _transportsView = std::make_shared<const std::vector<ui::Transport*> >();
+    }
+
+    std::shared_ptr<const std::vector<ui::Transport*> > transportsView() const {
+      std::lock_guard<std::mutex> guard(_transportsMutex);
+      return _transportsView;
     }
 
     mutable std::mutex _transportsMutex;
     ui::Auth _auth;
     TaskHandle_t _task = nullptr;
     std::vector<std::unique_ptr<ui::Transport> > _transports;
-    std::atomic<std::shared_ptr<const std::vector<ui::Transport*> > >
-        _transportsView;
+    std::shared_ptr<const std::vector<ui::Transport*> > _transportsView;
     std::vector<std::unique_ptr<ui::Asset> > _assets;
     void run();
     void notifyIncoming() {

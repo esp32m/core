@@ -1,16 +1,16 @@
 import { Table, TableRow, TableCell, TableBody } from '@mui/material';
 import { useTranslation } from '@ts-libs/ui-i18n';
 
-interface INameValue {
+export type TNameValue = {
   name: any;
   value: any;
 }
 
-interface IProps {
-  list: Array<INameValue | Array<any>>;
+type TProps = {
+  list: Array<TNameValue | Array<any>>;
 }
 
-export const NameValueList = ({ list }: IProps) => {
+export const NameValueList = ({ list }: TProps) => {
   const { t } = useTranslation();
   const rows = list.map((row, i) => {
     let name, value;

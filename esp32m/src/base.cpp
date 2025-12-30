@@ -4,9 +4,9 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <math.h>
 #include <cstdarg>
 #include <cstdio>
-#include <math.h>
 #include <map>
 
 #define NOP() asm volatile("nop")
@@ -58,6 +58,31 @@ namespace esp32m {
     char* buf = (char*)calloc(l, 1);
     snprintf(buf, l, "m/%s", name);
     return buf;
+  }
+
+  void hex_encode(char* dst, size_t dst_len, const uint8_t* src,
+                  size_t src_len) {
+    static const char* hex = "0123456789abcdef";
+    // dst_len must be >= (src_len*2 + 1)
+    size_t j = 0;
+    for (size_t i = 0; i < src_len && (j + 2) < dst_len; i++) {
+      dst[j++] = hex[(src[i] >> 4) & 0xF];
+      dst[j++] = hex[(src[i] >> 0) & 0xF];
+    }
+    if (j < dst_len)
+      dst[j] = '\0';
+  }
+
+  std::string hex_encode(const uint8_t* src, size_t src_len) {
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    out.reserve(src_len * 2);
+    for (size_t i = 0; i < src_len; i++) {
+      const uint8_t b = src[i];
+      out.push_back(hex[(b >> 4) & 0x0F]);
+      out.push_back(hex[(b >> 0) & 0x0F]);
+    }
+    return out;
   }
 
   bool strEndsWith(const char* str, const char* suffix) {

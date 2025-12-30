@@ -205,7 +205,7 @@ namespace esp32m {
       return;
     }
     Response* r;
-    auto transports = _transportsView.load(std::memory_order_acquire);
+    auto transports = transportsView();
     for (auto* transport : *transports)
       if (Response::is(ev, transport->name(), &r)) {
         ui::Rb* resp = (ui::Rb*)r;
@@ -222,17 +222,17 @@ namespace esp32m {
   }
 
   void Ui::broadcast(const char* text) {
-    auto transports = _transportsView.load(std::memory_order_acquire);
+    auto transports = transportsView();
     for (auto* transport : *transports) transport->broadcast(text);
   }
 
   void Ui::run() {
     esp_task_wdt_add(NULL);
-    auto transports = _transportsView.load(std::memory_order_acquire);
+    auto transports = transportsView();
     for (auto* transport : *transports) transport->init(this);
     for (;;) {
       esp_task_wdt_reset();
-      transports = _transportsView.load(std::memory_order_acquire);
+      transports = transportsView();
       for (auto* transport : *transports) transport->process();
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
     }
