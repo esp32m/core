@@ -12,6 +12,7 @@
 #include <mdns.h>
 #include <algorithm>
 #include <vector>
+#include <cstring>
 #include "sdkconfig.h"
 
 #define HTTPD_401 "401 UNAUTHORIZED" /*!< HTTP Response 401 */
@@ -76,17 +77,28 @@ namespace esp32m {
 
     void closeFn(httpd_handle_t hd, int sockfd) {
       Httpd* httpd = (Httpd*)httpd_get_global_user_ctx(hd);
+      httpd->wsSessionClosed(sockfd);
       httpd->sessionClosed(sockfd);
       close(sockfd);
     }
 
+    static inline bool isWsPath(const char* uri) {
+      return uri && !strncmp(uri, "/ws", 3);
+    }
+
     bool uriMatcher(const char* reference_uri, const char* uri_to_match,
                     size_t match_upto) {
-      bool isWsRequest = !strcmp(uri_to_match, UriWs);
-      if (!strcmp(reference_uri, UriWs))
-        return isWsRequest;
+      (void)match_upto;
+      const bool isWsRequest = isWsPath(uri_to_match);
+
+      // Specific websocket endpoints (e.g. /ws and /ws/uart)
+      if (isWsPath(reference_uri))
+        return uri_to_match && !strcmp(reference_uri, uri_to_match);
+
+      // Root HTTP handler: match anything that's not under /ws
       if (!strcmp(reference_uri, UriRoot))
         return !isWsRequest;
+
       logw("no handler for: %s, match: %s, size: %d", reference_uri,
            uri_to_match, match_upto);
       return false;
@@ -104,6 +116,78 @@ namespace esp32m {
         return ESP_FAIL;
       }
       return httpd->incomingWs(req);
+    }
+
+    esp_err_t Httpd::wsHandlerCustom(httpd_req_t* req) {
+      Httpd* httpd = nullptr;
+      for (Httpd* i : _httpdServers)
+        if (i->_server == req->handle) {
+          httpd = i;
+          break;
+        }
+      if (!httpd) {
+        logw("no user_ctx: %s %d", req->uri, req->handle);
+        return ESP_FAIL;
+      }
+
+      const int fd = httpd_req_to_sockfd(req);
+
+      // Enforce the same auth gate as /ws on the websocket handshake.
+      if (req->method == HTTP_GET) {
+        bool accessGranted = false;
+        ESP_CHECK_RETURN(httpd->authenticate(req, accessGranted));
+        if (!accessGranted)
+          return ESP_OK;
+        // Let the custom handler decide whether to accept or reject.
+      }
+
+      // On handshake we can reliably route by URI and remember the handler.
+      if (req->method == HTTP_GET) {
+        for (auto* h : httpd->_wsHandlers) {
+          if (h && h->uri() && req->uri[0] && !strcmp(h->uri(), req->uri)) {
+            const esp_err_t err = h->handle(req);
+            if (err == ESP_OK) {
+              std::lock_guard<std::mutex> guard(httpd->_wsSessionMutex);
+              httpd->_wsSessions[fd] = h;
+            }
+            return err;
+          }
+        }
+        logw("no ws handler for: %s", req->uri[0] ? req->uri : "(empty)");
+        return ESP_ERR_NOT_FOUND;
+      }
+
+      // For data frames, route by sockfd (req->uri may be empty/unstable).
+      {
+        std::lock_guard<std::mutex> guard(httpd->_wsSessionMutex);
+        auto it = httpd->_wsSessions.find(fd);
+        if (it != httpd->_wsSessions.end() && it->second) {
+          return it->second->handle(req);
+        }
+      }
+
+      // Fallback: try URI match if available.
+      for (auto* h : httpd->_wsHandlers) {
+        if (h && h->uri() && req->uri[0] && !strcmp(h->uri(), req->uri)) {
+          return h->handle(req);
+        }
+      }
+      logw("no ws handler for fd=%d uri=%s", fd, req->uri[0] ? req->uri : "(empty)");
+      return ESP_ERR_NOT_FOUND;
+    }
+
+    void Httpd::wsSessionClosed(int sockfd) {
+      IWSHandler* handler = nullptr;
+      {
+        std::lock_guard<std::mutex> guard(_wsSessionMutex);
+        auto it = _wsSessions.find(sockfd);
+        if (it != _wsSessions.end()) {
+          handler = it->second;
+          _wsSessions.erase(it);
+        }
+      }
+      if (handler)
+        handler->sessionClosed(sockfd);
     }
 
     esp_err_t httpHandler(httpd_req_t* req) {
@@ -175,6 +259,11 @@ namespace esp32m {
       net::Mdns::instance().set(mdns);
     }
 
+    Httpd *Httpd::instance() {
+      static Httpd *i = new Httpd();
+      return i;
+    }
+
     Httpd::~Httpd() {
       _httpdServers.erase(
           std::find(_httpdServers.begin(), _httpdServers.end(), this));
@@ -197,7 +286,61 @@ namespace esp32m {
         uh.is_websocket = false;
         uh.handler = httpHandler;
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
+
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+        // Register additional websocket endpoints provided by modules.
+        for (auto* e : _wsHandlers) {
+          if (!e)
+            continue;
+          httpd_uri_t wh = {.uri = e->uri(),
+                            .method = HTTP_GET,
+                            .handler = Httpd::wsHandlerCustom,
+                            .user_ctx = this,
+                            .is_websocket = true,
+                            .handle_ws_control_frames = false,
+                            .supported_subprotocol = 0};
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              httpd_register_uri_handler(_server, &wh));
+        }
+#endif
       }
+    }
+
+    esp_err_t Httpd::addWsHandler(IWSHandler& handler) {
+#ifndef CONFIG_HTTPD_WS_SUPPORT
+      (void)handler;
+      return ESP_ERR_NOT_SUPPORTED;
+#else
+      const char* uri = handler.uri();
+      if (!uri || !*uri)
+        return ESP_ERR_INVALID_ARG;
+      if (!isWsPath(uri))
+        return ESP_ERR_INVALID_ARG;
+      if (!strcmp(uri, UriWs))
+        return ESP_ERR_INVALID_ARG;
+
+      for (auto* e : _wsHandlers)
+        if (e && e->uri() && !strcmp(e->uri(), uri))
+          return ESP_ERR_INVALID_STATE;
+
+      _wsHandlers.push_back(&handler);
+
+      // If server is already running, register immediately.
+      if (_server) {
+        auto* e = _wsHandlers.back();
+        if (!e)
+          return ESP_ERR_INVALID_STATE;
+        httpd_uri_t wh = {.uri = e->uri(),
+                          .method = HTTP_GET,
+                          .handler = Httpd::wsHandlerCustom,
+                          .user_ctx = this,
+                          .is_websocket = true,
+                          .handle_ws_control_frames = false,
+                          .supported_subprotocol = 0};
+        return httpd_register_uri_handler(_server, &wh);
+      }
+      return ESP_OK;
+#endif
     }
 
     esp_err_t Httpd::incomingReq(httpd_req_t* req) {

@@ -24,6 +24,6 @@ extern "C" void app_main()
   net::useOlimexEthernet();
   net::useInterfaces();
   auto &ui = Ui::instance();
-  ui.addTransport(new ui::Httpd());
+  ui.addTransport(ui::Httpd::instance());
   initUi(&ui);
 }

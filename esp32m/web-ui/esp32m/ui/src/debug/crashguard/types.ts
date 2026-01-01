@@ -77,10 +77,10 @@ export type TInfo = {
     boot: number;
     lastSwitch: number
     ota: Array<TOtaInfo>;
-    coredump: {
+    coredump?: {
         uid: string;
         slot: number;
     }
-    last: TRunState;
-    history: Array<TRunState>;
+    last?: TRunState;
+    history?: Array<TRunState>;
 }

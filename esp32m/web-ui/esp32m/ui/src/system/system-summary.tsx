@@ -1,7 +1,7 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { Name, THardwareState, TAppState, ResetReasons } from './types';
+import { Name, THardwareState, TAppState, ResetReason } from './types';
 import { NameValueList } from '../app';
 import { useTimeTranslation } from '@ts-libs/ui-i18n';
 
@@ -26,7 +26,7 @@ export const SystemSummary = () => {
           'CPU temperature',
           Math.round(chip.temperature) + ' \u2103',
         ]);
-      if (chip.rr) list.push(['Reset reason', ResetReasons[chip.rr]]);
+      if (chip.rr) list.push(['Reset reason', ResetReason[chip.rr] || chip.rr]);
     }
     if (heap && heap.size && heap.free) {
       list.push([

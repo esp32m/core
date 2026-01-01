@@ -3,6 +3,8 @@ version: 0.5.0
 url: https://esp32m.com
 dependencies:
   idf: ">=5.5"
+  igrr/rfc2217-server:
+    version: "^0.4.0"
   espressif/esp-modbus:
     public: true
     version: "^2.1.1"

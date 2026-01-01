@@ -1,11 +1,13 @@
 import { Checkpoint, Name, OtaRole, OtaState, TInfo, TOtaInfo, TOtaState, TRunState, TState } from './types';
-import { useModuleInfo, useModuleState } from '../..';
+import { useModuleApi, useModuleInfo, useModuleState } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
-import { Tabs, Tab, Box, Link, Accordion, AccordionDetails, AccordionSummary, Divider, Typography, Pagination } from '@mui/material';
+import { Tabs, Tab, Box, Link, Accordion, AccordionDetails, AccordionSummary, Divider, Typography, Pagination, styled, Grid, Button } from '@mui/material';
 import { useState } from 'react';
 import { ExpandMore } from '@mui/icons-material';
 import { ResetReason } from '../../system/types';
+import { MessageBox, useMessageBox } from '@ts-libs/ui-base';
+import { useTranslation } from '@ts-libs/ui-i18n';
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -112,7 +114,7 @@ const OtaTabs = ({ info, state }: { info: TInfo, state: TState }) => {
                     }}
                     sx={{ width: '100%' }}
                 >
-                    <Tabs onChange={handleChange} aria-label="OTA partitions">
+                    <Tabs onChange={handleChange} aria-label="OTA partitions" value={activeTab}>
                         {tabs}
                     </Tabs>
                 </Box>
@@ -177,6 +179,28 @@ const LastRunPanel = ({ run }: { run: TRunState }) => {
     </Accordion>;
 }
 
+const ButtonBar = styled(Grid)({ marginTop: 24 });
+
+const SwitchPartitions = () => {
+    const { t } = useTranslation();
+    const api = useModuleApi(Name);
+    const requestSwitchOTA = () =>
+        api.request('switchOta').then(() => window.location.reload());
+    const { messageBoxProps, open } = useMessageBox({
+        restart: {
+            title: 'Do you really want to switch OTA partitions? The system will restart.',
+            actions: [{ name: 'yes', onClick: requestSwitchOTA }, 'no'],
+        },
+    });
+    return <ButtonBar container spacing={2}>
+        <Grid>
+            <Button onClick={() => open('restart')}>{t('switch OTA partitions')}</Button>
+        </Grid>
+        <MessageBox {...messageBoxProps} />
+    </ButtonBar>
+
+}
+
 export const content = () => {
     const [info] = useModuleInfo<TInfo>(Name);
     const state = useModuleState<TState>(Name);
@@ -195,9 +219,10 @@ export const content = () => {
     return (
         <CardBox title={"Crash Guard"}>
             <NameValueList list={list} />
-            <LastRunPanel run={info.last} />
-            <RunHistory runs={info.history} />
+            {info.last && <LastRunPanel run={info.last} />}
+            {info.history?.length && <RunHistory runs={info.history} />}
             <OtaTabs info={info} state={state} />
+            {info.ota?.[slot]?.role == OtaRole.Fallback && <SwitchPartitions />}
         </CardBox>
     );
 };

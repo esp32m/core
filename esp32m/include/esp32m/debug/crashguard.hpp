@@ -84,7 +84,7 @@ namespace esp32m {
 
       esp_err_t detect() {
         memset(&_info, 0, sizeof(_info));
-
+#if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
         const esp_partition_t* part = esp_partition_find_first(
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
             NULL /* label */);
@@ -111,13 +111,13 @@ namespace esp32m {
         if (rel + size > part->size)
           return ESP_ERR_INVALID_SIZE;
 
-#if CONFIG_ESP_COREDUMP_CHECKSUM_SHA256
+#  if CONFIG_ESP_COREDUMP_CHECKSUM_SHA256
         const size_t sum_len = 32;
-#elif CONFIG_ESP_COREDUMP_CHECKSUM_CRC32
+#  elif CONFIG_ESP_COREDUMP_CHECKSUM_CRC32
         const size_t sum_len = 4;
-#else
+#  else
         const size_t sum_len = 0;
-#endif
+#  endif
         if (sum_len > 0) {
           uint8_t sum[sum_len];
           const size_t rel_off = (addr - part->address);
@@ -131,6 +131,9 @@ namespace esp32m {
         _info.size = size;
         logI("found at 0x%zx, size %zu, UID %s", addr, size, _uid.c_str());
         return ESP_OK;
+#else
+        return ESP_ERR_NOT_SUPPORTED;
+#endif  // CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
       }
     };
 
@@ -157,8 +160,9 @@ namespace esp32m {
         uint32_t bootCount = 0;
         uint32_t resetReason = 0;
         uint32_t uptimeMs = 0;
-        // Earliest known wall-clock timestamp for this run (seconds since epoch).
-        // 0 means unknown/unset (e.g., time not synchronized during the run).
+        // Earliest known wall-clock timestamp for this run (seconds since
+        // epoch). 0 means unknown/unset (e.g., time not synchronized during the
+        // run).
         int64_t ts = 0;
         Checkpoint checkpoint = Checkpoint::Boot;
         bool unexpectedReset = false;
@@ -203,7 +207,8 @@ namespace esp32m {
           if (json::from(node["slot"], slot, &changed))
             runningSlot = (int8_t)slot;
           else {
-            // Backward compat: older persisted schema used "part":"ota0"/"ota1".
+            // Backward compat: older persisted schema used
+            // "part":"ota0"/"ota1".
             std::string part;
             if (json::from(node["part"], part, &changed)) {
               if (part == "ota0")
@@ -244,7 +249,8 @@ namespace esp32m {
         uint32_t lastGoodUptimeMs = 0;
 
         // Last crash signature attributed to this slot (e.g. coredump UID, or
-        // reset reason + checkpoint). Used to amplify repeated identical crashes.
+        // reset reason + checkpoint). Used to amplify repeated identical
+        // crashes.
         std::string lastCrashSig;
 
         void toJson(JsonObject node) const {

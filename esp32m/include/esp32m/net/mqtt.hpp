@@ -192,7 +192,7 @@ namespace esp32m {
       }
       bool publish(const char *topic, const char *message, int qos = 0,
                    bool retain = false);
-      bool enqueue(const char *topic, const char *message, int qos = 0,
+      bool enqueue(const char *topic, const char *message, int qos = 1,
                    bool retain = false, bool store = false);
       Subscription *subscribe(const char *topic, int qos = 0);
       Subscription *subscribe(const char *topic, HandlerFunction handler,

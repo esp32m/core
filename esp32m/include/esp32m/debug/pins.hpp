@@ -11,18 +11,18 @@ namespace esp32m {
 
     class Pins : public AppObject {
      public:
-      Pins(const Pins &) = delete;
-      const char *name() const override {
+      Pins(const Pins&) = delete;
+      const char* name() const override {
         return "debug-pins";
       }
 
-      static Pins &instance() {
+      static Pins& instance() {
         static Pins i;
         return i;
       }
 
      protected:
-      bool handleRequest(Request &req) override {
+      bool handleRequest(Request& req) override {
         if (AppObject::handleRequest(req))
           return true;
         if (req.is("enum")) {
@@ -38,7 +38,7 @@ namespace esp32m {
           }*/
           auto doc = new JsonDocument(); /* size */
           auto root = doc->to<JsonObject>();
-          for (auto const &[name, pins] : providers) {
+          for (auto const& [name, pins] : providers) {
             auto p = root[pins->name()].to<JsonArray>();
             for (int i = 0; i < pins->count(); i++) {
               auto pin = pins->pin(i);
@@ -63,7 +63,7 @@ namespace esp32m {
         return false;
       }
       void setState(RequestContext& ctx) override {
-        auto args=ctx.data.as<JsonObjectConst>();
+        auto args = ctx.data.as<JsonObjectConst>();
         auto pin = toPin(args["pin"]);
         auto type = toFeatureType(args["feature"]);
         auto state = args["state"].as<JsonObjectConst>();
@@ -145,7 +145,7 @@ namespace esp32m {
           }
         }
       }
-      JsonDocument *getState(RequestContext &ctx) override {
+      JsonDocument* getState(RequestContext& ctx) override {
         auto pin = toPin(ctx.data["pin"]);
         auto type = toFeatureType(ctx.data["feature"]);
         if (!pin || (type != pin::Type::Invalid &&
@@ -259,9 +259,9 @@ namespace esp32m {
       }
 
      private:
-      IPin *toPin(JsonArrayConst key) {
+      IPin* toPin(JsonArrayConst key) {
         if (key && key.size() == 2)
-          return pins::pin(key[0].as<const char *>(), key[1].as<int>());
+          return pins::pin(key[0].as<const char*>(), key[1].as<int>());
         return nullptr;
       }
       pin::Type toFeatureType(JsonVariantConst v) {
@@ -275,9 +275,7 @@ namespace esp32m {
       Pins() {}
     };
 
-    static Pins *usePins() {
-      return &Pins::instance();
-    }
+    Pins* usePins();
 
   }  // namespace debug
 }  // namespace esp32m

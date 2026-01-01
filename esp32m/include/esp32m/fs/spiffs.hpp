@@ -25,7 +25,7 @@ namespace esp32m {
       const char *_label = nullptr;
       bool _inited = false;
       Spiffs();
-      bool init();
+      esp_err_t init();
     };
 
     Spiffs &useSpiffs();

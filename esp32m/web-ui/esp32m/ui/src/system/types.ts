@@ -31,15 +31,15 @@ export const enum ChipFeatures {
 export enum ResetReason {
   Unknown = 1,
   PowerOn,
-  Ext,
-  Sw,
+  ExtPin,
+  Software,
   Panic,
   IntWdt,
   TaskWdt,
-  Wdt,
+  OtherWdt,
   DeepSleep,
   Brownout,
-  Sdio,
+  SDIO,
 }
 
 export type TChipState = {
@@ -113,16 +113,3 @@ export const Features: { [key: number]: string } = {
   [ChipFeatures.Ieee802154]: 'IEEE 802.15.4',
   [ChipFeatures.EmbPsram]: 'EMB_PSRAM',
 };
-export const ResetReasons = [
-  '',
-  'PowerOn',
-  'ExtPin',
-  'Software',
-  'Panic',
-  'IntWdt',
-  'TaskWdt',
-  'OtherWdt',
-  'DeepSleep',
-  'BrownOut',
-  'SDIO',
-];

@@ -154,7 +154,7 @@ export const useModuleApi = (target: string) => {
   const [inProgress, setInProgress] = useState(0);
   const enter = () => setInProgress((v) => v + 1);
   const leave = () => setInProgress((v) => v - 1);
-const request = useCallback(async <T extends TJsonValue>(name: string, data?: T) => {
+  const request = useCallback(async <T extends TJsonValue>(name: string, data?: T) => {
     try {
       enter()
       return await api.request(target, name, data);

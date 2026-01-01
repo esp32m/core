@@ -38,6 +38,7 @@
     "@ts-libs/ui-i18n": "*",
     "@ts-libs/ui-navbar": "*",
     "@ts-libs/ui-snack": "*",
+    "@xterm/xterm": "^6.0.0",
     "crc": "^4.3.2",
     "deep-object-diff": "^1.1.9",
     "formik": "^2.4.9",

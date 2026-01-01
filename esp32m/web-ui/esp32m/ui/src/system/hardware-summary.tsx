@@ -1,7 +1,7 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { Name, THardwareState, Models, Features, ResetReasons } from './types';
+import { Name, THardwareState, Models, Features, ResetReason } from './types';
 import { flashMode } from './utils';
 import { NameValueList } from '../app';
 import { useTranslation } from '@ts-libs/ui-i18n';
@@ -30,7 +30,7 @@ export const HardwareSummary = () => {
       list.push(['CPU temperature', Math.round(chip.temperature) + ' \u2103']);
     if (chip.freq || chip.efreq)
       list.push(['CPU Frequency', `${chip.freq} MHz`]);
-    if (chip.rr) list.push(['Reset reason', ResetReasons[chip.rr]]);
+    if (chip.rr) list.push(['Reset reason', ResetReason[chip.rr] || chip.rr]);
   }
   if (flash && flash.size) {
     list.push([

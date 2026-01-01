@@ -36,7 +36,7 @@ extern "C" void app_main() {
   // Start embedded HTTP server for UI. Just type http://IP_addres_of_your_ESP32
   // in your web browser to open the UI
   auto &ui = Ui::instance();
-  ui.addTransport(new ui::Httpd());
+  ui.addTransport(ui::Httpd::instance());
   initUi(&ui);
   // Add more devices/modules here:
   // dev::useBme280();

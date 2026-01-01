@@ -442,19 +442,19 @@ namespace esp32m {
         if (bits & NetifInitFailed)
           return s_netifInitResult;
 
-        // Before crashing, re-check: the stack might have been initialized by
+        // Before giving up, re-check: the stack might have been initialized by
         // someone else without going through esp32m::net::useNetif().
         if (detectNetifInitedExternally()) {
           xEventGroupSetBits(eg, NetifInitedExternally | NetifInitDone);
           s_netifInitResult = ESP_OK;
           return ESP_OK;
         }
+
         loge(
             "Timed out waiting for TCP/IP init. "
             "Call esp32m::net::useNetif() from the main task (app_main) "
             "before starting background tasks that use networking.");
-        abort();
-        return ESP_FAIL;
+        return ESP_ERR_TIMEOUT;
       }
 
       // Main task: perform the actual init once, and wake any waiters.

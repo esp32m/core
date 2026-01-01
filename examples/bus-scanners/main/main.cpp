@@ -31,6 +31,6 @@ extern "C" void app_main() {
   bus::scanner::useI2C();
   bus::scanner::useModbus();
   auto &ui = Ui::instance();
-  ui.addTransport(new ui::Httpd());
+  ui.addTransport(ui::Httpd::instance());
   initUi(&ui);
 }
