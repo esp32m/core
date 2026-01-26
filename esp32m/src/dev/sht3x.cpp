@@ -172,8 +172,8 @@ namespace esp32m {
       bool changed = false;
       _temperature.set(t, &changed);
       _humidity.set(h, &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_temperature.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);*/
       _stamp = millis();
       return true;
     }

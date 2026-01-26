@@ -10,12 +10,13 @@ namespace esp32m {
     class Sysled {
      public:
       Sysled();
-      Sysled(io::IPin *pin);
+      Sysled(io::IPin *pin, bool activeLow = false);
       Sysled(const Sysled &) = delete;
 
      private:
       io::IPin *_pin;
       TaskHandle_t _task = nullptr;
+      bool _activeLow = false;
       void init();
       void run();
       void blink(int count);

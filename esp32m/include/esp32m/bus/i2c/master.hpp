@@ -31,6 +31,10 @@ namespace esp32m {
         return i2c_master_probe(_handle, address, xfer_timeout_ms);
       }
 
+      esp_err_t reset() {
+        return i2c_master_bus_reset(_handle);
+      }
+
       esp_err_t find(uint16_t address, MasterDev** dev = nullptr);
 
       static MasterBus* getDefault() {
@@ -82,7 +86,7 @@ namespace esp32m {
         if (_handle) {
           std::lock_guard lock(_bus->_devicesMutex);
           _bus->_devices.erase(_handle);
-//          logw("removing I2C device %x", _config.device_address);
+          //          logw("removing I2C device %x", _config.device_address);
           int attempts = 5;
           esp_err_t res;
           while (attempts-- > 0) {
@@ -108,6 +112,12 @@ namespace esp32m {
       void setTimeout(int ms) {
         _timeout = ms;
       }
+      int getRetries() const {
+        return _retries;
+      }
+      void setRetries(int retries) {
+        _retries = retries;
+      }
       Endian getEndianness() const {
         return _endianness;
       }
@@ -122,32 +132,35 @@ namespace esp32m {
                      size_t in_size)
 
       {
-        esp_err_t res;
-        if (out_data && out_size)
-          res = i2c_master_transmit_receive(_handle, (const uint8_t*)out_data,
-                                            out_size, (uint8_t*)in_data,
-                                            in_size, _timeout);
-        else
-          res =
-              i2c_master_receive(_handle, (uint8_t*)in_data, in_size, _timeout);
+        esp_err_t res = withRetries([&]() {
+          if (out_data && out_size)
+            return i2c_master_transmit_receive(
+                _handle, (const uint8_t*)out_data, out_size, (uint8_t*)in_data,
+                in_size, _timeout);
+          return i2c_master_receive(_handle, (uint8_t*)in_data, in_size,
+                                    _timeout);
+        });
         return checkComm(res);
       }
       esp_err_t write(const void* out_reg, size_t out_reg_size,
                       const void* out_data, size_t out_size) {
-        esp_err_t res = ESP_ERR_INVALID_ARG;
-        if (out_reg && out_reg_size && out_data && out_size) {
-          i2c_master_transmit_multi_buffer_info_t buf[2];
-          buf[0].write_buffer = (uint8_t*)out_reg;
-          buf[0].buffer_size = out_reg_size;
-          buf[1].write_buffer = (uint8_t*)out_data;
-          buf[1].buffer_size = out_size;
-          res = i2c_master_multi_buffer_transmit(_handle, buf, 2, _timeout);
-        } else if (out_reg && out_reg_size)
-          res = i2c_master_transmit(_handle, (const uint8_t*)out_reg,
-                                    out_reg_size, _timeout);
-        else if (out_data && out_size)
-          res = i2c_master_transmit(_handle, (const uint8_t*)out_data, out_size,
-                                    _timeout);
+        esp_err_t res = withRetries([&]() {
+          esp_err_t local = ESP_ERR_INVALID_ARG;
+          if (out_reg && out_reg_size && out_data && out_size) {
+            i2c_master_transmit_multi_buffer_info_t buf[2];
+            buf[0].write_buffer = (uint8_t*)out_reg;
+            buf[0].buffer_size = out_reg_size;
+            buf[1].write_buffer = (uint8_t*)out_data;
+            buf[1].buffer_size = out_size;
+            local = i2c_master_multi_buffer_transmit(_handle, buf, 2, _timeout);
+          } else if (out_reg && out_reg_size)
+            local = i2c_master_transmit(_handle, (const uint8_t*)out_reg,
+                                        out_reg_size, _timeout);
+          else if (out_data && out_size)
+            local = i2c_master_transmit(_handle, (const uint8_t*)out_data,
+                                        out_size, _timeout);
+          return local;
+        });
         return checkComm(res);
       }
       inline esp_err_t read(uint8_t reg, void* in_data, size_t in_size) {
@@ -205,6 +218,7 @@ namespace esp32m {
       MasterBus* _bus;
       std::string _name;
       int _timeout = 30;
+      int _retries = 3;
       Endian _endianness = Endian::Big;
       const i2c_device_config_t _config;
       i2c_master_dev_handle_t _handle;
@@ -227,6 +241,24 @@ namespace esp32m {
           _commFailCount = 0;
         } else
           _commFailCount++;
+        return res;
+      }
+
+      template <class F>
+      esp_err_t withRetries(F&& fn) {
+        int attempts_left = _retries + 1;
+        esp_err_t res = ESP_FAIL;
+        while (attempts_left-- > 0) {
+          res = fn();
+          if (res == ESP_OK)
+            return ESP_OK;
+          if (res == ESP_ERR_TIMEOUT && attempts_left > 0) {
+            ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_bus_reset(_bus->_handle));
+            delay(2);
+            continue;
+          }
+          break;
+        }
         return res;
       }
     };

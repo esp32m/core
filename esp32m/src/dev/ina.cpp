@@ -434,15 +434,10 @@ namespace esp32m {
       arr.add(millis() - _stamp);
       arr.add(_i2c->address());
       arr.add(ina::type2name(type()));
-      float value;
-      getBusVolts(value);
-      arr.add(value);
-      getShuntVolts(value);
-      arr.add(value);
-      getAmps(value);
-      arr.add(value);
-      getWatts(value);
-      arr.add(value);
+      arr.add(_voltage.get());
+      arr.add(_shuntVolts);
+      arr.add(_current.get());
+      arr.add(_power.get());
       return doc;
     }
 
@@ -452,14 +447,14 @@ namespace esp32m {
       float value;
       ESP_CHECK_RETURN_BOOL(getBusVolts(value));
       _voltage.set(value, &changed);
-//      ESP_CHECK_RETURN_BOOL(getShuntVolts(value));
+      ESP_CHECK_RETURN_BOOL(getShuntVolts(_shuntVolts));
       ESP_CHECK_RETURN_BOOL(getAmps(value));
       _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getWatts(value));
       _power.set(value, &changed);
       _stamp = millis();
-      if (changed)
-        sensor::GroupChanged::publish(_voltage.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_voltage.group);*/
 
       return true;
     }

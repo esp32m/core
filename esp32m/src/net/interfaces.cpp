@@ -63,6 +63,8 @@ namespace esp32m {
     }
 
     void Interface::apply(ErrorList &errl) {
+      if (_role == Role::Default)
+        return;
       stopDhcp();
       for (auto i = 0; i < (int)ConfigItem::MAX; i++)
         apply((ConfigItem)i, errl);
@@ -70,8 +72,27 @@ namespace esp32m {
 
     void Interface::stopDhcp() {
       if (_handle) {
-        esp_netif_dhcpc_stop(_handle);
-        esp_netif_dhcps_stop(_handle);
+        // Stop only what we must, based on the configured role.
+        // In particular, do NOT stop the DHCP client for Role::DhcpClient.
+        // If we stop it here (during boot/config apply, while the netif is
+        // still down), ESP-IDF's default netif handlers will treat the
+        // interface as static on CONNECTED and may emit
+        // "esp_netif_handlers: invalid static ip", and DHCP won't start.
+        switch (_role) {
+          case Role::DhcpClient:
+            esp_netif_dhcps_stop(_handle);
+            break;
+          case Role::DhcpServer:
+            esp_netif_dhcpc_stop(_handle);
+            break;
+          case Role::Static:
+            esp_netif_dhcpc_stop(_handle);
+            esp_netif_dhcps_stop(_handle);
+            break;
+          case Role::Default:
+          default:
+            break;
+        }
       }
     }
 
@@ -95,7 +116,12 @@ namespace esp32m {
               break;
             case Role::DhcpClient:
               esp_netif_dhcps_stop(_handle);
-              esp_netif_dhcpc_start(_handle);
+              // Starting the DHCP client while the netif is still down can
+              // lead to hard-to-reproduce "connected but no IP" failures.
+              // Let the ESP-IDF default handlers start DHCP on CONNECTED, and
+              // only start it here when the interface is already up.
+              if (esp_netif_is_netif_up(_handle))
+                errl.check(esp_netif_dhcpc_start(_handle));
 #if CONFIG_LWIP_IPV6_DHCP6
               errl.check(dhcp6_enable_stateless(lwip_netif));
 #endif

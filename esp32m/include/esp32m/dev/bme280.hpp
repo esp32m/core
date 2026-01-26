@@ -134,7 +134,6 @@ namespace esp32m {
       ChipId _id = ChipId::Unknown;
       bool _inited = false;
       Settings _settings;
-      esp_err_t syncUnsafe(bool force = false);
       esp_err_t readCalibration();
       esp_err_t writeConfig();
       int32_t compTemperature(int32_t adcT, int32_t &fineT);

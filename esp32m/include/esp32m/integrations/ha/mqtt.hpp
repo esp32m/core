@@ -155,21 +155,35 @@ namespace esp32m {
 
         void checkInvalidConfigs() {
           auto& mqtt = net::Mqtt::instance();
-          std::lock_guard<std::mutex> lock(_publishedConfigsMutex);
-          if (!_checkInvalidConfigs)
-            return;
-          _checkInvalidConfigs = false;
-          for (auto it = _publishedConfigs.begin();
-               it != _publishedConfigs.end();) {
-            // logD("Config message: %s: %d", it->first.c_str(), it->second);
-            if (it->second == FlagConfigPublished) {
-              logD("Removing config message: %s", it->first.c_str());
-              mqtt.publish(it->first.c_str(), "", 1, true);
-              it = _publishedConfigs.erase(it);
-            } else {
-              ++it;
+            std::vector<std::string> toRemove;
+            {
+              std::lock_guard<std::mutex> lock(_publishedConfigsMutex);
+              if (!_checkInvalidConfigs)
+                return;
+              _checkInvalidConfigs = false;
+              for (auto it = _publishedConfigs.begin();
+                   it != _publishedConfigs.end();) {
+                // logD("Config message: %s: %d", it->first.c_str(), it->second);
+                if (it->second == FlagConfigPublished) {
+                toRemove.push_back(it->first);
+                ++it;
+                } else {
+                  ++it;
+                }
+              }
             }
-          }
+          for (auto const& topic : toRemove) {
+              esp_task_wdt_reset();
+              logD("Removing config message: %s", topic.c_str());
+            if (mqtt.publish(topic.c_str(), "", 1, true)) {
+              std::lock_guard<std::mutex> lock(_publishedConfigsMutex);
+              auto it = _publishedConfigs.find(topic);
+              if (it != _publishedConfigs.end() &&
+                  it->second == FlagConfigPublished)
+                _publishedConfigs.erase(it);
+            }
+              taskYIELD();
+            }
         }
 
         void describe() {
@@ -177,13 +191,16 @@ namespace esp32m {
           DescribeRequest req(nullptr);
           req.publish();
           for (auto const& [key, doc] : req.responses) {
+            esp_task_wdt_reset();
             auto data = doc->as<JsonVariantConst>();
             const char* id = data["id"] | key.c_str();
             publishConfig(id, data);
+            taskYIELD();
           }
           AllComponents components;
           for (auto component : components)
             if (!component->isDisabled()) {
+              esp_task_wdt_reset();
               auto id = component->uid();
               auto it = req.responses.find(id);
               if (it == req.responses.end()) {
@@ -193,6 +210,7 @@ namespace esp32m {
                 publishConfig(id.c_str(), data);
                 delete doc;
               }
+              taskYIELD();
             }
         }
 
@@ -222,6 +240,7 @@ namespace esp32m {
           auto reqData = reqDoc.to<JsonObject>();
           auto& mqtt = net::Mqtt::instance();
           for (auto const& [id, dev] : _devices) {
+            esp_task_wdt_reset();
             if (changedOnly && !dev->isStateChanged())
               continue;
             dev->resetStateChanged();
@@ -268,6 +287,7 @@ namespace esp32m {
             mqtt.publish(dev->stateTopic.c_str(), statePayload.c_str());
             /*if (jsonStatePayload)
               free(statePayload);*/
+            taskYIELD();
           }
         }
       };

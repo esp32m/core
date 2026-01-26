@@ -48,12 +48,12 @@ namespace esp32m {
       _frequency.precision = 2;
     }
 
-    float readFloat(uint16_t *ptr) {
+    float readFloat(uint16_t* ptr) {
       return (float)((ptr[0] << 16) | ptr[1]) / 100.0;
     }
 
     bool Dds238::initSensors() {
-      modbus::Master &mb = modbus::Master::instance();
+      modbus::Master& mb = modbus::Master::instance();
       if (mb.isRunning())
         ESP_ERROR_CHECK_WITHOUT_ABORT(mb.stop());
       if (!mb.isRunning())
@@ -61,8 +61,8 @@ namespace esp32m {
       return mb.isRunning();
     }
 
-    JsonDocument *Dds238::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(11) */
+    JsonDocument* Dds238::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(11) */
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_addr);
@@ -79,40 +79,46 @@ namespace esp32m {
     }
 
     bool Dds238::pollSensors() {
-      modbus::Master &mb = modbus::Master::instance();
-      if (!mb.isRunning())
-        return false;
-      uint16_t reg[0x18];
-      memset(reg, 0, sizeof(reg));
-      ESP_CHECK_RETURN_BOOL(
-          mb.request(_addr, modbus::Command::ReadHolding, 0, 0x18, &reg));
-      _te = readFloat(reg + 0x0);
-      _ee = readFloat(reg + 0x8);
-      _ie = readFloat(reg + 0xA);
-      _v = (float)reg[0xC] / 10;
-      _i = (float)reg[0xD] / 100;
-      _ap = (float)(int16_t)reg[0xE] / 1000;
-      _rap = (float)(int16_t)reg[0xF] / 1000;
-      _pf = (float)reg[0x10] / 1000;
-      _f = (float)reg[0x11] / 100;
-      _stamp = millis();
-
+      modbus::Master& mb = modbus::Master::instance();
+      bool ok = false;
+      if (mb.isRunning()) {
+        uint16_t reg[0x18];
+        memset(reg, 0, sizeof(reg));
+        ok = mb.request(_addr, modbus::Command::ReadHolding, 0, 0x18, &reg) ==
+             ESP_OK;
+        if (ok) {
+          _te = readFloat(reg + 0x0);
+          _ee = readFloat(reg + 0x8);
+          _ie = readFloat(reg + 0xA);
+          _v = (float)reg[0xC] / 10;
+          _i = (float)reg[0xD] / 100;
+          _ap = (float)(int16_t)reg[0xE] / 1000;
+          _rap = (float)(int16_t)reg[0xF] / 1000;
+          _pf = (float)reg[0x10] / 1000;
+          _f = (float)reg[0x11] / 100;
+          _stamp = millis();
+        }
+      }
+      if (!ok) {
+        _v = 0;
+        _i = 0;
+        _ap = 0;
+        _rap = 0;
+        _pf = 1;
+        _f = 0;
+      }
       bool changed = false;
       _energyExp.set(_ee, &changed);
       _energyImp.set(_ie, &changed);
       _voltage.set(_v, &changed);
       _current.set(_i, &changed);
       _powerActive.set(_ap, &changed);
-      _powerApparent.set(_ap/_pf, &changed);
+      _powerApparent.set(_ap / _pf, &changed);
       _powerReactive.set(_rap, &changed);
       _powerFactor.set(_pf, &changed);
       _frequency.set(_f, &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_energyExp.group);
-
-      return true;
+      return ok;
     }
-
 
     Dds238* useDds238(uint8_t addr) {
       return new Dds238(addr);

@@ -95,4 +95,5 @@ export type ApEntries = Array<TApEntry>;
 export type TWifiConfig = {
   txp: number;
   aps?: ApEntries;
+  xiaoRFExt?: boolean;
 };

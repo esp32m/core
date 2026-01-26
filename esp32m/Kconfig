@@ -163,8 +163,25 @@ menu "ESP32 Manager configuration"
 
     endmenu
 
+    choice ESP32M_BOARD_TYPE
+        bool "Board type"
+        default ESP32M_BOARD_TYPE_GENERIC
+        help
+            Specify board type.
+        config ESP32M_BOARD_TYPE_GENERIC
+            bool "Generic/custom ESP32 board"
+        config ESP32M_BOARD_TYPE_XIAO_ESP32C6
+            bool "SEEED STUDIO XIAO ESP32C6 board"
+    endchoice
+
+    config ESP32M_BOARD_TYPE
+        int
+        default 0 if ESP32M_BOARD_TYPE_GENERIC
+        default 1 if ESP32M_BOARD_TYPE_XIAO_ESP32C6
+        
     config ESP32M_CRASH_GUARD
         bool "Enable crash guard"
         default n
+
 
 endmenu

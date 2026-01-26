@@ -125,8 +125,8 @@ namespace esp32m {
       ESP_CHECK_RETURN_BOOL(getObjectTemperature(value));
       _objectTemperature.set(value, &changed);
       _stamp = millis();
-      if (changed)
-        sensor::GroupChanged::publish(_ambientTemperature.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_ambientTemperature.group);*/
       return true;
     }
     bool Mlx90614::initSensors() {

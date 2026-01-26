@@ -80,8 +80,8 @@ namespace esp32m {
       _potassium.set(values[6], &changed);
       _salinity.set(values[7], &changed);
       _tds.set(values[8], &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_temperature.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);*/
       return true;
     }
 

@@ -1,7 +1,6 @@
 import { configureStore, Selector, Store } from '@reduxjs/toolkit';
-import { isBrowser, isObject } from '@ts-libs/tools';
 import { getPlugins, pluginsObservable } from '@ts-libs/plugins';
-import { debounce } from '@ts-libs/tools';
+import { debounce, isBrowser, isObject } from '@ts-libs/tools';
 import deepEqual from 'fast-deep-equal';
 import {
   combineReducers,
@@ -22,8 +21,8 @@ import {
   REHYDRATE,
   Storage,
 } from 'redux-persist';
-import { AsyncNodeStorage } from './node/storage';
 import { Observable, timeout } from 'rxjs';
+import { AsyncNodeStorage } from './node/storage';
 import {
   IRedux,
   TObservableSelectorOptions,
@@ -60,7 +59,14 @@ function createDefaultStore<S extends { [key: string]: any }>(): [
       (isBrowser()
         ? // eslint-disable-next-line @typescript-eslint/no-var-requires
           require('redux-persist/lib/storage')?.default
-        : new AsyncNodeStorage('./'));
+        : new AsyncNodeStorage(
+            (() => {
+              // Keep @ts-libs/config out of browser bundles
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { getWorkdir } = require('@ts-libs/config');
+              return getWorkdir();
+            })()
+          ));
   }
   function addReducer(descr: Partial<TReducer>, defaultName?: string) {
     let { reducer } = descr;

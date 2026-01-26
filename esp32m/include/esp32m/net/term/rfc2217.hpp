@@ -1,11 +1,10 @@
 #pragma once
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
+#include <memory>
 
 #include "esp32m/app.hpp"
 
-#include <rfc2217_server.h>
+#include "esp32m/net/term/rfc2217_uart_server.hpp"
 
 namespace esp32m {
   namespace net {
@@ -25,27 +24,7 @@ namespace esp32m {
        private:
         RFC2217();
 
-        void run();
-
-        void *_server = nullptr;
-        SemaphoreHandle_t _clientConnected = nullptr;
-        SemaphoreHandle_t _clientDisconnected = nullptr;
-        bool _sessionActive = false;
-
-        void setupWatchdog();
-        static void feedWatchdog();
-
-        void handleClientConnected();
-        void handleClientDisconnected();
-        void handleDataReceived(const uint8_t *data, size_t len);
-        unsigned handleBaudrate(unsigned baudrate);
-        rfc2217_purge_t handlePurge(rfc2217_purge_t requested);
-
-        static void onClientConnected(void *ctx);
-        static void onClientDisconnected(void *ctx);
-        static void onDataReceived(void *ctx, const uint8_t *data, size_t len);
-        static unsigned onBaudrate(void *ctx, unsigned baudrate);
-        static rfc2217_purge_t onPurge(void *ctx, rfc2217_purge_t requested);
+        std::unique_ptr<Rfc2217UartServer> _server;
       };
 
     }  // namespace term

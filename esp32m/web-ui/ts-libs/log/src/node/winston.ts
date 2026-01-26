@@ -1,39 +1,41 @@
-import winston, { format, LeveledLogMethod, Logger } from 'winston';
-import { ILogger, ILoggerImpl, LogLevel, TLoggerPlugin } from '../types';
+import winston, { format, LeveledLogMethod } from 'winston';
+import { IAppender, ILogger, LogLevel, TLogAppenderPlugin } from '../types';
+import { pluginLog } from './plugin';
 
-class WinstonLogger implements ILoggerImpl {
-  readonly logger: ILogger;
-  readonly _winston: Logger;
-  constructor(logger: ILogger, transports: winston.transport[]) {
-    this.logger = logger;
+const Name = 'log-appender-winston';
+
+class WinstonAppender implements IAppender {
+  readonly name = Name;
+  constructor(readonly transports: winston.transport[]) {
+  }
+  append(logger: ILogger, level: LogLevel, ...args: any[]): void {
     const { name } = logger;
     const { combine, label, timestamp, printf } = format;
 
     const myFormat = printf(({ level, message, label, timestamp }) => {
       return `${timestamp} ${level} ${label}  ${message}`;
     });
-    this._winston = winston.loggers.get(name, {
+    const w = winston.loggers.get(name, {
       format: combine(timestamp(), label({ label: name }), myFormat),
-      transports,
+      transports: this.transports,
     });
-  }
-  log(level: LogLevel, ...args: any[]): void {
-    let lm: LeveledLogMethod = this._winston.info;
+
+    let lm: LeveledLogMethod = w.info;
     switch (level) {
       case LogLevel.Error:
-        lm = this._winston.error;
+        lm = w.error;
         break;
       case LogLevel.Warn:
-        lm = this._winston.warn;
+        lm = w.warn;
         break;
       case LogLevel.Info:
-        lm = this._winston.info;
+        lm = w.info;
         break;
       case LogLevel.Debug:
-        lm = this._winston.debug;
+        lm = w.debug;
         break;
       case LogLevel.Verbose:
-        lm = this._winston.verbose;
+        lm = w.verbose;
         break;
     }
     (lm as (...args: any[]) => void)(...args);
@@ -42,11 +44,10 @@ class WinstonLogger implements ILoggerImpl {
 
 export const pluginLogWinston = (
   ...transports: winston.transport[]
-): TLoggerPlugin => ({
-  name: 'logger-winston',
-  logger: {
-    impl: (logger) => {
-      return Promise.resolve(new WinstonLogger(logger, transports));
-    },
+): TLogAppenderPlugin => ({
+  name: Name,
+  log: {
+    appender: () => new WinstonAppender(transports),
   },
+  use: [pluginLog]
 });

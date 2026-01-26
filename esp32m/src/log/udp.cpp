@@ -61,7 +61,7 @@ namespace esp32m {
           host = "syslog.lan";
         struct addrinfo hints = {};
         hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_socktype = SOCK_DGRAM;
         struct addrinfo *res;
         int err = getaddrinfo(host, NULL, &hints, &res);
         if (err != 0 || res == NULL)
@@ -82,7 +82,7 @@ namespace esp32m {
         return true;
       static char eol = '\n';
       if (_fd < 0) {
-        struct timeval send_timeout = {1, 0};
+        struct timeval send_timeout = {0, 100000};
         _fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (_fd >= 0)
           setsockopt(_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&send_timeout,
@@ -97,18 +97,11 @@ namespace esp32m {
           if (!msg)
             return true;
           auto len = strlen(msg);
-          auto mptr = msg;
-          while (len) {
-            auto result = sendto(_fd, mptr, len, 0, (struct sockaddr *)&_addr,
-                                 sizeof(_addr));
-            if (result < 0) {
-              free(msg);
-              return false;
-            }
-            len -= result;
-            mptr += result;
-          }
+          auto result = sendto(_fd, msg, len, 0, (struct sockaddr *)&_addr,
+                               sizeof(_addr));
           free(msg);
+          if (result != (int)len)
+            return false;
           return sendto(_fd, &eol, sizeof(eol), 0, (struct sockaddr *)&_addr,
                         sizeof(_addr)) == sizeof(eol);
         }

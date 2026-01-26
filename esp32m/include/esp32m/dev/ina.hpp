@@ -173,6 +173,7 @@ namespace esp32m {
      private:
       unsigned long _stamp = 0;
       Sensor _voltage, _current, _power;
+      float _shuntVolts = NAN;
     };
 
     Ina* useIna(uint8_t addr);

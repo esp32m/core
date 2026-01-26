@@ -117,11 +117,8 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::sync(bool force) {
-      return syncUnsafe(force);
-    }
 
-    esp_err_t Core::syncUnsafe(bool force) {
+    esp_err_t Core::sync(bool force) {
       static const int ResetValue = 0xB6;
       if (!force && !_settings._modified && _id != ChipId::Unknown)
         return ESP_OK;
@@ -159,7 +156,7 @@ namespace esp32m {
     }
 
     esp_err_t Core::measure() {
-      ESP_CHECK_RETURN(syncUnsafe());
+      ESP_CHECK_RETURN(sync());
       uint8_t ctrl = 0;
       ESP_CHECK_RETURN(_i2c->read(Register::Ctrl, ctrl));
       ctrl &= ~0b11;  // clear two lower bits
@@ -171,7 +168,7 @@ namespace esp32m {
 
     esp_err_t Core::isMeasuring(bool& busy) {
       static const uint8_t regs[2] = {Register::Status, Register::Ctrl};
-      ESP_CHECK_RETURN(syncUnsafe());
+      ESP_CHECK_RETURN(sync());
       uint8_t status[2];
       ESP_CHECK_LOGW_RETURN(_i2c->read(regs, 2, &status, 2),
                             "failed to read status");
@@ -249,7 +246,7 @@ namespace esp32m {
       int32_t adc_pressure;
       int32_t adc_temp;
       uint8_t data[8];
-      ESP_CHECK_RETURN(syncUnsafe());
+      ESP_CHECK_RETURN(sync());
       bool hum = _id == ChipId::Bme280 && humidity;
       size_t size = hum ? 8 : 6;
       ESP_CHECK_LOGW_RETURN(_i2c->read(Register::PressureMsb, data, size),
@@ -318,22 +315,19 @@ namespace esp32m {
 
       if (!_humidity.isDisabled())
         _humidity.set(h, &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_temperature.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);*/
       return true;
     }
 
     JsonDocument* Bme280::getState(RequestContext& ctx) {
-      float t, p, h;
-      if (read(&t, &p, &h) != ESP_OK)
-        return nullptr;
-      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
+      JsonDocument* doc = new JsonDocument(); 
       JsonObject root = doc->to<JsonObject>();
       root["addr"] = _i2c->address();
-      root["temperature"] = t;
-      root["pressure"] = p;
+      root["temperature"] = _temperature.get();
+      root["pressure"] = _pressure.get();
       if (chipId() == bme280::ChipId::Bme280)
-        root["humidity"] = h;
+        root["humidity"] = _humidity.get();
       return doc;
     }
 

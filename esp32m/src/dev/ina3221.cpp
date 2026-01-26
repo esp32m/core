@@ -282,9 +282,9 @@ namespace esp32m {
           _shuntVoltages[ch]->set(sv, &changed);
           _currents[ch]->set(si, &changed);
         }
-      if (changed)
+/*      if (changed)
         sensor::GroupChanged::publish(
-            _busVoltages[ina3221::Channel::First]->group);
+            _busVoltages[ina3221::Channel::First]->group);*/
       return true;
     }
 

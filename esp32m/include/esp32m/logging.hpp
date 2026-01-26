@@ -320,7 +320,7 @@ namespace esp32m {
      * messages even after succesful initialization. In this case, the buffer
      * memory will never be released.
      */
-    void addBufferedAppender(LogAppender *a, int bufsize = 1024,
+    void addBufferedAppender(LogAppender *a, int bufsize = 4096,
                              bool autoRelease = true);
 
     /**

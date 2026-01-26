@@ -13,15 +13,11 @@ export const enum LogLevel {
 
 export const LevelNames = ['', 'error', 'warn', 'info', 'debug', 'verbose'];
 
-export interface ILoggerBase {
-  log(level: LogLevel, ...args: Array<any>): void;
-}
-
 type WrappedTry<T extends (...args: Parameters<T>) => ReturnType<T>> = (
   ...args: Parameters<T>
 ) => ReturnType<T> | undefined;
 
-export interface ILogger extends ILoggerBase {
+export interface ILogger {
   readonly name: string;
   readonly parent?: ILogger;
   level: LogLevel;
@@ -31,6 +27,7 @@ export interface ILogger extends ILoggerBase {
   readonly info: LevelLogMethod;
   readonly debug: LevelLogMethod;
   readonly verbose: LevelLogMethod;
+  log(level: LogLevel, ...args: Array<any>): void;
   dump(level: LogLevel, data: Uint8Array, ...args: Array<any>): void;
   try<T extends (...args: any) => any>(func: T): WrappedTry<T>;
   asyncTry<
@@ -42,17 +39,17 @@ export interface ILogger extends ILoggerBase {
   ): WrappedTry<T>;
 }
 
-export interface ILoggerImpl extends ILoggerBase {
-  readonly logger: ILogger;
+export interface IAppender {
+  readonly name: string;
+  append(logger: ILogger, level: LogLevel, ...args: Array<any>): void;
 }
 
-export type TLoggerImplConstructor = (
-  logger: ILogger
-) => Promise<ILoggerImpl> | undefined;
+export type TAppenderConstructor = (
+) => IAppender;
 
-export type TLoggerPlugin = TPlugin & {
-  logger: {
-    impl: TLoggerImplConstructor;
+export type TLogAppenderPlugin = TPlugin & {
+  log: {
+    appender: TAppenderConstructor;
   };
 };
 

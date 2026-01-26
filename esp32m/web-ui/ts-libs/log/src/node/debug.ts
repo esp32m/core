@@ -1,12 +1,15 @@
 import debug from 'debug';
 import { getLogger } from '../impl';
 import {
+  IAppender,
   ILogger,
-  ILoggerImpl,
   LevelNames,
   LogLevel,
-  TLoggerPlugin,
+  TLogAppenderPlugin,
 } from '../types';
+import { pluginLog } from './plugin';
+
+const Name = 'log-appender-debug';
 
 export const interceptDebugLogOutput = (level = LogLevel.Debug) => {
   debug.log = (message) => {
@@ -17,19 +20,19 @@ export const interceptDebugLogOutput = (level = LogLevel.Debug) => {
   };
 };
 
-class DebugLogger implements ILoggerImpl {
-  constructor(readonly logger: ILogger) {}
-  log(level: LogLevel, ...args: any[]): void {
+class DebugAppender implements IAppender {
+  readonly name = Name;
+  constructor() { }
+  append(logger: ILogger, level: LogLevel, ...args: any[]): void {
     const [message, ...params] = args;
-    debug(`${this.logger.name}:${LevelNames[level]}`)(message, params);
+    debug(`${logger.name}:${LevelNames[level]}`)(message, params);
   }
 }
 
-export const pluginLogDebug = (): TLoggerPlugin => ({
-  name: 'logger-debug',
-  logger: {
-    impl: (logger) => {
-      return Promise.resolve(new DebugLogger(logger));
-    },
+export const pluginLogDebug = (): TLogAppenderPlugin => ({
+  name: Name,
+  log: {
+    appender: () => new DebugAppender(),
   },
+  use: [pluginLog]
 });

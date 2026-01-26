@@ -15,6 +15,7 @@
 #include "esp32m/base.hpp"
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/debug/button.hpp"
+#include "esp32m/debug/crashguard.hpp"
 #include "esp32m/events/broadcast.hpp"
 #include "esp32m/fs/littlefs.hpp"
 #include "esp32m/fs/spiffs.hpp"
@@ -22,7 +23,6 @@
 #include "esp32m/log/console.hpp"
 #include "esp32m/log/udp.hpp"
 #include "esp32m/logging.hpp"
-#include "esp32m/debug/crashguard.hpp"
 
 namespace esp32m {
 
@@ -386,16 +386,14 @@ namespace esp32m {
   }
 
   JsonDocument* App::getState(RequestContext& ctx) {
-    /*size_t size = JSON_OBJECT_SIZE(
-        1 + 8);  // root: name, time, uptime, version, built, sdk, size, space*/
-    auto doc = new JsonDocument(); /* size */
+    auto doc = new JsonDocument(); 
     JsonObject info = doc->to<JsonObject>();
 
     info["name"] = _name;
     time_t t;
     time(&t);
     info["time"] = t;
-    info["uptime"] = millis();
+    info["uptime"] = esp_timer_get_time() / 1000ULL;
     if (_version)
       info["version"] = _version;
     info["built"] = __DATE__ " " __TIME__;
@@ -405,12 +403,7 @@ namespace esp32m {
   }
 
   JsonDocument* App::getConfig(RequestContext& ctx) {
-    /*size_t size = JSON_OBJECT_SIZE(4)  // hostname, udplog: enabled, host
-                  + JSON_STRING_SIZE(_hostname.size());
-    if (_udpLogger)
-      size += JSON_STRING_SIZE(_udpLogger->getHost().size());*/
-
-    auto doc = new JsonDocument(); /* size */
+    auto doc = new JsonDocument(); 
     auto root = doc->to<JsonObject>();
     json::to(root, "hostname", _hostname);
     auto udplog = root["udplog"].to<JsonObject>();

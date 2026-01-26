@@ -42,3 +42,4 @@ export const isDestinationRemote = () =>
   buildInfo?.destination == Destination.Remote;
 export const isDestinationAnalyze = () =>
   buildInfo?.destination == Destination.Analyze;
+

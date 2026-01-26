@@ -63,17 +63,6 @@ namespace esp32m {
     }
   }
 
-  /*  void Device::sensor(const char* sensor, const float value) {
-      if (!isnan(value))
-        EventSensor::publish(*this, sensor, value,
-    json::null<JsonObjectConst>());
-    };
-
-    void Device::sensor(const char* sensor, const float value,
-                        const JsonObjectConst props) {
-      if (!isnan(value))
-        EventSensor::publish(*this, sensor, value, props);
-    };*/
 
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;

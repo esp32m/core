@@ -1,5 +1,6 @@
 #pragma once
 
+#include <esp_netif_types.h>
 #include "esp32m/base.hpp"
 #include "esp32m/json.hpp"
 #include "esp32m/logging.hpp"
@@ -9,7 +10,7 @@
 
 namespace esp32m {
 
-  constexpr const char *ErrBusy = "ERR_BUSY";
+  constexpr const char* ErrBusy = "ERR_BUSY";
 
   class ErrorItem {
    public:
@@ -27,7 +28,7 @@ namespace esp32m {
         _list.emplace_back(err);
       return err;
     };
-    esp_err_t check(esp_err_t err, const char *message, ...) {
+    esp_err_t check(esp_err_t err, const char* message, ...) {
       if (err != ESP_OK) {
         va_list args;
         va_start(args, message);
@@ -36,24 +37,24 @@ namespace esp32m {
       }
       return err;
     };
-    esp_err_t check(esp_err_t err, const char *message, va_list args) {
+    esp_err_t check(esp_err_t err, const char* message, va_list args) {
       if (err != ESP_OK) {
         std::string msg = string_printf(message, args);
         _list.emplace_back(err, msg);
       }
       return err;
     };
-    void add(const char *name, ...) {
+    void add(const char* name, ...) {
       va_list args;
       va_start(args, name);
       add(name, args);
       va_end(args);
     };
-    void add(const char *name, va_list args) {
+    void add(const char* name, va_list args) {
       std::string n = string_printf(name, args);
       _list.emplace_back(n);
     };
-    esp_err_t fail(const char *message, ...) {
+    esp_err_t fail(const char* message, ...) {
       va_list args;
       va_start(args, message);
       auto result = check(ESP_FAIL, message, args);
@@ -80,7 +81,7 @@ namespace esp32m {
         arr = target["error"].to<JsonArray>();
       else
         arr = target.as<JsonArray>();
-      for (auto &item : _list) {
+      for (auto& item : _list) {
         auto i = arr.add<JsonArray>();
         if (item.name.size())
           i.add(item.name);
@@ -109,8 +110,9 @@ namespace esp32m {
         *result = doc;
       return doc;
     }*/
-    void toJson(std::unique_ptr<JsonDocument> &result) const {
-      if (empty()) return;
+    void toJson(std::unique_ptr<JsonDocument>& result) const {
+      if (empty())
+        return;
       JsonVariant target;
       if (result)  // TODO: make this more transparent (quick hack to include
                    // "error" object in case we are responding from
@@ -124,13 +126,37 @@ namespace esp32m {
       toJson(target);
     }
 
+    bool isFatal() const {
+      for (auto& item : _list) {
+        // Some ESP-IDF APIs report benign states (e.g. DHCP already started).
+        // Treat them as non-fatal so callers can proceed.
+        switch (item.code) {
+          case ESP_OK:
+          case ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED:
+          case ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED:
+            continue;
+          default:
+            return true;
+        }
+      }
+      return false;
+    }
+
     bool empty() const {
       return _list.empty();
     }
-    void copyFrom(ErrorList &other) {
-      for (auto &item : other._list) _list.push_back(item);
+
+    bool check(log::Loggable* l = nullptr) const {
+      if (empty())
+        return true;
+      dump(l);
+      return !isFatal();
     }
-    void dump() const {
+
+    void copyFrom(ErrorList& other) {
+      for (auto& item : other._list) _list.push_back(item);
+    }
+    void dump(log::Loggable* l = nullptr) const {
       if (empty())
         return;
       std::unique_ptr<JsonDocument> doc;
@@ -138,14 +164,17 @@ namespace esp32m {
       std::string str;
       serializeJson(doc->as<JsonVariantConst>(), str);
       // auto str = json::allocSerialize(doc->as<JsonVariantConst>());
-      loge(str.c_str());
+      if (l)
+        l->logger().log(log::Level::Error, str.c_str());
+      else
+        loge(str.c_str());
       // free(str);
     }
     void clear() {
       _list.clear();
     }
-    void append(ErrorList &other) {
-      for (auto &item : other._list) _list.push_back(item);
+    void append(ErrorList& other) {
+      for (auto& item : other._list) _list.push_back(item);
     }
 
    private:

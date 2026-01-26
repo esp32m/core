@@ -220,7 +220,7 @@ export const content = () => {
         <CardBox title={"Crash Guard"}>
             <NameValueList list={list} />
             {info.last && <LastRunPanel run={info.last} />}
-            {info.history?.length && <RunHistory runs={info.history} />}
+            {!!info.history?.length && <RunHistory runs={info.history} />}
             <OtaTabs info={info} state={state} />
             {info.ota?.[slot]?.role == OtaRole.Fallback && <SwitchPartitions />}
         </CardBox>

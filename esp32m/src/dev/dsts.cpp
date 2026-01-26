@@ -354,8 +354,8 @@ namespace esp32m {
             }
           }
         }
-      if (changed)
-        sensor::GroupChanged::publish(_sensorGroup);
+/*      if (changed)
+        sensor::GroupChanged::publish(_sensorGroup);*/
       return true;
     }
 

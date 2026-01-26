@@ -204,8 +204,8 @@ namespace esp32m {
       _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getPower(value));
       _power.set(value, &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_voltage.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_voltage.group);*/
       return true;
     }
 

@@ -1,0 +1,23 @@
+{
+  "name": "@ts-libs/config",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "DY",
+  "sideEffects": false,
+  "main": "src/index.ts",
+  "exports": {
+    ".": {
+      "node": "./src/node/index.ts",
+      "browser": "./src/web/index.ts"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@ts-libs/log": "*",
+    "@ts-libs/tools": "*",
+    "yargs": "^18.0.0"
+  }
+}

@@ -1,13 +1,12 @@
-import { ILogger, ILoggerImpl, LogLevel } from './types';
+import { IAppender, ILogger, LogLevel } from './types';
 
-export class ConsoleLogger implements ILoggerImpl {
-  readonly logger: ILogger;
-  constructor(logger: ILogger) {
-    this.logger = logger;
-  }
-  log(level: LogLevel, ...args: any[]): void {
+const Name='log-appender-console';
+
+export class ConsoleAppender implements IAppender {
+  readonly name = Name;
+  append(logger: ILogger, level: LogLevel, ...args: any[]): void {
     const [message, ...params] = args;
-    const text = `${this.logger.name}  ${message}`;
+    const text = `${logger.name}  ${message}`;
     switch (level) {
       case LogLevel.Error:
         console.error(text, ...params);

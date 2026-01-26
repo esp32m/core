@@ -9,12 +9,15 @@ import {
 import { EOL } from 'os';
 import { basename, dirname, join, normalize, resolve } from 'path';
 import {
+  IAppender,
   ILogger,
-  ILoggerImpl,
   LevelNames,
   LogLevel,
-  TLoggerPlugin,
+  TLogAppenderPlugin,
 } from '../types';
+import { pluginLog } from './plugin';
+
+const Name = 'log-appender-file';
 
 type TOptions = {
   readonly roll?: number;
@@ -25,7 +28,7 @@ class File {
   constructor(
     readonly path: string,
     readonly rollCount: number
-  ) {}
+  ) { }
   writeLine(line: string) {
     if (!this._stream) {
       const dir = dirname(this.path);
@@ -53,44 +56,52 @@ class File {
     this._stream.write(EOL);
   }
 }
-const files: Record<string, File> = {};
 
-class FileLogger implements ILoggerImpl {
-  private _file: File;
+class FileAppender implements IAppender {
+  readonly name = Name;
+  private readonly files: Record<string, File> = {};
   constructor(
-    readonly logger: ILogger,
-    readonly path: string,
+    readonly path: Promise<string>,
     readonly options?: TOptions
   ) {
-    const { group } = logger;
-    if (group) {
-      const dir = dirname(path);
-      const name = basename(path);
-      path = join(dir, `${group}-${name}`);
-    }
-    const p = resolve(normalize(path));
-    this._file = files[p] || (files[p] = new File(p, options?.roll || 0));
   }
-  log(level: LogLevel, ...args: any[]): void {
-    const [message, ...params] = args.map((a) => {
-      if (a instanceof Error && a.stack) return a.stack;
-      return a;
+  append(logger: ILogger, level: LogLevel, ...args: any[]): void {
+    this.path.then((path) => {
+      const { group } = logger;
+      if (group) {
+        const dir = dirname(path);
+        const name = basename(path);
+        path = join(dir, `${group}-${name}`);
+      }
+      const p = resolve(normalize(path));
+      const file = this.files[p] || (this.files[p] = new File(p, this.options?.roll || 0));
+
+      const [message, ...params] = args.map((a) => {
+        if (a instanceof Error && a.stack) return a.stack;
+        return a;
+      });
+      const text = `${new Date().toISOString()} ${LevelNames[level]} ${logger.name
+        }  ${message}${params.length > 0 ? ' ' + JSON.stringify(params) : ''}`;
+      file.writeLine(text);
+    }
+    ).catch((e) => {
+      try {
+        if (console) {
+          console.error(`${e} when logging a message with FileAppender:`);
+          console.error(...args);
+        }
+      } catch { }
     });
-    const text = `${new Date().toISOString()} ${LevelNames[level]} ${
-      this.logger.name
-    }  ${message}${params.length > 0 ? ' ' + JSON.stringify(params) : ''}`;
-    this._file.writeLine(text);
   }
 }
 
 export const pluginLogFile = (
-  path: string,
+  path: string | Promise<string>,
   options?: TOptions
-): TLoggerPlugin => ({
-  name: 'logger-file',
-  logger: {
-    impl: (logger) => {
-      return Promise.resolve(new FileLogger(logger, path, options));
-    },
+): TLogAppenderPlugin => ({
+  name: Name,
+  log: {
+    appender: () => new FileAppender(Promise.resolve(path), options),
   },
+  use: [pluginLog]
 });

@@ -135,8 +135,8 @@ namespace esp32m {
       _conductivity.set(values[2], &changed);
       _salinity.set(values[3], &changed);
       _tds.set(values[4], &changed);
-      if (changed)
-        sensor::GroupChanged::publish(_temperature.group);
+/*      if (changed)
+        sensor::GroupChanged::publish(_temperature.group);*/
       return true;
     }
 

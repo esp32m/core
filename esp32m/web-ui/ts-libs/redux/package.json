@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@reduxjs/toolkit": "^2.11.2",
+        "@ts-libs/config": "*",
         "@ts-libs/log": "*",
         "@ts-libs/plugins": "*",
         "@ts-libs/tools": "*",

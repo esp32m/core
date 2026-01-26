@@ -243,10 +243,13 @@ namespace esp32m {
           item =
               (LogMessage *)xRingbufferReceive(_buf, &size, pdMS_TO_TICKS(100));
           if (item) {
+            std::vector<LogAppender *> appenders;
             {
               std::lock_guard guard(_appendersLock);
-              for (auto appender : _appenders) appender->append(item);
+              appenders = _appenders;
             }
+            for (auto appender : appenders)
+              appender->append(item);
             vRingbufferReturnItem(_buf, item);
           }
         }
@@ -374,10 +377,13 @@ namespace esp32m {
         if (queue && xTaskGetSchedulerState() != taskSCHEDULER_SUSPENDED)
           enqueued = queue->enqueue(message);
         if (!enqueued) {
-          std::lock_guard guard(_appendersLock);
-          for (auto appender : _appenders) {
-            appender->append(message);
+          std::vector<LogAppender *> appenders;
+          {
+            std::lock_guard guard(_appendersLock);
+            appenders = _appenders;
           }
+          for (auto appender : appenders)
+            appender->append(message);
         }
       }
       free(message);

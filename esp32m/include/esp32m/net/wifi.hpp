@@ -19,8 +19,8 @@ namespace esp32m {
     namespace wifi {
       class Iface : public Interface {
        protected:
-        net::Wifi *_wifi = nullptr;
-        virtual void init(net::Wifi *wifi, const char *key) {
+        net::Wifi* _wifi = nullptr;
+        virtual void init(net::Wifi* wifi, const char* key) {
           _wifi = wifi;
           Interface::init(key);
         }
@@ -40,12 +40,12 @@ namespace esp32m {
 
       class Sta : public Iface {
        public:
-        Sta(const Sta &) = delete;
+        Sta(const Sta&) = delete;
         StaStatus status() const {
           return _status;
         }
         esp_err_t enable(bool enable);
-        StaOptions &options() {
+        StaOptions& options() {
           return _options;
         }
         bool isConnected();
@@ -53,7 +53,7 @@ namespace esp32m {
         esp_err_t startWPS();
 
        protected:
-        void init(net::Wifi *wifi, const char *key) override;
+        void init(net::Wifi* wifi, const char* key) override;
 
        private:
         Sta();
@@ -77,7 +77,7 @@ namespace esp32m {
 
       class Ap : public Iface {
        public:
-        Ap(const Ap &) = delete;
+        Ap(const Ap&) = delete;
         esp_err_t enable(bool enable);
         bool isRunning();
         int clientsCount();
@@ -85,17 +85,17 @@ namespace esp32m {
           return _status;
         }
 
-        ApOptions &options() {
+        ApOptions& options() {
           return _options;
         }
 
        protected:
-        void init(net::Wifi *wifi, const char *key) override;
+        void init(net::Wifi* wifi, const char* key) override;
 
        private:
         Ap();
         ApStatus _status = ApStatus::Initial;
-        CaptiveDns *_captivePortal = nullptr;
+        CaptiveDns* _captivePortal = nullptr;
         unsigned long _apTimer = 0;
         ApOptions _options = {};
         void setStatus(ApStatus status);
@@ -112,24 +112,24 @@ namespace esp32m {
       wifi_event_t event() const {
         return _event;
       }
-      void *data() const {
+      void* data() const {
         return _data;
       }
 
       bool is(wifi_event_t event) const;
 
-      static bool is(Event &ev, WifiEvent **r);
-      static bool is(Event &ev, wifi_event_t event, WifiEvent **r = nullptr);
+      static bool is(Event& ev, WifiEvent** r);
+      static bool is(Event& ev, wifi_event_t event, WifiEvent** r = nullptr);
 
-      static void publish(wifi_event_t event, void *data);
+      static void publish(wifi_event_t event, void* data);
 
      protected:
-      constexpr static const char *Type = "wifi";
+      constexpr static const char* Type = "wifi";
 
      private:
       wifi_event_t _event;
-      void *_data;
-      WifiEvent(wifi_event_t event, void *data)
+      void* _data;
+      WifiEvent(wifi_event_t event, void* data)
           : Event(Type), _event(event), _data(data) {}
       friend class Wifi;
     };
@@ -140,21 +140,21 @@ namespace esp32m {
         None = 0,
         Fallback = 1,
       };
-      ApInfo(uint32_t id, const char *ssid, const char *password,
-             const uint8_t *bssid, Flags flags = Flags::None,
+      ApInfo(uint32_t id, const char* ssid, const char* password,
+             const uint8_t* bssid, Flags flags = Flags::None,
              uint8_t failcount = 0);
       ~ApInfo();
       uint32_t id() const {
         return _id;
       }
-      const char *ssid() const {
-        return (const char *)_buffer;
+      const char* ssid() const {
+        return (const char*)_buffer;
       }
-      const char *password() const {
-        return (const char *)_buffer + _passwordOfs;
+      const char* password() const {
+        return (const char*)_buffer + _passwordOfs;
       }
-      const uint8_t *bssid() const {
-        return _bssidOfs ? (const uint8_t *)_buffer + _bssidOfs : nullptr;
+      const uint8_t* bssid() const {
+        return _bssidOfs ? (const uint8_t*)_buffer + _bssidOfs : nullptr;
       }
       Flags flags() const {
         return _flags;
@@ -165,9 +165,9 @@ namespace esp32m {
       uint8_t failcount() const {
         return _failcount;
       }
-      bool is(uint32_t id, const char *ssid, const uint8_t *bssid);
-      bool matchesPassword(const char *pass);
-      bool toJson(JsonArray &target, bool maskPassword);
+      bool is(uint32_t id, const char* ssid, const uint8_t* bssid);
+      bool matchesPassword(const char* pass);
+      bool toJson(JsonArray& target, bool maskPassword);
       size_t jsonSize(bool maskPassword);
       void failed() {
         _failcount++;
@@ -175,13 +175,13 @@ namespace esp32m {
       void succeeded() {
         _failcount = 0;
       }
-      bool equals(ApInfo *other);
-      ApInfo *clone() {
+      bool equals(ApInfo* other);
+      ApInfo* clone() {
         return new ApInfo(_id, ssid(), password(), bssid(), _flags, _failcount);
       }
 
      private:
-      char *_buffer;
+      char* _buffer;
       uint32_t _id;
       uint16_t _passwordOfs, _bssidOfs;
       uint8_t _failcount;
@@ -193,23 +193,23 @@ namespace esp32m {
 
     class Wifi : public Device {
      public:
-      Wifi(const Wifi &) = delete;
+      Wifi(const Wifi&) = delete;
 
-      static Wifi &instance();
-      const char *name() const override {
+      static Wifi& instance();
+      const char* name() const override {
         return "wifi";
       }
-      ApInfo *addFallback(const char *ssid, const char *password,
-                          const uint8_t *bssid = nullptr) {
+      ApInfo* addFallback(const char* ssid, const char* password,
+                          const uint8_t* bssid = nullptr) {
         return addOrUpdateAp(
             new ApInfo(0, ssid, password, bssid, ApInfo::Flags::Fallback, 0));
       }
       bool isInitialized() const;
       bool isConnected() const;
-      Sta &sta() {
+      Sta& sta() {
         return _sta;
       }
-      Ap *ap() {
+      Ap* ap() {
         return _ap.get();
       }
       void stop();
@@ -231,12 +231,12 @@ namespace esp32m {
       static const uint8_t DiagApRunning = 4;
 
      protected:
-      JsonDocument *getState(RequestContext &ctx) override;
-      bool setConfig(RequestContext &ctx) override;
-      JsonDocument *getConfig(RequestContext &ctx) override;
+      JsonDocument* getState(RequestContext& ctx) override;
+      bool setConfig(RequestContext& ctx) override;
+      JsonDocument* getConfig(RequestContext& ctx) override;
       bool pollSensors() override;
-      bool handleRequest(Request &req) override;
-      void handleEvent(Event &ev) override;
+      bool handleRequest(Request& req) override;
+      void handleEvent(Event& ev) override;
 
      private:
       std::unique_ptr<Ap> _ap;
@@ -245,18 +245,20 @@ namespace esp32m {
       TaskHandle_t _task = nullptr;
       EventGroupHandle_t _eventGroup = nullptr;
       bool _managedExternally = false;
-      std::vector<ApInfo *> _aps;
+      std::vector<ApInfo*> _aps;
       wifi_err_reason_t _errReason = (wifi_err_reason_t)0;
       int8_t _txp = 0;
       uint8_t _channel = 0;
-
+#if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
+      bool _xiaoRFExt = false;
+#endif
       unsigned long _staTimer = 0, _scanStarted = 0;
       int _connectFailures = 0;
       int _maxAps = 5;
       bool _hostnameChanged = true;
       wifi_scan_config_t _scanConfig = {};
 
-      Response *_pendingResponse = nullptr;
+      Response* _pendingResponse = nullptr;
       std::unique_ptr<ApInfo> _connect;
       dev::Sensor _rssi;
 
@@ -268,23 +270,23 @@ namespace esp32m {
       void checkScan();
       esp_err_t checkNameChanged();
       void run();
-      bool tryConnect(ApInfo *ap, bool noBssid);
+      bool tryConnect(ApInfo* ap, bool noBssid);
       bool tryConnect();
-      ApInfo *addOrUpdateAp(ApInfo *ap);
-      ApInfo *addOrUpdateAp(JsonArrayConst source, bool &changed);
-      void ensureId(ApInfo *ap);
-      char *btmNeighborList(uint8_t *report, size_t report_len);
-      friend void neighbor_report_recv_cb(void *ctx, const uint8_t *report,
+      ApInfo* addOrUpdateAp(ApInfo* ap);
+      ApInfo* addOrUpdateAp(JsonArrayConst source, bool& changed);
+      void ensureId(ApInfo* ap);
+      char* btmNeighborList(uint8_t* report, size_t report_len);
+      friend void neighbor_report_recv_cb(void* ctx, const uint8_t* report,
                                           size_t report_len);
       friend class wifi::Ap;
       friend class wifi::Sta;
     };
 
-    Wifi *useWifi();
+    Wifi* useWifi();
 
     namespace wifi {
-      void addAccessPoint(const char *ssid, const char *password,
-                          const uint8_t *bssid = nullptr);
+      void addAccessPoint(const char* ssid, const char* password,
+                          const uint8_t* bssid = nullptr);
     }
   }  // namespace net
 }  // namespace esp32m

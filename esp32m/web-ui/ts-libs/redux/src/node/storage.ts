@@ -1,59 +1,47 @@
 import { LocalStorage } from 'node-localstorage';
 
 export class AsyncNodeStorage {
-  private localStorage: LocalStorage;
+  private _localStorage: LocalStorage | null = null;
+  private storageDirectoryPromise: Promise<string>;
+  private maxStorageSize: number;
 
-  constructor(storageDirectory: string, maxStorageSize = 500) {
-    this.localStorage = new LocalStorage(
-      storageDirectory,
-      maxStorageSize * 1024 * 1024
-    );
+  constructor(storageDirectory: Promise<string>, maxStorageSize = 500) {
+    this.storageDirectoryPromise = storageDirectory;
+    this.maxStorageSize = maxStorageSize;
   }
 
-  getItem(key: string) {
-    return new Promise<string | null>((resolve, reject) => {
-      try {
-        const storedValue = this.localStorage.getItem(key);
-        process.nextTick(() => resolve(storedValue));
-      } catch (e) {
-        reject(e);
-      }
-    });
+  private async ensureStorage(): Promise<LocalStorage> {
+    if (!this._localStorage) {
+      const dir = await this.storageDirectoryPromise;
+      this._localStorage = new LocalStorage(
+        dir,
+        this.maxStorageSize * 1024 * 1024
+      );
+    }
+    return this._localStorage;
   }
 
-  setItem(key: string, value: string | number) {
-    return new Promise<void>((resolve, reject) => {
-      try {
-        this.localStorage.setItem(key, value + '');
-        process.nextTick(() => resolve());
-      } catch (e) {
-        reject(e);
-      }
-    });
+  async getItem(key: string): Promise<string | null> {
+    const storage = await this.ensureStorage();
+    return storage.getItem(key);
   }
 
-  removeItem(key: string) {
-    return new Promise<void>((resolve, reject) => {
-      try {
-        this.localStorage.removeItem(key);
-        process.nextTick(() => resolve());
-      } catch (e) {
-        reject(e);
-      }
-    });
+  async setItem(key: string, value: string | number): Promise<void> {
+    const storage = await this.ensureStorage();
+    storage.setItem(key, value + '');
   }
 
-  getAllKeys() {
-    return new Promise<string[]>((resolve, reject) => {
-      try {
-        const keys: string[] = [];
-        for (let i = 0; i < this.localStorage.length; i++) {
-          keys.push(this.localStorage.key(i));
-        }
-        process.nextTick(() => resolve(keys));
-      } catch (e) {
-        reject(e);
-      }
-    });
+  async removeItem(key: string): Promise<void> {
+    const storage = await this.ensureStorage();
+    storage.removeItem(key);
+  }
+
+  async getAllKeys(): Promise<string[]> {
+    const storage = await this.ensureStorage();
+    const keys: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      keys.push(storage.key(i));
+    }
+    return keys;
   }
 }

@@ -1,5 +1,8 @@
 set(CMAKE_CXX_STANDARD 20)
 
+# Expose shared versioning helpers to the whole build once esp32m is processed.
+include("${CMAKE_CURRENT_LIST_DIR}/scripts/versioning.cmake")
+
 idf_component_register(
     SRC_DIRS "src" "src/events" "src/log" "src/config" "src/bus" "src/net" "src/fs" "src/io" "src/net/term" "src/bt" "src/ui" "src/dev" "src/dev/opentherm" "src/debug" "src/debug/lwip" "src/integrations/ha" "src/integrations/influx"
     INCLUDE_DIRS "include"

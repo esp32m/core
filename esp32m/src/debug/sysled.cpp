@@ -10,7 +10,7 @@ namespace esp32m {
     Sysled::Sysled() : _pin(gpio::pin(GPIO_NUM_2)) {
       init();
     }
-    Sysled::Sysled(io::IPin *pin) : _pin(pin) {
+    Sysled::Sysled(io::IPin *pin, bool activeLow) : _pin(pin), _activeLow(activeLow) {
       init();
     }
 
@@ -24,9 +24,9 @@ namespace esp32m {
       if (digital) {
         digital->setDirection(false, true);
         for (int i = 0; i < count; i++) {
-          digital->write(true);
+          digital->write(!_activeLow);
           delay(200);
-          digital->write(false);
+          digital->write(_activeLow);
           delay(200);
         }
       }

@@ -25,7 +25,7 @@ namespace esp32m {
      private:
       uint8_t _addr;
       float _te = 0, _ee = 0, _ie = 0, _v = 0, _i = 0, _ap = 0, _rap = 0,
-            _pf = 0, _f = 0;
+            _pf = 1, _f = 0;
       unsigned long _stamp = 0;
       Sensor _energyImp, _energyExp, _voltage, _current, _powerActive, _powerApparent, _powerReactive, _powerFactor, _frequency;
     };

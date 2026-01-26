@@ -7,13 +7,13 @@
   "type": "module",
   "main": "src/index.ts",
   "devDependencies": {
-    "@types/node": "^25.0.3",
-    "@types/react": "^19.2.7",
+    "@types/node": "^25.0.9",
+    "@types/react": "^19.2.8",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@mui/icons-material": "^7.3.6",
-    "@mui/material": "^7.3.6",
+    "@mui/icons-material": "^7.3.7",
+    "@mui/material": "^7.3.7",
     "@reduxjs/toolkit": "^2.11.2",
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",

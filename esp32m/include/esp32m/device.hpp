@@ -523,7 +523,7 @@ namespace esp32m {
      private:
       int _id;
     };
-    class GroupChanged : public Event {
+/*    class GroupChanged : public Event {
      public:
       GroupChanged(const GroupChanged&) = delete;
       const Group& group() const {
@@ -546,7 +546,7 @@ namespace esp32m {
       GroupChanged(int group) : Event(Type), _group(group) {}
       Group _group;
       constexpr static const char* Type = "sensor-group-changed";
-    };
+    };*/
 
   }  // namespace sensor
 

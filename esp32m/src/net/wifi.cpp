@@ -8,6 +8,10 @@
 #include "esp32m/net/net.hpp"
 #include "esp32m/props.hpp"
 
+#if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
+#  include <esp32m/io/gpio.hpp>
+#endif
+
 // #include <dhcpserver/dhcpserver.h>
 // #include <dhcpserver/dhcpserver_options.h>
 #include <esp_mac.h>
@@ -26,8 +30,8 @@
 namespace esp32m {
   namespace net {
 
-    static bool sta_config_equal(const wifi_config_t &lhs,
-                                 const wifi_config_t &rhs) {
+    static bool sta_config_equal(const wifi_config_t& lhs,
+                                 const wifi_config_t& rhs) {
       return memcmp(&lhs, &rhs, sizeof(wifi_config_t)) == 0;
     }
 
@@ -47,7 +51,7 @@ namespace esp32m {
         _role = Role::DhcpClient;
       };
 
-      void Sta::init(net::Wifi *wifi, const char *key) {
+      void Sta::init(net::Wifi* wifi, const char* key) {
         auto handle = esp_netif_get_handle_from_ifkey(key);
         if (handle) {
           auto flags = esp_netif_get_flags(handle);
@@ -106,7 +110,7 @@ namespace esp32m {
         }
       }
 
-      const char *StaStatusNames[]{
+      const char* StaStatusNames[]{
           "initial",
           "connecting",
           "connected",
@@ -153,7 +157,7 @@ namespace esp32m {
                 _dns[ESP_NETIF_DNS_MAIN] = dns;*/
       };
 
-      void Ap::init(net::Wifi *wifi, const char *key) {
+      void Ap::init(net::Wifi* wifi, const char* key) {
         auto handle = esp_netif_get_handle_from_ifkey(key);
         if (handle) {
           // we can't just set _dns because it will be overwritten on synchandle
@@ -194,11 +198,11 @@ namespace esp32m {
 
           wifi_config_t conf;
           memset(&conf, 0, sizeof(wifi_config_t));
-          strlcpy(reinterpret_cast<char *>(conf.ap.ssid),
+          strlcpy(reinterpret_cast<char*>(conf.ap.ssid),
                   App::instance().hostname(), sizeof(conf.ap.ssid));
           conf.ap.channel = 1;
           conf.ap.authmode = WIFI_AUTH_OPEN;
-          conf.ap.ssid_len = strlen(reinterpret_cast<char *>(conf.ap.ssid));
+          conf.ap.ssid_len = strlen(reinterpret_cast<char*>(conf.ap.ssid));
           conf.ap.max_connection = 4;
           conf.ap.beacon_interval = 100;
           if (!sta_config_equal(current_conf, conf)) {
@@ -213,9 +217,9 @@ namespace esp32m {
 
       void Ap::getInfo(JsonObject info) {
         auto infoAp = info["ap"].to<JsonObject>();
-        const char *hostname = NULL;
+        const char* hostname = NULL;
         if (!esp_netif_get_hostname(handle(), &hostname))
-          infoAp["ssid"] = (char *)hostname;
+          infoAp["ssid"] = (char*)hostname;
         uint8_t mac[6];
         // char sbssid[18] = {0};
         if (!esp_wifi_get_mac(WIFI_IF_AP, mac) /*&& formatBssid(mac, sbssid)*/)
@@ -230,7 +234,7 @@ namespace esp32m {
           json::to(infoAp, ip);
       }
 
-      const char *ApStateNames[]{"initial", "starting", "running", "stopped"};
+      const char* ApStateNames[]{"initial", "starting", "running", "stopped"};
 
       void Ap::setStatus(ApStatus state) {
         if (state == _status)
@@ -318,14 +322,14 @@ namespace esp32m {
         };
       }
 
-      static const char *getDefaultStaKey() {
+      static const char* getDefaultStaKey() {
         const esp_netif_inherent_config_t config =
             ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
         return config.if_key;
       }
 
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
-      static const char *getDefaultApKey() {
+      static const char* getDefaultApKey() {
         const esp_netif_inherent_config_t config =
             ESP_NETIF_INHERENT_DEFAULT_WIFI_AP();
         return config.if_key;
@@ -333,42 +337,42 @@ namespace esp32m {
 #endif
     }  // namespace wifi
 
-    const char *ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
+    const char* ModeNames[]{"Disabled", "STA", "AP", "AP+STA"};
 
     bool WifiEvent::is(wifi_event_t event) const {
       return _event == event;
     }
 
-    bool WifiEvent::is(Event &ev, WifiEvent **r) {
+    bool WifiEvent::is(Event& ev, WifiEvent** r) {
       if (!ev.is(Type))
         return false;
       if (r)
-        *r = (WifiEvent *)&ev;
+        *r = (WifiEvent*)&ev;
       return true;
     }
 
-    bool WifiEvent::is(Event &ev, wifi_event_t event, WifiEvent **r) {
+    bool WifiEvent::is(Event& ev, wifi_event_t event, WifiEvent** r) {
       if (!ev.is(Type))
         return false;
-      wifi_event_t t = ((WifiEvent &)ev)._event;
+      wifi_event_t t = ((WifiEvent&)ev)._event;
       if (t != event)
         return false;
       if (r)
-        *r = (WifiEvent *)&ev;
+        *r = (WifiEvent*)&ev;
       return true;
     }
 
-    void WifiEvent::publish(wifi_event_t event, void *data) {
+    void WifiEvent::publish(wifi_event_t event, void* data) {
       WifiEvent ev(event, data);
       EventManager::instance().publish(ev);
     }
 
-    ApInfo::ApInfo(uint32_t id, const char *ssid, const char *password,
-                   const uint8_t *bssid, Flags flags, uint8_t failcount) {
+    ApInfo::ApInfo(uint32_t id, const char* ssid, const char* password,
+                   const uint8_t* bssid, Flags flags, uint8_t failcount) {
       _id = id;
       auto sl = ssid ? strlen(ssid) : 0;
       auto pl = password ? strlen(password) : 0;
-      _buffer = (char *)malloc(sl + pl + 2 + (bssid ? 6 : 0));
+      _buffer = (char*)malloc(sl + pl + 2 + (bssid ? 6 : 0));
       _passwordOfs = sl + 1;
       if (sl)
         memcpy(_buffer, ssid, _passwordOfs);
@@ -390,10 +394,10 @@ namespace esp32m {
     ApInfo::~ApInfo() {
       free(_buffer);
     }
-    bool ApInfo::is(uint32_t id, const char *ssid, const uint8_t *bssid) {
+    bool ApInfo::is(uint32_t id, const char* ssid, const uint8_t* bssid) {
       if (id)
         return id == _id;
-      const char *mySsid = this->ssid();
+      const char* mySsid = this->ssid();
       if (!ssid && strlen(mySsid))
         return false;
       if (strcmp(ssid, mySsid))
@@ -402,7 +406,7 @@ namespace esp32m {
         return true;
       return _bssidOfs && !memcmp(bssid, this->bssid(), 6);
     }
-    bool ApInfo::matchesPassword(const char *pass) {
+    bool ApInfo::matchesPassword(const char* pass) {
       auto pl = pass ? strlen(pass) : 0;
       if (pl != strlen(password()))
         return false;
@@ -411,14 +415,14 @@ namespace esp32m {
       return !strcmp(pass, password());
     }
 
-    bool ApInfo::equals(ApInfo *other) {
+    bool ApInfo::equals(ApInfo* other) {
       if (this == other)
         return true;
       if (_id != other->_id || _flags != other->_flags ||
           _failcount != other->_failcount)
         return false;
       if (strcmp(ssid(), other->ssid()) ||
-          !strcmp(password(), other->password()))
+          strcmp(password(), other->password()))
         return false;
       if (_bssidOfs != other->_bssidOfs)
         return false;
@@ -433,10 +437,10 @@ namespace esp32m {
              (_bssidOfs ? 19 : 0);
     }*/
 
-    bool ApInfo::toJson(JsonArray &target, bool maskPassword) {
-      auto result = target.add(_id) && target.add((char *)ssid()) &&
+    bool ApInfo::toJson(JsonArray& target, bool maskPassword) {
+      auto result = target.add(_id) && target.add((char*)ssid()) &&
                     (maskPassword ? target.add(nullptr)
-                                  : target.add((char *)password())) &&
+                                  : target.add((char*)password())) &&
                     target.add((int)_flags) && target.add(_failcount);
       if (!result)
         return false;
@@ -454,7 +458,7 @@ namespace esp32m {
       _eventGroup = xEventGroupCreate();
     }
 
-    bool Wifi::handleRequest(Request &req) {
+    bool Wifi::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("scan")) {
@@ -472,10 +476,10 @@ namespace esp32m {
         auto data = req.data();
         uint8_t bssid[6];
         _connect = std::unique_ptr<ApInfo>(new ApInfo(
-            0, data["ssid"].as<const char *>(),
-            data["password"].as<const char *>(),
-            net::macParse(data["bssid"].as<const char *>(), bssid) ? bssid
-                                                                   : nullptr));
+            0, data["ssid"].as<const char*>(),
+            data["password"].as<const char*>(),
+            net::macParse(data["bssid"].as<const char*>(), bssid) ? bssid
+                                                                  : nullptr));
         req.respond();
         _sta.disconnect();
         xTaskNotifyGive(_task);
@@ -507,18 +511,18 @@ namespace esp32m {
       return false;
     }
 
-    void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                            int32_t event_id, void *event_data) {
+    void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                            int32_t event_id, void* event_data) {
       WifiEvent::publish((wifi_event_t)event_id, event_data);
     }
 
-    void ip_event_handler(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data) {
-      auto wifi = (Wifi *)arg;
+    void ip_event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data) {
+      auto wifi = (Wifi*)arg;
       IpEvent::publish(wifi->sta().handle(), (ip_event_t)event_id, event_data);
     }
 
-    static inline uint32_t WPA_GET_LE32(const uint8_t *a) {
+    static inline uint32_t WPA_GET_LE32(const uint8_t* a) {
       return ((uint32_t)a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0];
     }
 #ifndef WLAN_EID_MEASURE_REPORT
@@ -537,9 +541,9 @@ namespace esp32m {
 #  define ETH_ALEN 6
 #endif
 #define MAX_NEIGHBOR_LEN 512
-    char *Wifi::btmNeighborList(uint8_t *report, size_t report_len) {
+    char* Wifi::btmNeighborList(uint8_t* report, size_t report_len) {
       size_t len = 0;
-      const uint8_t *data;
+      const uint8_t* data;
       int ret = 0;
 
       /*
@@ -558,11 +562,11 @@ namespace esp32m {
         return nullptr;
       }
 
-      char *buf = (char *)calloc(1, MAX_NEIGHBOR_LEN);
+      char* buf = (char*)calloc(1, MAX_NEIGHBOR_LEN);
       data = report;
 
       while (report_len >= 2 + NR_IE_MIN_LEN) {
-        const uint8_t *nr;
+        const uint8_t* nr;
         char lci[256 * 2 + 1];
         char civic[256 * 2 + 1];
         uint8_t nr_len = data[1];
@@ -661,13 +665,13 @@ namespace esp32m {
       return buf;
     }
 
-    void neighbor_report_recv_cb(void *ctx, const uint8_t *report,
+    void neighbor_report_recv_cb(void* ctx, const uint8_t* report,
                                  size_t report_len) {
       if (ctx != &Wifi::instance() || !report)
         return;
-      uint8_t *pos = (uint8_t *)report;
-      char *neighbor_list =
-          ((Wifi *)ctx)->btmNeighborList(pos + 1, report_len - 1);
+      uint8_t* pos = (uint8_t*)report;
+      char* neighbor_list =
+          ((Wifi*)ctx)->btmNeighborList(pos + 1, report_len - 1);
       if (neighbor_list) {
         esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS, neighbor_list,
                                                0);
@@ -682,7 +686,7 @@ namespace esp32m {
       inited = true;
 
       esp_netif_t *ifsta = nullptr, *ifap = nullptr;
-      const char *staKey = getDefaultStaKey();
+      const char* staKey = getDefaultStaKey();
 
       ifsta = esp_netif_get_handle_from_ifkey(staKey);
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SUPPORT
@@ -765,11 +769,11 @@ namespace esp32m {
              (WifiFlags::StaConnected | WifiFlags::StaGotIp);
     }
 
-    void Wifi::handleEvent(Event &ev) {
+    void Wifi::handleEvent(Event& ev) {
       Device::handleEvent(ev);
-      IpEvent *ip;
-      WifiEvent *wifi;
-      sleep::Event *slev;
+      IpEvent* ip;
+      WifiEvent* wifi;
+      sleep::Event* slev;
       DoneReason reason;
       bool wakeup = false;
       if (EventInit::is(ev, 0)) {
@@ -788,7 +792,7 @@ namespace esp32m {
           ESP_ERROR_CHECK_WITHOUT_ABORT(useEventLoop());
         }
 
-        xTaskCreate([](void *self) { ((Wifi *)self)->run(); }, "m/wifi", 5120,
+        xTaskCreate([](void* self) { ((Wifi*)self)->run(); }, "m/wifi", 5120,
                     this, tskIDLE_PRIORITY + 1, &_task);
       } else if (EventDone::is(ev, &reason)) {
         stop();
@@ -814,7 +818,7 @@ namespace esp32m {
 #endif
             break;
           case WIFI_EVENT_STA_DISCONNECTED: {
-            auto r = (wifi_event_sta_disconnected_t *)wifi->data();
+            auto r = (wifi_event_sta_disconnected_t*)wifi->data();
             _errReason = (wifi_err_reason_t)r->reason;
             xEventGroupClearBits(_eventGroup,
                                  WifiFlags::StaConnected | WifiFlags::StaGotIp);
@@ -834,14 +838,14 @@ namespace esp32m {
           } break;
           case WIFI_EVENT_STA_WPS_ER_SUCCESS: {
             logW("WPS succeeded");
-            wifi_event_sta_wps_er_success_t *evt =
-                (wifi_event_sta_wps_er_success_t *)wifi->data();
+            wifi_event_sta_wps_er_success_t* evt =
+                (wifi_event_sta_wps_er_success_t*)wifi->data();
             int i;
 
             if (evt) {
               for (i = 0; i < evt->ap_cred_cnt; i++) {
-                auto ssid = (const char *)evt->ap_cred[i].ssid;
-                auto passphrase = (const char *)evt->ap_cred[i].passphrase;
+                auto ssid = (const char*)evt->ap_cred[i].ssid;
+                auto passphrase = (const char*)evt->ap_cred[i].passphrase;
                 auto ap = new ApInfo(0, ssid, passphrase, nullptr);
                 logI("got WPS credentials: %s (%s)", ssid, passphrase);
                 if (_connect)
@@ -852,9 +856,9 @@ namespace esp32m {
             } else {
               wifi_config_t current_conf;
               esp_wifi_get_config(WIFI_IF_STA, &current_conf);
-              auto ssid = (const char *)current_conf.sta.ssid;
+              auto ssid = (const char*)current_conf.sta.ssid;
               if (strlen(ssid)) {
-                auto passphrase = (const char *)current_conf.sta.password;
+                auto passphrase = (const char*)current_conf.sta.password;
                 logI("got WPS credentials: %s (%s)", ssid, passphrase);
                 auto ap = new ApInfo(0, ssid, passphrase, nullptr);
                 if (_connect)
@@ -934,7 +938,7 @@ namespace esp32m {
         xTaskNotifyGive(_task);
     }
 
-    JsonDocument *Wifi::getState(RequestContext &ctx) {
+    JsonDocument* Wifi::getState(RequestContext& ctx) {
       /*      size_t size =
                 JSON_OBJECT_SIZE(4 + 3)  // mode, flags, ch, ch2  + nested: sta,
          ap
@@ -991,23 +995,17 @@ namespace esp32m {
 
     void setIfcfg(wifi_interface_t ifx, JsonObjectConst source) {}
 
-    JsonDocument *Wifi::getConfig(RequestContext &ctx) {
-      /*size_t size = JSON_OBJECT_SIZE(2) +      // txp, channel
-                    JSON_OBJECT_SIZE(1 + 3) +  // sta: proto, bw, inact
-                    JSON_OBJECT_SIZE(1 + 3);   // ap:  proto, bw, inact,
-*/
+    JsonDocument* Wifi::getConfig(RequestContext& ctx) {
       bool maskSensitive = !ctx.request.isInternal();
       size_t apsCount = _aps.size();
-      /*      if (apsCount) {
-              size += JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(apsCount);
-              for (auto it = _aps.begin(); it != _aps.end(); it++)
-                size += (*it)->jsonSize(maskSensitive);
-            }*/
 
       auto doc = new JsonDocument(); /* size */
       auto cr = doc->to<JsonObject>();
       cr["txp"] = _txp;
       cr["channel"] = _channel;
+#if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
+      cr["xiaoRFExt"] = _xiaoRFExt;
+#endif
       auto sta = cr["sta"].to<JsonObject>();
       getIfcfg(WIFI_IF_STA, sta);
       auto ap = cr["ap"].to<JsonObject>();
@@ -1022,7 +1020,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Wifi::setConfig(RequestContext &ctx) {
+    bool Wifi::setConfig(RequestContext& ctx) {
       JsonObjectConst ca = ctx.data.as<JsonObjectConst>();
       if (!isInitialized()) {
         JsonDocument* doc = new JsonDocument();
@@ -1041,6 +1039,16 @@ namespace esp32m {
           changed = true;
         }
       json::from(ca["channel"], _channel, &changed);
+#if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
+      if (json::from(ca["xiaoRFExt"], _xiaoRFExt, &changed)) {
+        auto rfSwitchDisable = gpio::pin(GPIO_NUM_3)->digital();
+        rfSwitchDisable->setDirection(false, true);
+        rfSwitchDisable->write(false);  // enable RF switch
+        auto rfUseUFL = gpio::pin(GPIO_NUM_14)->digital();
+        rfUseUFL->setDirection(false, true);
+        rfUseUFL->write(_xiaoRFExt);  // use UFL connector
+      }
+#endif
       JsonObjectConst obj = ca["sta"];
       if (obj)
         setIfcfg(WIFI_IF_STA, obj);
@@ -1056,32 +1064,39 @@ namespace esp32m {
       return changed;
     }
 
-    bool Wifi::tryConnect(ApInfo *ap, bool noBssid) {
+    bool Wifi::tryConnect(ApInfo* ap, bool noBssid) {
       esp_task_wdt_reset();
       _sta.disconnect();
-      if (_sta.enable(true) != ESP_OK)
+      if (_sta.enable(true) != ESP_OK) {
         return false;
+      }
       if (ap) {
         wifi_config_t conf;
         memset(&conf, 0, sizeof(wifi_config_t));
-        const char *ssid = ap->ssid();
-        strlcpy(reinterpret_cast<char *>(conf.sta.ssid), ssid,
+        const char* ssid = ap->ssid();
+        strlcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid,
                 sizeof(conf.sta.ssid));
-        const uint8_t *bssid = ap->bssid();
+
+        // Prefer the strongest AP when multiple BSSIDs share the same SSID.
+        // This is handled by the ESP-IDF Wi-Fi stack during connect.
+        conf.sta.scan_method = WIFI_FAST_SCAN;
+        conf.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+
+        const uint8_t* bssid = ap->bssid();
         char bssidStr[net::MacMaxChars] = "any";
         if (_channel)
           conf.sta.channel = _channel;
         if (bssid && !noBssid) {
           conf.sta.bssid_set = 1;
-          memcpy((void *)&conf.sta.bssid[0], bssid, 6);
+          memcpy((void*)&conf.sta.bssid[0], bssid, 6);
           sprintf(bssidStr, MACSTR, MAC2STR(bssid));
         }
-        const char *password = ap->password();
+        const char* password = ap->password();
         if (password) {
           if (strlen(password) == 64)  // it's not a passphrase, is the PSK
-            memcpy(reinterpret_cast<char *>(conf.sta.password), password, 64);
+            memcpy(reinterpret_cast<char*>(conf.sta.password), password, 64);
           else
-            strlcpy(reinterpret_cast<char *>(conf.sta.password), password,
+            strlcpy(reinterpret_cast<char*>(conf.sta.password), password,
                     sizeof(conf.sta.password));
         }
         // conf.sta.rm_enabled = 1;
@@ -1103,7 +1118,7 @@ namespace esp32m {
         _sta.apply(Interface::ConfigItem::Ip, errl);
         _sta.apply(Interface::ConfigItem::Dns, errl);
         _sta.apply(Interface::ConfigItem::Role, errl);*/
-        if (!errl.empty())
+        if (!errl.check(this))
           return false;
         logI("connecting to %s [%s], channel %d", ssid, bssidStr,
              (int)_channel);
@@ -1123,7 +1138,18 @@ namespace esp32m {
       }
       bool ok = isConnected();
       if (!ok) {
-        logW("connection failed: %u", (int)_errReason);
+        esp_netif_dhcp_status_t dhcpc = ESP_NETIF_DHCP_INIT;
+        (void)esp_netif_dhcpc_get_status(_sta.handle(), &dhcpc);
+        esp_netif_ip_info_t ip = {};
+        (void)esp_netif_get_ip_info(_sta.handle(), &ip);
+        auto bits = xEventGroupGetBits(_eventGroup);
+        if ((bits & WifiFlags::StaConnected) && !(bits & WifiFlags::StaGotIp) &&
+            !_errReason)
+          logW("connected but failed to obtain IP (dhcpc=%d, ip=" IPSTR ")",
+               (int)dhcpc, IP2STR(&ip.ip));
+        else
+          logW("connection failed: %u (dhcpc=%d, ip=" IPSTR ")",
+               (int)_errReason, (int)dhcpc, IP2STR(&ip.ip));
         if (_ap && _ap->_status == ApStatus::Running)
           delay(5000);
         else
@@ -1148,13 +1174,28 @@ namespace esp32m {
           _connect.reset();
       }
       if (!_ap || _ap->clientsCount() == 0) {
-        if (!connected)
+        bool hasPinnedBssid = false;
+        for (auto ap : _aps)
+          if (ap->bssid()) {
+            hasPinnedBssid = true;
+            break;
+          }
+
+        // If the user pinned one or more BSSIDs, always prefer them first.
+        // Only fall back to the strongest-AP selection when none of the
+        // pinned BSSIDs are reachable.
+        if (!connected && hasPinnedBssid)
           for (auto ap : _aps)
             if (ap->bssid()) {
               connected = tryConnect(ap, false);
               if (connected)
                 break;
             }
+
+        // If no BSSID was configured (or all pinned BSSIDs failed), let the
+        // stack choose the strongest AP for the SSID.
+        if (!connected && hasPinnedBssid)
+          logW("all pinned BSSIDs failed; falling back to strongest-AP selection");
         if (!connected)
           for (auto ap : _aps) {
             connected = tryConnect(ap, true);
@@ -1181,12 +1222,12 @@ namespace esp32m {
       return ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_mode(next));
     }
 
-    Wifi &Wifi::instance() {
+    Wifi& Wifi::instance() {
       static Wifi i;
       return i;
     }
 
-    bool compareAps(ApInfo *i1, ApInfo *i2) {
+    bool compareAps(ApInfo* i1, ApInfo* i2) {
       int f1 = i1->flags() & ApInfo::Flags::Fallback;
       int f2 = i2->flags() & ApInfo::Flags::Fallback;
       int i = f1 - f2;
@@ -1195,30 +1236,30 @@ namespace esp32m {
       return i < 0;
     }
 
-    ApInfo *Wifi::addOrUpdateAp(JsonArrayConst source, bool &changed) {
+    ApInfo* Wifi::addOrUpdateAp(JsonArrayConst source, bool& changed) {
       if (!source || source.size() < 4)
         return nullptr;
       uint32_t id = 0;
       int i = 0;
       if (source[0].is<int>())
         id = source[i++];
-      const char *ssid = source[i++];
+      const char* ssid = source[i++];
       if (!ssid)
         return nullptr;
-      const char *password = source[i++];
+      const char* password = source[i++];
       auto flags = (ApInfo::Flags)source[i++].as<int>();
       int failcount = source[i++];
-      const char *bssidStr = source[i++];
+      const char* bssidStr = source[i++];
       uint8_t bssid[6];
-      uint8_t *bssidPtr = net::macParse(bssidStr, bssid) ? bssid : nullptr;
-      ApInfo *ap = new ApInfo(id, ssid, password, bssidPtr, flags, failcount);
-      ApInfo *result = addOrUpdateAp(ap);
+      uint8_t* bssidPtr = net::macParse(bssidStr, bssid) ? bssid : nullptr;
+      ApInfo* ap = new ApInfo(id, ssid, password, bssidPtr, flags, failcount);
+      ApInfo* result = addOrUpdateAp(ap);
       if (!result->equals(ap))
         changed = true;
       return result;
     }
 
-    void Wifi::ensureId(ApInfo *ap) {
+    void Wifi::ensureId(ApInfo* ap) {
       if (ap->id())
         return;
       uint32_t max = 0;
@@ -1228,7 +1269,7 @@ namespace esp32m {
       ap->_id = max + 1;
     }
 
-    ApInfo *Wifi::addOrUpdateAp(ApInfo *ap) {
+    ApInfo* Wifi::addOrUpdateAp(ApInfo* ap) {
       for (auto it = _aps.begin(); it != _aps.end(); ++it)
         if ((*it)->is(ap->id(), ap->ssid(), ap->bssid())) {
           auto pf = (*it)->flags() & ApInfo::Flags::Fallback;
@@ -1338,19 +1379,19 @@ namespace esp32m {
         uint16_t sc = 0;
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_scan_get_ap_num(&sc));
 
-        JsonDocument *doc = nullptr;
+        JsonDocument* doc = nullptr;
         if (sc > 0) {
           doc = new JsonDocument(/*
               JSON_ARRAY_SIZE(sc) +
               (sc * (JSON_ARRAY_SIZE(5) + 33 + net::MacMaxChars))*/);
           JsonArray arr = doc->to<JsonArray>();
-          wifi_ap_record_t *scanResult =
-              (wifi_ap_record_t *)calloc(sc, sizeof(wifi_ap_record_t));
+          wifi_ap_record_t* scanResult =
+              (wifi_ap_record_t*)calloc(sc, sizeof(wifi_ap_record_t));
           if (doc && scanResult &&
               ESP_ERROR_CHECK_WITHOUT_ABORT(
                   esp_wifi_scan_get_ap_records(&sc, scanResult)) == ESP_OK) {
             for (uint16_t i = 0; i < sc; i++) {
-              wifi_ap_record_t *r = scanResult + i;
+              wifi_ap_record_t* r = scanResult + i;
               auto entry = arr.add<JsonArray>();
               if (entry) {
                 entry.add(r->ssid);
@@ -1398,13 +1439,13 @@ namespace esp32m {
       return true;
     };
 
-    Wifi *useWifi() {
+    Wifi* useWifi() {
       return &Wifi::instance();
     }
 
     namespace wifi {
-      void addAccessPoint(const char *ssid, const char *password,
-                          const uint8_t *bssid) {
+      void addAccessPoint(const char* ssid, const char* password,
+                          const uint8_t* bssid) {
         Wifi::instance().addFallback(ssid, password, bssid);
       }
     }  // namespace wifi

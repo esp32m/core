@@ -1,29 +1,57 @@
-import { getPlugins } from '@ts-libs/plugins';
-import { ConsoleLogger } from './console';
+import { getPlugins, pluginsObservable, TPlugin } from '@ts-libs/plugins';
+import { ConsoleAppender } from './console';
 import {
+  IAppender,
   ILogger,
-  ILoggerImpl,
   LogLevel,
+  TLogAppenderPlugin,
   TLoggerOptions,
-  TLoggerPlugin,
 } from './types';
+import { Subscription } from 'rxjs';
 
 let defaultLevel = LogLevel.Info;
 
-const implConstructor = (logger: ILogger) => {
-  const plugins = getPlugins<TLoggerPlugin>((p) => !!p.logger?.impl);
-  let result: Promise<ILoggerImpl> | undefined;
-  for (const {
-    logger: { impl },
-  } of plugins) {
-    result = impl(logger);
-    if (result) break;
+const pendingAppenders: Record<string, TLogAppenderPlugin> = {};
+const appenders: Record<string, IAppender> = {};
+let appendersSubscription: Subscription;
+let defaultAppender: IAppender | undefined;
+
+const getAppenders = () => {
+  if (!appendersSubscription) {
+    appendersSubscription =
+      pluginsObservable.subscribe((p: TPlugin & Partial<TLogAppenderPlugin>) => {
+        if (p.log?.appender) {
+          pendingAppenders[p.name] = p as TLogAppenderPlugin;
+        }
+      });
+    getPlugins<TLogAppenderPlugin>((p) => !!p.log?.appender).reduce((acc, p) => {
+      acc[p.name] = p;
+      return acc;
+    }, pendingAppenders);
   }
-  return result || Promise.resolve(new ConsoleLogger(logger));
-};
+  if (Object.keys(pendingAppenders).length) {
+    for (const name in pendingAppenders) {
+      const plugin = pendingAppenders[name];
+      delete pendingAppenders[name];
+      if (!appenders[plugin.name]) try {
+        appenders[plugin.name] = plugin.log.appender();
+      } catch (e) {
+        try {
+          if (console)
+            console.error(`${e} when creating an appender ${plugin.name}`);
+        } catch { }
+      }
+    }
+  }
+  if (!Object.keys(appenders).length) {
+    if (!defaultAppender)
+      defaultAppender = new ConsoleAppender();
+    return [defaultAppender];
+  }
+  return Object.values(appenders);
+}
 
 class Logger implements ILogger {
-  private _impl: Promise<ILoggerImpl> | undefined;
   get level() {
     return this._level || this.parent?.level || defaultLevel;
   }
@@ -35,7 +63,7 @@ class Logger implements ILogger {
     readonly parent: ILogger | undefined,
     private _level: LogLevel | undefined,
     readonly group?: string
-  ) {}
+  ) { }
   try<T extends (...args: any) => any>(
     func: T
   ): (...args: any) => any | undefined {
@@ -96,34 +124,24 @@ class Logger implements ILogger {
   }
 
   log(level: LogLevel, ...args: Array<any>) {
-    if (level <= this.level)
-      this.impl()
-        .then((i) => {
-          try {
-            i.log(level, ...args);
-          } catch (e) {
-            try {
-              if (console) {
-                console.error(`${e} when logging a message:`);
-                console.error(...args);
-              }
-            } catch {}
+    if (level > this.level)
+      return;
+    const appenders = getAppenders();
+    for (const appender of appenders) {
+      try {
+        appender.append(this, level, ...args);
+      } catch (e) {
+        try {
+          if (console) {
+            console.error(`${e} when logging a message:`);
+            console.error(...args);
           }
-        })
-        .catch((e) => {
-          try {
-            if (console) {
-              console.error(`${e} when creating a logger:`);
-              console.error(...args);
-            }
-          } catch {}
-        });
-  }
-
-  private impl() {
-    return this._impl || (this._impl = implConstructor(this));
+        } catch { }
+      }
+    }
   }
 }
+
 
 const loggers: Record<string, Logger> = {};
 
