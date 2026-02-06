@@ -147,54 +147,40 @@ namespace esp32m {
 
      protected:
       bool append(const LogMessage *message) {
+        // Avoid locking/buffering if scheduler is suspended (can deadlock if a
+        // different task holds the mutex while context switching is disabled).
+        if (xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED)
+          return _appender.append(message);
+        std::lock_guard guard(_lock);
         auto messageSize = message ? message->size() : 0;
         // this message can't be buffered if there's no buffer, or the size of
-        // the buffer is less than the size of the message, of if the task
-        // scheduler is suspended
-        if (!_handle || _maxItemSize == 0 || _maxItemSize < messageSize ||
-            xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED)
+        // the buffer is less than the size of the message
+        if (!_handle || _maxItemSize == 0 || _maxItemSize < messageSize)
           return _appender.append(message);
         // null message means logger is asking whether this appender can append,
         // we answer yes if the buffer of any size is allocated
         if (!message)
           return true;
-        size_t size;
-        LogMessage *item;
-        // try to add this message to the buffer
+
+        // First try to flush any previously removed (pending) item.
+        flushPending();
+
+        // Try to add this message to the buffer.
         for (;;) {
           if (xRingbufferSend(_handle, message, messageSize, 0))
             break;
-          // buffer is full, take the oldest item, and either append or lose
-          // it
-          item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
+          // Buffer is full: drop the oldest item.
+          size_t size;
+          auto item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
           if (!item)
-            // this should be impossible, but still better to check so we don't
-            // try to call vRingbufferReturnItem() with null item
             break;
-          _appender.append(
-              item);  // we don't care whether it succeeded or not at this
-                      // point, since there's no room in the buffer, so we're OK
-                      // with dropping the oldest item in case of failure
-          vRingbufferReturnItem(_handle, item);
-          item = nullptr;
-          // at this point some space has been freed in the buffer, so we try to
-          // add message to the buffer again
-        }
-        // the buffer is consistent FIFO at this point, and we try to push as
-        // many messages to the actual appender as possible
-        for (;;) {
-          item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
-          if (!item) {
-            // the buffer is empty
-            if (_autoRelease)
-              release();
-            return true;
-          }
-          if (!_appender.append(item))
-            // appender is not ready, we keep item in the buffer for later
-            return true;
           vRingbufferReturnItem(_handle, item);
         }
+
+        // Try to flush buffered messages if the underlying appender reports it
+        // is ready.
+        flush();
+        return true;
       }
 
      private:
@@ -202,11 +188,61 @@ namespace esp32m {
       bool _autoRelease;
       RingbufHandle_t _handle;
       size_t _maxItemSize;
-      void release() {
+      std::mutex _lock;
+      LogMessage *_pending = nullptr;
+
+      void flushPending() {
+        if (!_pending)
+          return;
+        if (!_handle) {
+          _pending = nullptr;
+          return;
+        }
+        if (_appender.append(_pending)) {
+          vRingbufferReturnItem(_handle, _pending);
+          _pending = nullptr;
+        }
+      }
+
+      void flush() {
+        if (!_handle || _pending)
+          return;
+        // Use the contract of LogAppender::append(nullptr) as a readiness test.
+        if (!_appender.append(nullptr))
+          return;
+
+        for (;;) {
+          size_t size;
+          auto item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
+          if (!item) {
+            if (_autoRelease)
+              releaseLocked();
+            return;
+          }
+          if (!_appender.append(item)) {
+            // Can't send right now; keep this item allocated and retry later.
+            _pending = item;
+            return;
+          }
+          vRingbufferReturnItem(_handle, item);
+        }
+      }
+
+      void releaseLocked() {
         if (!_handle)
           return;
+        if (_pending) {
+          vRingbufferReturnItem(_handle, _pending);
+          _pending = nullptr;
+        }
         vRingbufferDelete(_handle);
         _handle = nullptr;
+        _maxItemSize = 0;
+      }
+
+      void release() {
+        std::lock_guard guard(_lock);
+        releaseLocked();
       }
     };
 

@@ -1,4 +1,5 @@
 import { Box, BoxProps, SvgIcon, SxProps } from '@mui/material';
+import { JSX } from 'react';
 
 const Menu = (
   <svg

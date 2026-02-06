@@ -3,6 +3,7 @@ import { ConsoleAppender } from './console';
 import {
   IAppender,
   ILogger,
+  LevelNames,
   LogLevel,
   TLogAppenderPlugin,
   TLoggerOptions,
@@ -158,6 +159,9 @@ export function getLogger(name: string, options?: TLoggerOptions): ILogger {
   return loggers[n] || (loggers[n] = new Logger(n, p, level, group));
 }
 
-export function setLogLevel(level: LogLevel) {
-  defaultLevel = level;
+export function setLogLevel(level: LogLevel | string) {
+  let l: LogLevel = typeof level === 'string' ? LevelNames.indexOf(level) : level;
+  if (l <= LogLevel.None) l = LogLevel.Error;
+  if (l > LogLevel.Verbose) l = LogLevel.Verbose;
+  defaultLevel = l;
 }
