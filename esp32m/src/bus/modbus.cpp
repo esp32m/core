@@ -20,7 +20,8 @@ namespace esp32m {
     };
 
     void Master::configureSerial(uart_port_t port, uint32_t baud,
-                                 uart_parity_t parity, bool ascii) {
+                   uart_parity_t parity, bool ascii,
+                   uint8_t uartRxTimeout) {
       auto mode = ascii ? MB_ASCII : MB_RTU;
       bool changed = false;
       auto& ser = _config.ser_opts;
@@ -40,12 +41,16 @@ namespace esp32m {
         ser.parity = parity;
         changed = true;
       }
+      if (_uartRxTimeout != uartRxTimeout) {
+        _uartRxTimeout = uartRxTimeout;
+        changed = true;
+      }
       _mutex = &locks::uart(port);
       if (changed && _running) {
         stop();
         start();
       }
-      _config.ser_opts.response_tout_ms = 1000,
+      _config.ser_opts.response_tout_ms = 3000,
       _config.ser_opts.data_bits = UART_DATA_8_BITS,
       _config.ser_opts.stop_bits = UART_STOP_BITS_1;
       _configured = true;
@@ -87,6 +92,12 @@ namespace esp32m {
       ESP_CHECK_RETURN(mbc_master_start(_handle));
       ESP_CHECK_RETURN(
           uart_set_mode(_config.ser_opts.port, UART_MODE_RS485_HALF_DUPLEX));
+      // esp-modbus sets a small UART RX timeout (in symbols). Some slaves
+      // violate Modbus RTU inter-character timing and respond with long gaps
+      // between bytes. In such case the port task sees multiple 1-2 byte
+      // timeout fragments and drops them as "short packets", leading to
+      // master request timeouts even though a valid response exists on the bus.
+      ESP_CHECK_RETURN(uart_set_rx_timeout(_config.ser_opts.port, _uartRxTimeout));
       _running = true;
       return ESP_OK;
     }
@@ -114,8 +125,10 @@ namespace esp32m {
 
     namespace master {
       void configureSerial(uart_port_t port, uint32_t baud,
-                           uart_parity_t parity, bool ascii) {
-        Master::instance().configureSerial(port, baud, parity, ascii);
+                           uart_parity_t parity, bool ascii,
+                           uint8_t uartRxTimeout) {
+        Master::instance().configureSerial(port, baud, parity, ascii,
+                                           uartRxTimeout);
       }
     }  // namespace master
 

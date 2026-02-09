@@ -1,6 +1,7 @@
 export * from './bme280';
 export * from './buzzer';
 export * from './dds238';
+export * from './sdm230';
 export * from './dsts';
 export * from './fc37';
 export * from './flow';

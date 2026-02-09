@@ -51,7 +51,7 @@ namespace esp32m {
       static Master &instance();
       void configureSerial(uart_port_t port, uint32_t baud = 115200,
                            uart_parity_t parity = UART_PARITY_DISABLE,
-                           bool ascii = false);
+                           bool ascii = false, uint8_t uartRxTimeout = 3);
 
       esp_err_t start() override;
       esp_err_t stop() override;
@@ -60,6 +60,8 @@ namespace esp32m {
 
      private:
       Master() {}
+
+      uint8_t _uartRxTimeout = 3;
     };
 
     class Slave : public Modbus {
@@ -69,7 +71,7 @@ namespace esp32m {
     namespace master {
       void configureSerial(uart_port_t port, uint32_t baud = 115200,
                            uart_parity_t parity = UART_PARITY_DISABLE,
-                           bool ascii = false);
+                           bool ascii = false, uint8_t uartRxTimeout = 3);
     }
 
   }  // namespace modbus

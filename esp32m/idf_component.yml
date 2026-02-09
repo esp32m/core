@@ -7,11 +7,11 @@ dependencies:
     version: "^0.4.0"
   espressif/esp-modbus:
     public: true
-    version: "^2.1.1"
+    version: "^2.1.2"
   espressif/mdns:
     version: "^1.0.5"
   joltwallet/littlefs:
-    version: "^1.5.3"
+    version: "^1.20.4"
   bblanchon/arduinojson:
     public: true
     version: "^7"
