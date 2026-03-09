@@ -1,9 +1,9 @@
 #pragma once
-
 #include <mutex>
+#include "esp32m/logging.hpp"
 
-#include "mbcontroller.h"
 #include <hal/uart_types.h>
+#include "mbcontroller.h"
 
 namespace esp32m {
   namespace modbus {
@@ -25,11 +25,11 @@ namespace esp32m {
       ReadWriteRegisters = 23,
     };
 
-    class Modbus {
+    class Modbus : public log::Loggable {
      public:
       virtual esp_err_t start() = 0;
       virtual esp_err_t stop() = 0;
-      const mb_communication_info_t &config() const {
+      const mb_communication_info_t& config() const {
         return _config;
       }
       bool isConfigured() const {
@@ -40,28 +40,37 @@ namespace esp32m {
       }
 
      protected:
-      std::mutex *_mutex;
-      void *_handle = nullptr;
+      std::mutex* _mutex;
+      void* _handle = nullptr;
       mb_communication_info_t _config = {};
       bool _configured = false, _running = false;
     };
 
     class Master : public Modbus {
      public:
-      static Master &instance();
+      static Master& instance();
+      const char* name() const override {
+        return "modbus_master";
+      }
       void configureSerial(uart_port_t port, uint32_t baud = 115200,
                            uart_parity_t parity = UART_PARITY_DISABLE,
-                           bool ascii = false, uint8_t uartRxTimeout = 3);
+                           bool ascii = false, uint8_t uartRxTimeout = 3,
+                           uint32_t responseTimeoutMs = 3000);
 
       esp_err_t start() override;
       esp_err_t stop() override;
       esp_err_t request(uint8_t addr, Command command, uint16_t reg_start,
-                        uint16_t reg_size, void *data);
+                        uint16_t reg_size, void* data);
 
      private:
       Master() {}
 
       uint8_t _uartRxTimeout = 3;
+      uint32_t _responseTimeoutMs = 3000;
+
+      esp_err_t startNoLock();
+      esp_err_t stopNoLock();
+      esp_err_t resetNoLock();
     };
 
     class Slave : public Modbus {
@@ -71,7 +80,8 @@ namespace esp32m {
     namespace master {
       void configureSerial(uart_port_t port, uint32_t baud = 115200,
                            uart_parity_t parity = UART_PARITY_DISABLE,
-                           bool ascii = false, uint8_t uartRxTimeout = 3);
+                           bool ascii = false, uint8_t uartRxTimeout = 3,
+                           uint32_t responseTimeoutMs = 3000);
     }
 
   }  // namespace modbus
