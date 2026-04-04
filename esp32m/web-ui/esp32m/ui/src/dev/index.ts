@@ -32,6 +32,7 @@ export * from './soil5';
 export * from './fan';
 export * from './ahtxx';
 export * from './md-host';
+export * from './stm32act';
 export * from './tm601awlcor';
 
 export * from './shared';

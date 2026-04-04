@@ -1,3 +1,5 @@
+#pragma once
+
 #include "esp32m/device.hpp"
 #include "esp32m/events/request.hpp"
 
@@ -6,7 +8,7 @@ namespace esp32m {
   namespace integrations {
     namespace ha {
 
-      JsonDocument* describeSensor(Component* component);
+      JsonDocument* describeComponent(Component* component);
 
       class DescribeRequest : public Request {
        public:
@@ -26,7 +28,7 @@ namespace esp32m {
         }
 
         static void autoRespond(Request& req, Sensor& sensor) {
-          auto doc = ha::describeSensor(&sensor);
+          auto doc = ha::describeComponent(&sensor);
           req.respond(sensor.device()->name(), doc->as<JsonVariantConst>());
           delete doc;
         }
@@ -68,8 +70,9 @@ namespace esp32m {
 
       class CommandRequest : public Request {
        public:
-        CommandRequest(const char* target, JsonVariantConst data)
-            : Request(Name, 0, target, data, nullptr) {}
+        std::string componentId;
+        CommandRequest(const char* target, std::string componentId, JsonVariantConst data)
+            : Request(Name, 0, target, data, nullptr), componentId(componentId) {}
 
         void respondImpl(const char* source, const JsonVariantConst data,
                          bool isError) override {}

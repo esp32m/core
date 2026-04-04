@@ -20,18 +20,8 @@ namespace esp32m {
           _salinity(this, "salinity"),
           _tds(this, "tds") {
       Device::init(Flags::HasSensors);
-      auto group = sensor::nextGroup();
-      _moisture.group = group;
       _moisture.precision = 1;
-      _temperature.group = group;
       _temperature.precision = 1;
-      _conductivity.group = group;
-      _ph.group = group;
-      _nitrogen.group = group;
-      _phosphorus.group = group;
-      _potassium.group = group;
-      _salinity.group = group;
-      _tds.group = group;
     }
 
     bool Soil5::initSensors() {

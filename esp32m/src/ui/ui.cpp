@@ -36,9 +36,9 @@ namespace esp32m {
     class Rb : public Response {
      public:
       uint32_t clientId;
-      Rb(const char* transport, const char* name, const char* source, int seq,
+      Rb(const char* transport, const Request& request, const char* source,
          uint32_t cid)
-          : Response(transport, name, source, seq), clientId(cid) {}
+          : Response(transport, request, source), clientId(cid) {}
     };
 
     class Req : public Request {
@@ -68,7 +68,7 @@ namespace esp32m {
       }
 
       Response* makeResponseImpl() override {
-        return new Rb(_transport->name(), name(), target(), seq(), _clientId);
+        return new Rb(_transport->name(), *this, target(), _clientId);
       }
 
      private:

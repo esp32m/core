@@ -180,12 +180,8 @@ namespace esp32m {
           _current(this, "current"),
           _power(this, "power") {
       Device::init(Flags::HasSensors);
-      auto group = sensor::nextGroup();
-      _voltage.group = group;
       _voltage.precision = 2;
-      _current.group = group;
       _current.precision = 4;
-      _power.group = group;
       _power.precision = 4;
       _power.unit = "W";
     }

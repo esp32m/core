@@ -289,13 +289,9 @@ namespace esp32m {
           _temperature(this, "temperature"),
           _pressure(this, "atmospheric_pressure"),
           _humidity(this, "humidity") {
-      auto group = sensor::nextGroup();
-      _temperature.group = group;
       _temperature.precision = 2;
-      _pressure.group = group;
       _pressure.precision = 0;
       _pressure.unit = "mmHg";
-      _humidity.group = group;
       _humidity.precision = 0;
       Device::init(Flags::HasSensors);
     }

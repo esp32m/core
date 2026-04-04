@@ -1,5 +1,3 @@
-#include <esp_modbus_master.h>
-
 #include "esp32m/base.hpp"
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/defs.hpp"

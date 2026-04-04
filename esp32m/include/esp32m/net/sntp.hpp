@@ -6,26 +6,38 @@
 namespace esp32m {
 
   namespace net {
+
+    class EventTimeSync : public Event {
+     public:
+      static bool is(Event& ev) {
+        return ev.is(Type);
+      }
+
+     private:
+      EventTimeSync() : Event(Type) {}
+      constexpr static const char* Type = "time-sync";
+      friend class Sntp;
+    };
+
     class Sntp : public AppObject {
      public:
-      Sntp(const Sntp &) = delete;
-      static Sntp &instance();
-      const char *name() const override {
+      Sntp(const Sntp&) = delete;
+      static Sntp& instance();
+      const char* name() const override {
         return "sntp";
       }
-      std::string host(); 
+      std::string host();
       int tzOfs();
-      bool synced()
-      {
+      bool synced() {
         return _syncedAt > 0;
       }
 
      protected:
-      void handleEvent(Event &ev) override;
-      bool handleRequest(Request &req) override;
-      JsonDocument *getState(RequestContext &ctx) override;
-      bool setConfig(RequestContext &ctx) override;
-      JsonDocument *getConfig(RequestContext &ctx) override;
+      void handleEvent(Event& ev) override;
+      bool handleRequest(Request& req) override;
+      JsonDocument* getState(RequestContext& ctx) override;
+      bool setConfig(RequestContext& ctx) override;
+      JsonDocument* getConfig(RequestContext& ctx) override;
 
      private:
       Sntp();
@@ -34,10 +46,10 @@ namespace esp32m {
       float _interval;
       unsigned long _syncedAt = 0;
       void update();
-      void synced(struct timeval *tv);
-      friend void sync_time_cb(struct timeval *tv);
+      void synced(struct timeval* tv);
+      friend void sync_time_cb(struct timeval* tv);
     };
 
-    Sntp *useSntp();
+    Sntp* useSntp();
   }  // namespace net
 }  // namespace esp32m

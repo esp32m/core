@@ -63,7 +63,6 @@ namespace esp32m {
     }
   }
 
-
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;
     // static Sleeper sleeper;
@@ -143,7 +142,6 @@ namespace esp32m {
       _device = nullptr;
     }
 
-
     void Component::setState(JsonVariantConst value, bool* changed) {
       if (!_device)
         return;
@@ -178,30 +176,19 @@ namespace esp32m {
     StateEmitter::StateEmitter(EmitFlags flags) : _flags(flags) {}
 
     void StateEmitter::handleEvent(Event& ev) {
-      union {
-        // sensor::GroupChanged* gc;
-        ComponentStateChanged* sc;
-      };
+      ComponentStateChanged* sc;
       bool changed = false;
       if (EventInited::is(ev))
         xTaskCreate([](void* self) { ((StateEmitter*)self)->run(); }, "m/stem",
                     4096, this, 1, &_task);
-      else /*if (sensor::GroupChanged::is(ev, &gc)) {
-        for (auto sensor : gc->group())
-          if (!sensor->disabled && filter(sensor)) {
-            std::lock_guard guard(_queueMutex);
-            _queue[sensor->uid()].sensor = sensor;
-            changed = true;
-          }
-      } else */
-        if (ComponentStateChanged::is(ev, &sc)) {
-          auto component = sc->component();
-          if (!component->isDisabled() && filter(component)) {
-            std::lock_guard guard(_queueMutex);
-            _queue[component->uid()].component = component;
-            changed = true;
-          }
+      else if (ComponentStateChanged::is(ev, &sc)) {
+        auto component = sc->component();
+        if (!component->isDisabled() && filter(component)) {
+          std::lock_guard guard(_queueMutex);
+          _queue[component->uid()].component = component;
+          changed = true;
         }
+      }
       if (changed && _task && (_flags & EmitFlags::OnChange))
         xTaskNotifyGive(_task);
     }
@@ -247,31 +234,5 @@ namespace esp32m {
     }
 
   }  // namespace dev
-
-  namespace sensor {
-    int _groupCounter = 0;
-    int nextGroup() {
-      // std::lock_guard lock(_componentsMutex);
-      return ++_groupCounter;
-    }
-
-    /* Group::Iterator::Iterator(int id) : _id(id) {
-       if (id < 0)
-         _inner = dev::_components.end();
-       else {
-         _inner = dev::_components.begin();
-         if (_inner->second->group != _id)
-           next();
-       }
-     }
-
-     void Group::Iterator::next() {
-       for (;;) {
-         _inner++;
-         if (_inner == dev::_components.end() || _inner->second->group == _id)
-           break;
-       }
-     }*/
-  }  // namespace sensor
 
 }  // namespace esp32m

@@ -12,11 +12,8 @@ namespace esp32m {
         : _name(name),
           _sensorFlow(this, "volume_flow_rate", "flow"),
           _sensorConsumption(this, "water", "consumption") {
-      auto group = sensor::nextGroup();
-      _sensorConsumption.group = group;
       _sensorConsumption.stateClass = StateClass::Total;
       _sensorConsumption.unit = "m³";
-      _sensorFlow.group = group;
       _sensorFlow.unit = "m³/h";
       _sensorFlow.stateClass = StateClass::Measurement;
       Device::init(Flags::HasSensors);

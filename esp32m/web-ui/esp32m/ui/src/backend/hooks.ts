@@ -5,7 +5,7 @@ import {
   useEffect,
   useState,
 } from 'react';
-import { IBackendApi } from './types';
+import { IBackendApi, TRequestOptions } from './types';
 import { useDispatch, useSelector } from 'react-redux';
 import { TSelector, TStateRoot } from '@ts-libs/redux';
 import { useSnackApi } from '@ts-libs/ui-snack';
@@ -22,12 +22,12 @@ export const useBackendApi = () => {
   return ctx;
 };
 
-type TBaseRequestOptions = {
+type TBaseRequestOptions = TRequestOptions & {
   condition?: boolean;
   data?: any;
 };
 
-type TRequestOptions = TBaseRequestOptions & {
+type TUseRequestOptions = TBaseRequestOptions & {
   delay?: number;
   interval?: number;
 };
@@ -53,7 +53,7 @@ class Pending<T> {
 export function useRequest<T = unknown>(
   target: string,
   name: string,
-  options?: TRequestOptions
+  options?: TUseRequestOptions
 ) {
   const [refreshPending, setRefreshPending] = useState<
     Pending<T> | undefined
@@ -71,7 +71,7 @@ export function useRequest<T = unknown>(
     if (refreshPending || condition === undefined || condition)
       try {
         setRunning(true);
-        const response = await api.request(target, name, data);
+        const response = await api.request(target, name, data, options);
         refreshPending?.resolve(response.data);
         setResult(response.data);
       } catch (e) {
@@ -103,7 +103,7 @@ export function useRequest<T = unknown>(
   return [result, refresh, running] as const;
 }
 
-type TCachedRequestOptions<T = unknown> = TRequestOptions & {
+type TCachedRequestOptions<T = unknown> = TUseRequestOptions & {
   action: ActionCreator<UnknownAction>;
   selector: TSelector<T>;
 };
@@ -127,7 +127,7 @@ export function useCachedRequest<T = unknown>(
   return [condition ? result : selected, update, running] as const;
 }
 
-type TGetStateOptions = TRequestOptions & {
+type TGetStateOptions = TUseRequestOptions & {
   once?: boolean;
 };
 
@@ -154,13 +154,13 @@ export const useModuleApi = (target: string) => {
   const [inProgress, setInProgress] = useState(0);
   const enter = () => setInProgress((v) => v + 1);
   const leave = () => setInProgress((v) => v - 1);
-  const request = useCallback(async <T extends TJsonValue>(name: string, data?: T) => {
+  const request = useCallback(async <T extends TJsonValue>(name: string, data?: T, options?: TRequestOptions) => {
     try {
       enter()
-      return await api.request(target, name, data);
+      return await api.request(target, name, data, options);
     } catch (e) {
       snack.error(e);
-    } finally {
+    } finally { 
       leave();
     }
   }, [target, api, snack]);
@@ -224,7 +224,7 @@ export const useModuleApi = (target: string) => {
 
 export function useModuleConfig<T = unknown>(
   target: string,
-  options?: TRequestOptions
+  options?: TUseRequestOptions
 ) {
   const api = useModuleApi(target);
   const { setConfig, inProgress: settingConfig } = api;
@@ -235,7 +235,7 @@ export function useModuleConfig<T = unknown>(
 
 export function useModuleInfo<T = unknown>(
   target: string,
-  options?: TRequestOptions
+  options?: TUseRequestOptions
 ) {
   return useRequest<T>(target, 'info-get', options);
 }

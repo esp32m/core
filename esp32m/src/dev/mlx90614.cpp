@@ -96,10 +96,7 @@ namespace esp32m {
         : mlx90614::Core(i2c),
           _objectTemperature(this, "temperature", "object"),
           _ambientTemperature(this, "temperature", "ambient") {
-      auto group = sensor::nextGroup();
-      _objectTemperature.group = group;
       _objectTemperature.precision = 1;
-      _ambientTemperature.group = group;
       _ambientTemperature.precision = 1;
       Device::init(Flags::HasSensors);
     }

@@ -111,10 +111,9 @@ class StatePoller implements IStatePoller {
   suspend() {
     this._suspendCount++;
     this.update();
-    this.poller.disable();
     return () => {
-      this._suspendCount++;
-      this.poller.disable();
+      this._suspendCount--;
+      this.update();
     }
   }
   disable() {

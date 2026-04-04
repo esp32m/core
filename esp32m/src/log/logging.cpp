@@ -2,7 +2,7 @@
 #include "esp32m/base.hpp"
 #include "esp32m/net/ota.hpp"
 
-#include <esp_rom_uart.h>
+#include <esp_rom_serial_output.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <freertos/ringbuf.h>
@@ -11,9 +11,9 @@
 #include <rom/ets_sys.h>
 #include <string.h>
 #include <time.h>
+#include <algorithm>  // needed for std::remove() to work
 #include <mutex>
 #include <vector>
-#include <algorithm> // needed for std::remove() to work
 
 #include "sdkconfig.h"
 
@@ -27,7 +27,7 @@ namespace esp32m {
 #endif
 
     LogMessageFormatter _formatter = nullptr;
-    std::vector<LogAppender *> _appenders;
+    std::vector<LogAppender*> _appenders;
     std::mutex _appendersLock;
     std::mutex _loggingLock;
 
@@ -37,7 +37,7 @@ namespace esp32m {
       return "0123456789abcdef"[n & 0xf];
     };
 
-    size_t bytes2hex(char *dest, size_t destSize, const uint8_t *src,
+    size_t bytes2hex(char* dest, size_t destSize, const uint8_t* src,
                      size_t srcSize) {
       size_t si, di = 0;
       for (si = 0; si < srcSize; si++) {
@@ -56,8 +56,8 @@ namespace esp32m {
       return di;
     }
 
-    const char *dumpline(char *dest, int bpl, const char *src,
-                         const char *srcend) {
+    const char* dumpline(char* dest, int bpl, const char* src,
+                         const char* srcend) {
       if (src >= srcend)
         return 0;
       int i;
@@ -81,8 +81,8 @@ namespace esp32m {
       return src + i;
     }
 
-    LogMessage *LogMessage::alloc(Level level, int64_t stamp, const char *name,
-                                  const char *message) {
+    LogMessage* LogMessage::alloc(Level level, int64_t stamp, const char* name,
+                                  const char* message) {
       size_t nl = (name ? strlen(name) : 0) + 1;
       if (nl > 255)
         nl = 255;
@@ -98,31 +98,31 @@ namespace esp32m {
       auto maxml = 65535 - (sizeof(LogMessage) + nl);
       if (ml > maxml)
         ml = maxml;
-      const char *task = pcTaskGetName(xTaskGetCurrentTaskHandle());
+      const char* task = pcTaskGetName(xTaskGetCurrentTaskHandle());
       size_t tl = (task ? strlen(task) : 0) + 1;
       if (tl > 255)
         tl = 255;
       auto size = sizeof(LogMessage) + nl + ml + tl;
-      void *pool = malloc(size);
+      void* pool = malloc(size);
       return new (pool)
           LogMessage(size, level, stamp, task, tl, name, nl, message, ml);
     }
 
     LogMessage::LogMessage(uint16_t size, Level level, int64_t stamp,
-                           const char *task, uint8_t tasklen, const char *name,
-                           uint8_t namelen, const char *message,
+                           const char* task, uint8_t tasklen, const char* name,
+                           uint8_t namelen, const char* message,
                            uint16_t messagelen)
         : _stamp(stamp),
           _size(size),
           _level(level),
           _namelen(namelen),
           _tasklen(tasklen) {
-      strlcpy((char *)this->task(), task, tasklen);
-      strlcpy((char *)this->name(), name, namelen);
-      strlcpy((char *)this->message(), message, messagelen);
+      strlcpy((char*)this->task(), task, tasklen);
+      strlcpy((char*)this->name(), name, namelen);
+      strlcpy((char*)this->message(), message, messagelen);
     }
 
-    Logger &Loggable::logger() {
+    Logger& Loggable::logger() {
       if (!_logger) {
         std::lock_guard guard(_loggingLock);
         _logger = std::unique_ptr<Logger>(new Logger(*this));
@@ -136,7 +136,7 @@ namespace esp32m {
 
     class BufferedAppender : public LogAppender {
      public:
-      BufferedAppender(LogAppender &appender, size_t bufsize, bool autoRelease)
+      BufferedAppender(LogAppender& appender, size_t bufsize, bool autoRelease)
           : _appender(appender), _autoRelease(autoRelease) {
         _handle = xRingbufferCreate(bufsize, RINGBUF_TYPE_NOSPLIT);
         _maxItemSize = _handle ? xRingbufferGetMaxItemSize(_handle) : 0;
@@ -146,7 +146,7 @@ namespace esp32m {
       }
 
      protected:
-      bool append(const LogMessage *message) {
+      bool append(const LogMessage* message) {
         // Avoid locking/buffering if scheduler is suspended (can deadlock if a
         // different task holds the mutex while context switching is disabled).
         if (xTaskGetSchedulerState() == taskSCHEDULER_SUSPENDED)
@@ -171,7 +171,7 @@ namespace esp32m {
             break;
           // Buffer is full: drop the oldest item.
           size_t size;
-          auto item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
+          auto item = (LogMessage*)xRingbufferReceive(_handle, &size, 0);
           if (!item)
             break;
           vRingbufferReturnItem(_handle, item);
@@ -184,12 +184,12 @@ namespace esp32m {
       }
 
      private:
-      LogAppender &_appender;
+      LogAppender& _appender;
       bool _autoRelease;
       RingbufHandle_t _handle;
       size_t _maxItemSize;
       std::mutex _lock;
-      LogMessage *_pending = nullptr;
+      LogMessage* _pending = nullptr;
 
       void flushPending() {
         if (!_pending)
@@ -213,7 +213,7 @@ namespace esp32m {
 
         for (;;) {
           size_t size;
-          auto item = (LogMessage *)xRingbufferReceive(_handle, &size, 0);
+          auto item = (LogMessage*)xRingbufferReceive(_handle, &size, 0);
           if (!item) {
             if (_autoRelease)
               releaseLocked();
@@ -247,13 +247,13 @@ namespace esp32m {
     };
 
     class LogQueue;
-    LogQueue *logQueue = nullptr;
+    LogQueue* logQueue = nullptr;
 
     class LogQueue {
      public:
       LogQueue(size_t bufsize) : _bufsize(bufsize) {
         _buf = xRingbufferCreate(bufsize, RINGBUF_TYPE_NOSPLIT);
-        xTaskCreate([](void *self) { ((LogQueue *)self)->run(); }, "m/logq",
+        xTaskCreate([](void* self) { ((LogQueue*)self)->run(); }, "m/logq",
                     4096, this, tskIDLE_PRIORITY, &_task);
         logQueue = this;
       }
@@ -262,7 +262,7 @@ namespace esp32m {
         vRingbufferDelete(_buf);
         logQueue = nullptr;
       }
-      bool enqueue(const LogMessage *message) {
+      bool enqueue(const LogMessage* message) {
         return xRingbufferSend(_buf, message, message->size(), 0);
       }
 
@@ -275,17 +275,16 @@ namespace esp32m {
         for (;;) {
           esp_task_wdt_reset();
           size_t size;
-          LogMessage *item;
+          LogMessage* item;
           item =
-              (LogMessage *)xRingbufferReceive(_buf, &size, pdMS_TO_TICKS(100));
+              (LogMessage*)xRingbufferReceive(_buf, &size, pdMS_TO_TICKS(100));
           if (item) {
-            std::vector<LogAppender *> appenders;
+            std::vector<LogAppender*> appenders;
             {
               std::lock_guard guard(_appendersLock);
               appenders = _appenders;
             }
-            for (auto appender : appenders)
-              appender->append(item);
+            for (auto appender : appenders) appender->append(item);
             vRingbufferReturnItem(_buf, item);
           }
         }
@@ -305,12 +304,12 @@ namespace esp32m {
       return millis();
     }
 
-    char *format(const LogMessage *msg) {
-      static const char *levels = "??EWIDV";
+    char* format(const LogMessage* msg) {
+      static const char* levels = "??EWIDV";
       if (!msg)
         return nullptr;
       auto stamp = msg->stamp();
-      char *buf = nullptr;
+      char* buf = nullptr;
       auto level = msg->level();
       auto name = msg->name();
       auto namelen = msg->namelen();
@@ -329,7 +328,7 @@ namespace esp32m {
                       1 /*space*/ + 1 /*level*/ + 1 /*space*/ + 1 /*lbracket*/ +
                       tasknamelen + 2 /*rbracket space*/ + namelen +
                       2 /*spaces*/ + messagelen + 1 /*zero*/;
-        buf = (char *)malloc(buflen);
+        buf = (char*)malloc(buflen);
         snprintf(buf, buflen, "%s.%03d %c [%s] %s  %s", strftime_buf,
                  (int)(stamp % 1000), l, taskname, name, msg->message());
       } else {
@@ -347,7 +346,7 @@ namespace esp32m {
                       1 /*space*/ + 1 /*lbracket*/ + tasknamelen +
                       2 /*rbracket space*/ + namelen + 2 /*spaces*/ +
                       messagelen + 1 /*zero*/;
-        buf = (char *)malloc(buflen);
+        buf = (char*)malloc(buflen);
         snprintf(buf, buflen, "%d:%02d:%02d:%02d.%03d %c [%s] %s  %s", days,
                  hours, minutes, seconds, millis, l, taskname, name,
                  msg->message());
@@ -359,7 +358,7 @@ namespace esp32m {
       _formatter = formatter == nullptr ? log::formatter() : formatter;
     }
 
-    bool FormattingAppender::append(const LogMessage *message) {
+    bool FormattingAppender::append(const LogMessage* message) {
       auto str = _formatter(message);
       if (!str)
         return true;
@@ -368,7 +367,7 @@ namespace esp32m {
       return result;
     }
 
-    bool isEmpty(const char *s) {
+    bool isEmpty(const char* s) {
       if (!s)
         return true;
       auto l = strlen(s);
@@ -380,27 +379,22 @@ namespace esp32m {
       return true;
     }
 
-    void Logger::log(Level level, const char *msg) {
-      if (isEmpty(msg))
-        return;
+    void Logger::log(const LogMessage& message) {
       if (net::ota::isRunning())
         return;
       auto effectiveLevel = _level;
       if (effectiveLevel == Level::Default)
         effectiveLevel = log::level();
-      if (level > effectiveLevel)
+      if (message.level() > effectiveLevel)
         return;
-      auto name = _loggable.logName();
-      LogMessage *message = LogMessage::alloc(level, timeOrUptime(), name, msg);
-      if (!message)
-        return;
+
       bool noAppenders;
       {
         std::lock_guard guard(_appendersLock);
         noAppenders = _appenders.size() == 0;
       }
       if (noAppenders) {
-        auto m = formatter()(message);
+        auto m = formatter()(&message);
         if (m) {
           ets_printf(m);
           ets_printf("\n");
@@ -411,7 +405,7 @@ namespace esp32m {
         bool enqueued = false;
         // we can't use queue if scheduler is suspended
         if (queue && xTaskGetSchedulerState() != taskSCHEDULER_SUSPENDED)
-          enqueued = queue->enqueue(message);
+          enqueued = queue->enqueue(&message);
         if (!enqueued) {
           std::vector<LogAppender *> appenders;
           {
@@ -419,13 +413,30 @@ namespace esp32m {
             appenders = _appenders;
           }
           for (auto appender : appenders)
-            appender->append(message);
+            appender->append(&message);
         }
       }
+    }
+
+    void Logger::log(Level level, const char* msg) {
+      if (isEmpty(msg))
+        return;
+      if (net::ota::isRunning())
+        return;
+      auto effectiveLevel = _level;
+      if (effectiveLevel == Level::Default)
+        effectiveLevel = log::level();
+      if (level > effectiveLevel)
+        return;
+      auto name = _loggable.logName();
+      LogMessage* message = LogMessage::alloc(level, timeOrUptime(), name, msg);
+      if (!message)
+        return;
+      log(*message);
       free(message);
     }
 
-    void Logger::logf(Level level, const char *format, ...) {
+    void Logger::logf(Level level, const char* format, ...) {
       if (!format)
         return;
       va_list arg;
@@ -434,18 +445,19 @@ namespace esp32m {
       va_end(arg);
     }
 
-    void Logger::logf(Level level, const char *format, va_list arg) {
+    void Logger::logf(Level level, const char* format, va_list arg) {
       if (!format)
         return;
       if (net::ota::isRunning())
         return;
       char buf[64];
-      char *temp = buf;
+      char* temp = buf;
       va_list a2;
-      va_copy(a2, arg); // spec says arg is undefined after vsnprintf() call, so need to make a copy
+      va_copy(a2, arg);  // spec says arg is undefined after vsnprintf() call,
+                         // so need to make a copy
       auto len = vsnprintf(NULL, 0, format, arg);
       if (len >= sizeof(buf)) {
-        temp = (char *)malloc(len + 1);
+        temp = (char*)malloc(len + 1);
         if (temp == NULL) {
           va_end(a2);
           return;
@@ -458,23 +470,23 @@ namespace esp32m {
         free(temp);
     }
 
-    void Logger::dump(Level level, const void *buf, size_t buflen) {
+    void Logger::dump(Level level, const void* buf, size_t buflen) {
       const int bpl = 16;
       const int destlen = 9 + 16 * 4;
       char dest[destlen + 1];
       dest[destlen] = 0;
-      const char *start = (char *)buf;
-      const char *cur = start;
-      const char *end = start + buflen;
+      const char* start = (char*)buf;
+      const char* cur = start;
+      const char* end = start + buflen;
       while (!!(cur = dumpline(dest, bpl, cur, end))) log(level, dest);
     }
 
-    void addBufferedAppender(LogAppender *a, int bufsize, bool autoRelease) {
+    void addBufferedAppender(LogAppender* a, int bufsize, bool autoRelease) {
       if (a)
         addAppender(new BufferedAppender(*a, bufsize, autoRelease));
     }
 
-    void addAppender(LogAppender *a) {
+    void addAppender(LogAppender* a) {
       if (!a)
         return;
       std::lock_guard guard(_appendersLock);
@@ -511,7 +523,7 @@ namespace esp32m {
       return _appenders.size() != 0;
     }
 
-    void removeAppender(LogAppender *a) {
+    void removeAppender(LogAppender* a) {
       if (!a)
         return;
       std::lock_guard guard(_appendersLock);
@@ -532,12 +544,12 @@ namespace esp32m {
         delete q;
     }
 
-    Logger &system() {
+    Logger& system() {
       static SimpleLoggable loggable("system");
       return loggable.logger();
     }
 
-    bool charToLevel(char c, Level &l) {
+    bool charToLevel(char c, Level& l) {
       switch (c) {
         case 'I':
           l = Level::Info;
@@ -560,7 +572,7 @@ namespace esp32m {
       return true;
     }
 
-    Level detectLevel(const char **mptr) {
+    Level detectLevel(const char** mptr) {
       auto msg = *mptr;
       Level l = Level::None;
       if (msg) {
@@ -592,7 +604,7 @@ namespace esp32m {
     }
 
     class Esp32Hook;
-    Esp32Hook *_esp32Hook = nullptr;
+    Esp32Hook* _esp32Hook = nullptr;
 
     class Esp32Hook {
      public:
@@ -608,9 +620,9 @@ namespace esp32m {
      private:
       vprintf_like_t _prevLogger = nullptr;
       uint8_t _recursion = 0;
-      const char *_pendingName = nullptr;
+      const char* _pendingName = nullptr;
       Level _pendingLevel = Level::None;
-      static int esp32hook(const char *str, va_list arg) {
+      static int esp32hook(const char* str, va_list arg) {
         auto h = _esp32Hook;
         if (!h || h->_recursion)
           return 0;
@@ -623,9 +635,9 @@ namespace esp32m {
         } else if (!strcmp(str, "%c (%d) %s:")) {
           charToLevel((char)va_arg(arg, int), h->_pendingLevel);
           va_arg(arg, long);
-          h->_pendingName = va_arg(arg, const char *);
+          h->_pendingName = va_arg(arg, const char*);
         } else {
-          const char *mptr = str;
+          const char* mptr = str;
           auto level = detectLevel(&mptr);
           system().logf(level, mptr, arg);
         }
@@ -648,14 +660,14 @@ namespace esp32m {
     }
 
     class SerialHook;
-    SerialHook *serialHook = nullptr;
+    SerialHook* serialHook = nullptr;
 
     class SerialHook {
      public:
       SerialHook(size_t bufsize) {
-        _serialBuf = (char *)malloc(_serialBufLen = bufsize);
+        _serialBuf = (char*)malloc(_serialBufLen = bufsize);
         serialHook = this;
-//        ets_install_putc1(hook);
+        //        ets_install_putc1(hook);
         esp_rom_install_channel_putc(1, hook);
       }
       ~SerialHook() {
@@ -673,7 +685,7 @@ namespace esp32m {
         if (!h)
           return;
         if (h->_recursion) {
-//          ets_write_char_uart(c);
+          //          ets_write_char_uart(c);
           esp_rom_output_putc(c);
           return;
         }
@@ -693,7 +705,7 @@ namespace esp32m {
           if (c == '\n' || _serialBufPtr >= bl - 1) {
             b[_serialBufPtr] = 0;
             _serialBufPtr = 0;
-            const char **mptr = (const char **)&b;
+            const char** mptr = (const char**)&b;
             auto level = detectLevel(mptr);
             if (!suspended)
               _lock.unlock();
@@ -712,7 +724,7 @@ namespace esp32m {
       }
 
       std::mutex _lock;
-      char *_serialBuf;
+      char* _serialBuf;
       size_t _serialBufLen;
       int _serialBufPtr = 0;
       uint8_t _recursion = 0;

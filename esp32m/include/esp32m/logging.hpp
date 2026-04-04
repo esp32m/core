@@ -57,14 +57,14 @@ namespace esp32m {
      */
     class Loggable : public virtual INamed {
      public:
-      Logger &logger();
+      Logger& logger();
 
      protected:
       /**
        * @brief This needs to be overriden to return name of the loggable object
        * @return Name of the object for context logging
        */
-      virtual const char *logName() const {
+      virtual const char* logName() const {
         return name();
       }
       friend class Logger;
@@ -80,19 +80,19 @@ namespace esp32m {
      */
     class SimpleLoggable : public virtual Loggable {
      public:
-      SimpleLoggable(const char *name) : _name(name) {}
-      virtual const char *name() const {
+      SimpleLoggable(const char* name) : _name(name) {}
+      virtual const char* name() const {
         return _name;
       };
 
      protected:
       SimpleLoggable() : _name("_") {}
-      void init(const char *name, const char *nameDef) {
+      void init(const char* name, const char* nameDef) {
         _name = name ? name : (nameDef ? nameDef : "_");
       }
 
      private:
-      const char *_name;
+      const char* _name;
     };
 
     /**
@@ -100,7 +100,7 @@ namespace esp32m {
      */
     struct __attribute__((packed)) LogMessage {
      public:
-      LogMessage(const LogMessage &) = delete;
+      LogMessage(const LogMessage&) = delete;
       /**
        * @return Size of this struct in bytes
        */
@@ -110,8 +110,8 @@ namespace esp32m {
       /**
        * @return The message itself
        */
-      const char *message() const {
-        return ((char *)this) + sizeof(LogMessage) + _namelen + _tasklen;
+      const char* message() const {
+        return ((char*)this) + sizeof(LogMessage) + _namelen + _tasklen;
       }
       /**
        * @return Size of the message including null terminator
@@ -122,14 +122,14 @@ namespace esp32m {
       /**
        * @return Name of the logger emitted the message
        */
-      const char *task() const {
-        return ((char *)this) + sizeof(LogMessage);
+      const char* task() const {
+        return ((char*)this) + sizeof(LogMessage);
       }
       size_t tasklen() const {
         return _tasklen - 1;
       }
-      const char *name() const {
-        return ((char *)this) + sizeof(LogMessage) + _tasklen;
+      const char* name() const {
+        return ((char*)this) + sizeof(LogMessage) + _tasklen;
       }
       size_t namelen() const {
         return _namelen - 1;
@@ -150,16 +150,17 @@ namespace esp32m {
         return _stamp;
       }
 
+      static LogMessage* alloc(Level level, int64_t stamp, const char* name,
+                               const char* message);
+
      private:
       int64_t _stamp;
       uint16_t _size;
       uint8_t _level;
       uint8_t _namelen, _tasklen;  // including null terminator
-      LogMessage(uint16_t size, Level level, int64_t stamp, const char *task,
-                 uint8_t tasklen, const char *name, uint8_t namelen,
-                 const char *message, uint16_t messagelen);
-      static LogMessage *alloc(Level level, int64_t stamp, const char *name,
-                               const char *message);
+      LogMessage(uint16_t size, Level level, int64_t stamp, const char* task,
+                 uint8_t tasklen, const char* name, uint8_t namelen,
+                 const char* message, uint16_t messagelen);
       friend class Logger;
     };
 
@@ -170,7 +171,7 @@ namespace esp32m {
      */
     class Logger {
      public:
-      Logger(const Logger &) = delete;
+      Logger(const Logger&) = delete;
       /**
        * @brief Level of this logger.
        * Log messages with level greater than this one will be dropped
@@ -186,13 +187,15 @@ namespace esp32m {
       void setLevel(Level level) {
         _level = level;
       }
+
+      void log(const LogMessage& message);
       /**
        * @brief Send message to the log
        * @param level If greater than this logger's level, the message will be
        * dropped
        * @param msg Message to be recorded
        */
-      void log(Level level, const char *msg);
+      void log(Level level, const char* msg);
       /**
        * @brief Format and send message to the log
        * @param level If greater than this logger's level, the message will be
@@ -200,32 +203,32 @@ namespace esp32m {
        * @param msg Message to be recorded
        * @param arg Arguments
        */
-      void logf(Level level, const char *msg, va_list arg);
+      void logf(Level level, const char* msg, va_list arg);
       /**
        * @brief Format and send message to the log
        * @param level If greater than this logger's level, the message will be
        * dropped
        * @param msg Message to be recorded
        */
-      void logf(Level level, const char *format, ...);
+      void logf(Level level, const char* format, ...);
       /**
        * @brief Dump hex data to the log
        * @param buf data pointer
        * @param buflen length of the data
        */
-      void dump(Level level, const void *buf, size_t buflen);
+      void dump(Level level, const void* buf, size_t buflen);
 
      private:
-      const Loggable &_loggable;
+      const Loggable& _loggable;
       Level _level = Level::Default;
-      Logger(const Loggable &loggable) : _loggable(loggable) {}
+      Logger(const Loggable& loggable) : _loggable(loggable) {}
       friend class Loggable;
     };
 
     /**
      * @brief Function that transforms log message struct to readable string
      */
-    typedef char *(*LogMessageFormatter)(const LogMessage *);
+    typedef char* (*LogMessageFormatter)(const LogMessage*);
 
     /**
      * @brief Base abstract class for log appenders
@@ -251,14 +254,14 @@ namespace esp32m {
        * @param message Message to be recorded, may be @c nullptr
        * @return @c true on success, @c false on failure
        */
-      virtual bool append(const LogMessage *message) = 0;
+      virtual bool append(const LogMessage* message) = 0;
 
      private:
       friend class Logger;
       friend class BufferedAppender;
       friend class LogQueue;
-      friend void addAppender(LogAppender *a);
-      friend void removeAppender(LogAppender *a);
+      friend void addAppender(LogAppender* a);
+      friend void removeAppender(LogAppender* a);
     };
 
     /**
@@ -277,13 +280,13 @@ namespace esp32m {
       /**
        * @brief This is overriden to format the message
        */
-      virtual bool append(const LogMessage *message);
+      virtual bool append(const LogMessage* message);
 
       /**
        * @brief This must be overriden in the descendants to recod the formatted
        * message
        */
-      virtual bool append(const char *message) = 0;
+      virtual bool append(const char* message) = 0;
 
      private:
       LogMessageFormatter _formatter;
@@ -293,14 +296,14 @@ namespace esp32m {
      * @brief This is the default logger to be used when @c Loggable instacne is
      * not available
      */
-    Logger &system();
+    Logger& system();
 
     /**
      * @brief Adds appender to the logging subsystem.
      * All log messages passing the level check will be sent to this appender
      * @param a Appender to be added
      */
-    void addAppender(LogAppender *a);
+    void addAppender(LogAppender* a);
 
     /**
      * @brief Adds appender that may need some time to initialize before it can
@@ -320,7 +323,7 @@ namespace esp32m {
      * messages even after succesful initialization. In this case, the buffer
      * memory will never be released.
      */
-    void addBufferedAppender(LogAppender *a, int bufsize = 4096,
+    void addBufferedAppender(LogAppender* a, int bufsize = 4096,
                              bool autoRelease = true);
 
     /**
@@ -328,7 +331,7 @@ namespace esp32m {
      * Log messages will no longer be sent to this appender
      * @param a Appender to be removed
      */
-    void removeAppender(LogAppender *a);
+    void removeAppender(LogAppender* a);
 
     /**
      * @returns true if at least one appender was added
@@ -391,7 +394,7 @@ namespace esp32m {
     /**
      * @brief Unitlty method to format byte buffer as a hex sequence.
      */
-    size_t bytes2hex(char *dest, size_t destSize, const uint8_t *src,
+    size_t bytes2hex(char* dest, size_t destSize, const uint8_t* src,
                      size_t srcSize);
   }  // namespace log
 }  // namespace esp32m

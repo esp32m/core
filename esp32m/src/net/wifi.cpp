@@ -82,7 +82,7 @@ namespace esp32m {
         esp_wps_config_t config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
         ESP_CHECK_RETURN(enable(true));
         ESP_CHECK_RETURN(esp_wifi_wps_enable(&config));
-        ESP_CHECK_RETURN(esp_wifi_wps_start(0));
+        ESP_CHECK_RETURN(esp_wifi_wps_start());
         logI("WPS started");
         return ESP_OK;
       }

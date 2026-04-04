@@ -315,7 +315,6 @@ namespace esp32m {
 
     Dsts::Dsts(Owb *owb) : dsts::Core(owb) {
       Device::init(Flags::HasSensors);
-      _sensorGroup = sensor::nextGroup();
     };
 
     Sensor &Dsts::getSensor(const dsts::Probe &probe) {
@@ -328,7 +327,6 @@ namespace esp32m {
         id += probe.codestr();
         sensor = new Sensor(this, "temperature", id.c_str());
         sensor->precision = 2;
-        sensor->group = _sensorGroup;
         if (probe.name)
           sensor->setTitle(probe.name);
         auto props = new JsonDocument(

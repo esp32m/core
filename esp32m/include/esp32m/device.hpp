@@ -12,6 +12,7 @@
 #include "esp32m/json.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <type_traits>
 #include <vector>
@@ -126,6 +127,8 @@ namespace esp32m {
     namespace ComponentType {
       constexpr const char* Sensor = "sensor";
       constexpr const char* Switch = "switch";
+      constexpr const char* Select = "select";
+      constexpr const char* Cover = "cover";
       constexpr const char* BinarySensor = "binary_sensor";
     }  // namespace ComponentType
 
@@ -134,11 +137,15 @@ namespace esp32m {
     class Component : public virtual log::Loggable,
                       public virtual json::PropsContainer {
      public:
-      enum Options {
+      enum Flags {
         None = 0,
         Disabled = 1 << 0,
-        Sensor = 1 << 1,
-        RetainState = 1 << 2,
+        Sensor =
+            1 << 1,  // instances of Sensor component type should set this flag
+        RetainState = 1 << 2,  // if set, the component state will be retained
+                               // in MQTT storage
+        HasState = 1 << 3,     // if set, the component has state
+        AcceptsCommands = 1 << 4  // if set, the component accepts commands
       };
       int precision = -1;
       Component(const Component&) = delete;
@@ -157,14 +164,14 @@ namespace esp32m {
       }
 
       bool isDisabled() const {
-        return (_options & Options::Disabled) != 0;
+        return (_flags & Flags::Disabled) != 0;
       }
 
       void setDisabled(bool disabled) {
         if (disabled)
-          _options = (Options)(_options | Options::Disabled);
+          _flags = (Flags)(_flags | Flags::Disabled);
         else
-          _options = (Options)(_options & ~Options::Disabled);
+          _flags = (Flags)(_flags & ~Flags::Disabled);
       }
 
       // descriptive name, optional
@@ -180,12 +187,21 @@ namespace esp32m {
        * subclass
        */
       bool isSensor() const {
-        return (_options & Options::Sensor) != 0;
+        return (_flags & Flags::Sensor) != 0;
+      }
+
+      bool hasState() const {
+        return (_flags & Flags::HasState) != 0;
       }
 
       bool shouldRetainState() const {
-        return (_options & Options::RetainState) != 0;
+        return (_flags & Flags::RetainState) != 0;
       }
+
+      bool acceptsCommands() const {
+        return (_flags & Flags::AcceptsCommands) != 0;
+      }
+
       /**
        * @return component type
        */
@@ -258,7 +274,7 @@ namespace esp32m {
      protected:
       std::string _id;
       const char* _title = nullptr;
-      Options _options = Options::None;
+      Flags _flags = Flags::None;
       Component(const char* id = nullptr) {
         if (id)
           _id = id;
@@ -266,11 +282,56 @@ namespace esp32m {
       void init(Device* device);
 
      private:
+      template <typename T, typename Enable = void>
+      struct StateChangeDetector {
+        static bool hasChanged(JsonVariantConst oldValue, const T& value, int) {
+          return !oldValue.is<T>() || oldValue.as<T>() != value;
+        }
+      };
+
+      template <typename T>
+      struct StateChangeDetector<
+          T, typename std::enable_if<std::is_floating_point<T>::value>::type> {
+        static bool hasChanged(JsonVariantConst oldValue, T value,
+                               int precision) {
+          if (!oldValue.is<T>())
+            return true;
+          auto effectivePrecision = precision;
+          if (effectivePrecision < 0)
+            effectivePrecision = std::numeric_limits<T>::digits10;
+          T multiplier = std::pow(T(10), effectivePrecision);
+          T rNew = std::round(value * multiplier);
+          T rOld = std::round(oldValue.as<T>() * multiplier);
+          return rNew != rOld;
+        }
+      };
+
+      template <typename T>
+      struct StateChangeDetector<
+          T, typename std::enable_if<std::is_same<T, const char*>::value ||
+                                     std::is_same<T, char*>::value>::type> {
+        static bool hasChanged(JsonVariantConst oldValue, const T& value, int) {
+          auto oldString = oldValue.as<const char*>();
+          const char* newString = value ? value : "";
+          return !oldString || std::strcmp(oldString, newString) != 0;
+        }
+      };
+
+      template <typename T>
+      struct StateChangeDetector<
+          T,
+          typename std::enable_if<std::is_same<T, std::string>::value>::type> {
+        static bool hasChanged(JsonVariantConst oldValue, const T& value, int) {
+          return !oldValue.is<const char*>() ||
+                 oldValue.as<std::string>() != value;
+        }
+      };
+
       Device* _device = nullptr;
       std::unique_ptr<JsonDocument> _props;
     };
 
-    ENUM_FLAG_OPERATORS(Component::Options)
+    ENUM_FLAG_OPERATORS(Component::Flags)
 
     class ComponentStateChanged : public Event {
      public:
@@ -300,26 +361,19 @@ namespace esp32m {
 
     template <typename T>
     void Component::setState(T value, bool* changed) {
-      if (!_device)
+      if (!_device) {
+        if (changed)
+          *changed = false;
         return;
-      JsonVariantConst oldValue = _device->getComponentState(id());
-      bool ch;
-      if (std::is_floating_point_v<T> && oldValue.is<T>()) {
-        auto effectivePrecision = precision;
-        static T epsilon = 0.5;
-        if (effectivePrecision < 0)
-          effectivePrecision = std::numeric_limits<T>::digits10;
-        T multiplier = std::pow(10.0, effectivePrecision);
-        T rNew = std::round(value * multiplier);
-        T rOld = std::round(oldValue.as<T>() * multiplier);
-        ch = std::abs(rNew - rOld) >= epsilon;
-      } else {
-        ch = oldValue != value;
       }
+      using ValueType = std::decay_t<T>;
+      JsonVariantConst oldValue = _device->getComponentState(id());
+      bool ch = StateChangeDetector<ValueType>::hasChanged(oldValue, value,
+                                                           precision);
+      if (changed)
+        *changed = ch;
       if (ch) {
         _device->setComponentState(id(), value);
-        if (changed)
-          *changed = true;
         ComponentStateChanged::publish(this);
       }
     }
@@ -398,12 +452,11 @@ namespace esp32m {
 
     class Sensor : public Component {
      public:
-      int group = 0;
       StateClass stateClass = StateClass::Undefined;
       const char* unit = nullptr;
       Sensor(Device* device, const char* type, const char* id = nullptr)
           : Component(id), _type(type) {
-        _options = (Options)(_options | Options::Sensor);
+        _flags = (Flags)(_flags | Flags::Sensor | Flags::HasState);
         Component::init(device);
       }
 
@@ -412,7 +465,7 @@ namespace esp32m {
         return _type;
       }
       const char* component() const override {
-        return "sensor";
+        return ComponentType::Sensor;
       }
 
       const char* id() const override {
@@ -424,20 +477,6 @@ namespace esp32m {
       bool is(const char* t) const {
         return t && !strcmp(type(), t);
       }
-      /*template <typename T>
-      void set(T value, bool* changed = nullptr) {
-        if constexpr (std::is_same_v<T, float>)
-          if (precision >= 0)
-            value = roundTo(value, precision);
-        auto c = _value != value;
-        _value.set(value);
-        if (c) {
-          if (changed)
-            *changed = true;
-          if (group <= 0)
-            ComponentStateChanged::publish(this);
-        }
-      }*/
       JsonVariantConst get() const {
         return getState();
       }
@@ -450,18 +489,30 @@ namespace esp32m {
       const char* _type;
     };
 
+    class BinarySensor : public Sensor {
+     public:
+      BinarySensor(Device* device, const char* name, const char* id = nullptr)
+          : Sensor(device, name, id) {
+        _flags |= Flags::RetainState;
+      }
+      BinarySensor(const BinarySensor&) = delete;
+      const char* component() const override {
+        return ComponentType::BinarySensor;
+      }
+    };
+
     class Switch : public Component {
      public:
       Switch(Device* device, const char* id = nullptr) : Component(id) {
         Component::init(device);
-        _options |= Options::RetainState;
+        _flags |= Flags::RetainState | Flags::HasState | Flags::AcceptsCommands;
       }
       Switch(const Switch&) = delete;
       const char* type() const override {
         return "";
       }
       const char* component() const override {
-        return "switch";
+        return ComponentType::Switch;
       }
       void set(bool value, bool* changed = nullptr) {
         setState(value, changed);
@@ -471,82 +522,97 @@ namespace esp32m {
       }
     };
 
-    class BinarySensor : public Sensor {
+    class Select : public Component {
      public:
-      BinarySensor(Device* device, const char* name, const char* id = nullptr)
-          : Sensor(device, name, id) {
-        _options |= Options::RetainState;
+      typedef std::vector<std::string> TOptions;
+      Select(Device* device, const TOptions& options, const char* id = nullptr)
+          : Component(id), _options(options) {
+        Component::init(device);
+        _flags |= Flags::RetainState | Flags::HasState | Flags::AcceptsCommands;
       }
-      BinarySensor(const BinarySensor&) = delete;
+      Select(const Select&) = delete;
+      const char* type() const override {
+        return "";
+      }
       const char* component() const override {
-        return "binary_sensor";
+        return ComponentType::Select;
       }
+      void set(std::string value, bool* changed = nullptr) {
+        setState(value, changed);
+      }
+      std::string get() {
+        return getState().as<std::string>();
+      }
+      const TOptions& options() const {
+        return _options;
+      }
+
+     private:
+      const TOptions& _options;
+    };
+
+    enum class CoverState { Unknown, Opening, Open, Closing, Closed, Stopped };
+
+    class Cover : public Component {
+     public:
+      Cover(Device* device, const char* type, const char* id = nullptr)
+          : Component(id), _type(type) {
+        Component::init(device);
+        _flags |= Flags::RetainState | Flags::HasState | Flags::AcceptsCommands;
+      }
+      Cover(const Cover&) = delete;
+      const char* type() const override {
+        return _type;
+      }
+      const char* component() const override {
+        return ComponentType::Cover;
+      }
+      void set(CoverState value, bool* changed = nullptr) {
+        const char* strValue = nullptr;
+        switch (value) {
+          case CoverState::Opening:
+            strValue = "opening";
+            break;
+          case CoverState::Open:
+            strValue = "open";
+            break;
+          case CoverState::Closing:
+            strValue = "closing";
+            break;
+          case CoverState::Closed:
+            strValue = "closed";
+            break;
+          case CoverState::Stopped:
+            strValue = "stopped";
+            break;
+          default:
+            break;
+        }
+        setState(strValue, changed);
+      }
+      CoverState get() {
+        auto strValue = getState().as<std::string>();
+        if (strValue == "opening")
+          return CoverState::Opening;
+        if (strValue == "open")
+          return CoverState::Open;
+        if (strValue == "closing")
+          return CoverState::Closing;
+        if (strValue == "closed")
+          return CoverState::Closed;
+        if (strValue == "stopped")
+          return CoverState::Stopped;
+        return CoverState::Unknown;
+      }
+
+     private:
+      const char* _type;
     };
 
   }  // namespace dev
 
   namespace sensor {
     int nextGroup();
-    class Group {
-     public:
-      Group(int id) : _id(id) {}
-      struct Iterator {
-       public:
-        typedef std::map<std::string, dev::Component*>::iterator Inner;
-        Iterator(int id);
-        bool operator==(const Iterator& other) const {
-          return _inner == other._inner;
-        }
-        bool operator!=(const Iterator& other) const {
-          return _inner != other._inner;
-        }
-        dev::Component* operator*() const {
-          return _inner->second;
-        }
-        Iterator& operator++() {
-          next();
-          return *this;
-        }
-
-       private:
-        int _id;
-        Inner _inner;
-        void next();
-      };
-      Iterator begin() const {
-        return Iterator(_id);
-      }
-      Iterator end() const {
-        return Iterator(-1);
-      }
-
-     private:
-      int _id;
-    };
-/*    class GroupChanged : public Event {
-     public:
-      GroupChanged(const GroupChanged&) = delete;
-      const Group& group() const {
-        return _group;
-      }
-      static void publish(int group) {
-        GroupChanged ev(group);
-        ev.Event::publish();
-      }
-      static bool is(Event& ev, GroupChanged** changed) {
-        if (ev.is(Type)) {
-          if (changed)
-            *changed = (GroupChanged*)&ev;
-          return true;
-        }
-        return false;
-      }
-
-     private:
-      GroupChanged(int group) : Event(Type), _group(group) {}
-      Group _group;
-      constexpr static const char* Type = "sensor-group-changed";
-    };*/
 
   }  // namespace sensor
 

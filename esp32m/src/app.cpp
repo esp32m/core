@@ -5,7 +5,6 @@
 #include <esp_ota_ops.h>
 #include <esp_private/esp_int_wdt.h>
 #include <esp_task_wdt.h>
-#include <hal/efuse_hal.h>
 #include <lwip/apps/netbiosns.h>
 #include <sdkconfig.h>
 
@@ -180,7 +179,8 @@ namespace esp32m {
   void App::Init::inferHostname(int limit, int macDigits) {
     uint8_t mac[6];
     char digit[3];
-    efuse_hal_get_mac(mac);
+    if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_efuse_mac_get_default(mac)) != ESP_OK)
+      memset(mac, 0, sizeof(mac));
     if (macDigits > 6)
       macDigits = 6;
     if (macDigits < 1)

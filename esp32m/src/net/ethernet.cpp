@@ -173,7 +173,12 @@ namespace esp32m {
       eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
       phy_config.phy_addr = 0;
       phy_config.reset_gpio_num = -1;
-      esp_eth_phy_t *phy = esp_eth_phy_new_lan87xx(&phy_config);
+      esp_eth_phy_t *phy = nullptr;
+    #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+      phy = esp_eth_phy_new_generic(&phy_config);
+    #else
+      phy = esp_eth_phy_new_lan87xx(&phy_config);
+    #endif
       esp_eth_config_t config = ETH_DEFAULT_CONFIG(mac, phy);
       auto ether = new Ethernet(name, config);
       return ether;

@@ -7,7 +7,9 @@
 #include <string>
 #include <vector>
 
+#if CONFIG_ESP_COREDUMP_ENABLE
 #include "esp_core_dump.h"
+#endif
 #include "esp_partition.h"
 
 #include "esp32m/app.hpp"

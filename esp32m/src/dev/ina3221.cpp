@@ -239,7 +239,6 @@ namespace esp32m {
   namespace dev {
 
     Ina3221::Ina3221(i2c::MasterDev* i2c) : ina3221::Core(i2c) {
-      auto group = sensor::nextGroup();
       char idbuf[16];
 
       for (ina3221::Channel ch = ina3221::Channel::First;
@@ -248,17 +247,14 @@ namespace esp32m {
         auto sv = _shuntVoltages[ch] = new Sensor(this, "voltage", idbuf);
         sv->unit = "mV";
         sv->precision = 2;
-        sv->group = group;
         snprintf(idbuf, sizeof(idbuf), "bus-%d", ch + 1);
         auto bv = _busVoltages[ch] = new Sensor(this, "voltage", idbuf);
         bv->unit = "V";
         bv->precision = 2;
-        bv->group = group;
         snprintf(idbuf, sizeof(idbuf), "current-%d", ch + 1);
         auto c = _currents[ch] = new Sensor(this, "current", idbuf);
         c->unit = "mA";
         c->precision = 2;
-        c->group = group;
       }
       Device::init(Flags::HasSensors);
     }

@@ -136,10 +136,7 @@ namespace esp32m {
           : ahtxx::Core(name),
             _temperature(this, "temperature"),
             _humidity(this, "humidity") {
-        auto group = sensor::nextGroup();
-        _temperature.group = group;
         _temperature.precision = 2;
-        _humidity.group = group;
         _humidity.precision = 0;
         Device::init(Flags::HasSensors);
         ahtxx::Core::init(i2c);

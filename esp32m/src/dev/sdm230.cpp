@@ -30,34 +30,24 @@ namespace esp32m {
           _powerFactor(this, "power_factor"),
           _frequency(this, "frequency") {
       Device::init(Flags::HasSensors);
-      auto group = sensor::nextGroup();
-      _energyImp.group = group;
       _energyImp.precision = 2;
       _energyImp.setTitle("consumed energy");
       _energyImp.stateClass = StateClass::Total;
-      _energyExp.group = group;
       _energyExp.precision = 2;
       _energyExp.setTitle("supplied energy");
       _energyExp.stateClass = StateClass::Total;
-      _voltage.group = group;
       _voltage.precision = 2;
-      _current.group = group;
       _current.precision = 2;
-      _powerActive.group = group;
       _powerActive.unit = "kW";
       _powerActive.precision = 2;
       _powerActive.stateClass = StateClass::Measurement;
-      _powerApparent.group = group;
       _powerApparent.unit = "kVA";
       _powerApparent.precision = 2;
       _powerApparent.stateClass = StateClass::Measurement;
-      _powerReactive.group = group;
       _powerReactive.unit = "kvar";
       _powerReactive.precision = 2;
       _powerReactive.stateClass = StateClass::Measurement;
-      _powerFactor.group = group;
       _powerFactor.precision = 2;
-      _frequency.group = group;
       _frequency.precision = 2;
     }
 

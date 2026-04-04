@@ -13,7 +13,7 @@ namespace esp32m {
 
       class ConfigBuilder : public log::Loggable {
        public:
-        std::string configTopic, configPayload, stateTopic, commandTopic;
+        std::string configTopic, configPayload, stateTopic, commandTopic, componentId;
         const char* name() const override {
           return _id;
         }
@@ -27,6 +27,9 @@ namespace esp32m {
             return false;
           }
           _component = component;
+          componentId = _descriptor["componentId"].as<std::string>();
+          _hasState = _descriptor["has_state"] | false;
+          _acceptsCommands = _descriptor["accepts_commands"] | false;
           _descriptorConfig = _descriptor["config"];
           if (!_descriptorConfig) {
             logW("device did not provide HA config");
@@ -53,7 +56,8 @@ namespace esp32m {
         std::string _component, _uniqueId, _name, _availabilityTopic,
             _payloadAvailable, _payloadUnavailable;
         std::map<std::string, std::string> _deviceProps;
-        bool _addUniqueId = false, _addName = false;
+        bool _addUniqueId = false, _addName = false, _hasState = false,
+             _acceptsCommands = false;
         // size_t _configPayloadSize = 0;
         void inferUniqueId() {
           auto uniqueId = _descriptorConfig["unique_id"].as<const char*>();
@@ -82,35 +86,18 @@ namespace esp32m {
           auto prop = props.get(name);
           if (!device[name] && !prop.empty()) {
             _deviceProps[name] = prop;
-            /*_configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(prop.size());*/
           }
         }
         void inferDeviceInfo() {
           JsonObjectConst device = _descriptorConfig["device"];
-          if (!device) {
-            //_configPayloadSize += JSON_OBJECT_SIZE(1);
-          }
-          /*          if (!device["connections"])
-                      _configPayloadSize += JSON_OBJECT_SIZE(1);
-                    _configPayloadSize +=
-                        JSON_ARRAY_SIZE(2 + 2 * 2) +
-                        JSON_STRING_SIZE(
-                            net::MacMaxChars);  // [["mac", mac],["hostname",
-             hostname]]*/
-
           if (!device["name"]) {
             std::string name = App::instance().name();
             _deviceProps["name"] = name;
-            /*_configPayloadSize +=
-                JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(name.size());*/
           }
           if (!device["configuration_url"]) {
             auto url =
                 string_printf("http://%s.local/", App::instance().hostname());
             _deviceProps["configuration_url"] = url;
-            /*          _configPayloadSize +=
-                          JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(url.size());*/
           }
           inferDeviceProp(device, "model");
           inferDeviceProp(device, "manufacturer");
@@ -138,15 +125,11 @@ namespace esp32m {
             for (const char* name : commandTopicNames)
               _commandTopicNames.push_back(name);
           if (!_commandTopicNames.size())
-            if (_component == "switch")
+            if (_acceptsCommands)
               _commandTopicNames.push_back("command_topic");
 
-          if (_commandTopicNames.size()) {
+          if (_commandTopicNames.size()) 
             commandTopic = _descriptor["commandTopic"] | makeTopic(true);
-            /*_configPayloadSize += JSON_OBJECT_SIZE(_commandTopicNames.size())
-               + JSON_STRING_SIZE(commandTopic.size()) *
-                                      _commandTopicNames.size();*/
-          }
         }
         void inferStateTopic() {
           JsonArrayConst stateTopicNames = _descriptor["stateTopicNames"];
@@ -154,15 +137,10 @@ namespace esp32m {
             for (const char* name : stateTopicNames)
               _stateTopicNames.push_back(name);
           if (!_stateTopicNames.size())
-            if (_component == "sensor" || _component == "switch" ||
-                _component == "binary_sensor")
+            if (_hasState)
               _stateTopicNames.push_back("state_topic");
-          if (_stateTopicNames.size()) {
+          if (_stateTopicNames.size()) 
             stateTopic = _descriptor["stateTopic"] | makeTopic(false);
-            /*_configPayloadSize +=
-                JSON_OBJECT_SIZE(_stateTopicNames.size()) +
-                JSON_STRING_SIZE(stateTopic.size()) * _stateTopicNames.size();*/
-          }
         }
         void inferAvailability() {
           if (_descriptorConfig["availability_topic"])
@@ -220,7 +198,6 @@ namespace esp32m {
               root[name] = commandTopic;
 
           json::check(this, doc, "HA config payload");
-          //          configPayload = json::serialize(root);
           serializeJson(root, configPayload);
           delete doc;
         }

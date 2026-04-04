@@ -7,7 +7,7 @@ namespace esp32m {
 
       const char* stateClasses[] = {"measurement", "total", "total_increasing"};
 
-      JsonDocument* describeSensor(Component* component) {
+      JsonDocument* describeComponent(Component* component) {
         auto uid = component->uid();
         auto id = component->id();
         auto title = component->title();
@@ -59,9 +59,8 @@ namespace esp32m {
         root["name"] = component->device()->name();
         root["componentId"] = id;
         root["component"] = component->component();
-        /*if (group > 0)
-          root["group"] = group;*/
-        root["state_class"] = "measurement";
+        root["has_state"] = component->hasState(  );
+        root["accepts_commands"] = component->acceptsCommands(  );
         auto config = root["config"].to<JsonObject>();
         if (title)
           config["name"] = title;
@@ -76,9 +75,17 @@ namespace esp32m {
         if (component->isComponent(ComponentType::BinarySensor) ||
             component->isComponent(ComponentType::Switch)) {
           config["value_template"] =
-              string_printf("{{ 'ON' if value_json.%s else 'OFF' }}", id);
+              string_printf("{{ 'ON' if value_json['%s'] else 'OFF' }}", id);
         } else
-          config["value_template"] = string_printf("{{value_json.%s}}", id);
+          config["value_template"] = string_printf("{{value_json['%s']}}", id);
+        if (component->isComponent(ComponentType::Select)) {
+          config["platform"] = "select";
+          auto options=config["options"].to<JsonArray>();
+          for (auto& opt: static_cast<Select*>(component)->options())
+            options.add(opt);
+        } else if (component->isComponent(ComponentType::Cover)) {
+          config["platform"] = "cover";
+        }
         return doc;
       }
     }  // namespace ha

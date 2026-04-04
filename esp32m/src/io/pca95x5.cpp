@@ -69,8 +69,10 @@ namespace esp32m {
         case pca95x5::Bits::Eight: {
           uint8_t v8;
           auto result = _i2c->read((uint8_t)reg, v8);
-          if (result == ESP_OK)
+          if (result == ESP_OK) {
             value = v8;
+            return ESP_OK;
+          }
         } break;
         case pca95x5::Bits::Sixteen:
           return _i2c->read((uint8_t)reg << 1, value);

@@ -2,6 +2,8 @@
 #include "esp32m/io/rmt.hpp"
 #include "esp32m/logging.hpp"
 
+#include <driver/gpio.h>
+
 namespace esp32m {
 
   namespace owb {
@@ -149,10 +151,12 @@ namespace esp32m {
           txcfg.mem_block_symbols = 64;  // ping-pong is always avaliable on tx
                                          // channel, save hardware memory blocks
           txcfg.trans_queue_depth = 4;
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
           // make tx channel coexist with rx channel on the same gpio pin
           txcfg.flags.io_loop_back = true;
           // enable open-drain mode for 1-wire bus
           txcfg.flags.io_od_mode = true;
+#endif
 
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
           rmt_transmit_config_t txconfig = {};
@@ -163,7 +167,7 @@ namespace esp32m {
 
           ESP_CHECK_RETURN(_rx->enable());
           ESP_CHECK_RETURN(_tx->enable());
-          // ESP_CHECK_RETURN(gpio_od_enable(pin())); // looking into the future - IDF 6.0
+          ESP_CHECK_RETURN(gpio_od_enable(pin()));
           _ready = true;
         }
         return ESP_OK;

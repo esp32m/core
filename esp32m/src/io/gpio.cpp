@@ -695,7 +695,6 @@ namespace esp32m {
         ledc_conf.gpio_num = _pin->num();
         ledc_conf.speed_mode = LEDC_BEST_SPEED_MODE;
         ledc_conf.channel = (ledc_channel_t)_channel;
-        ledc_conf.intr_type = LEDC_INTR_DISABLE;
         ledc_conf.timer_sel = (ledc_timer_t)_timer;
         ledc_conf.duty = uint32_t(_duty * (1 << _dutyRes));
         LOGI(_pin, "PWM config: channel=%i, timer=%i, freq=%i, res=%d",
@@ -727,7 +726,6 @@ namespace esp32m {
         ledc_conf.gpio_num = _pin->num();
         ledc_conf.speed_mode = mode;
         ledc_conf.channel = (ledc_channel_t)_channel;
-        ledc_conf.intr_type = LEDC_INTR_DISABLE;
         ledc_conf.timer_sel = (ledc_timer_t)_timer;
         ESP_CHECK_RETURN(ledc_channel_config(&ledc_conf));
         /*LOGI(_pin, "LEDC config: channel=%i, timer=%i, freq=%i,

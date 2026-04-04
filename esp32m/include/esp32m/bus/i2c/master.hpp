@@ -103,6 +103,9 @@ namespace esp32m {
       const char* name() const override {
         return _name.c_str();
       }
+      i2c_master_dev_handle_t handle() const {
+        return _handle;
+      }
       uint16_t address() const {
         return _config.device_address;
       }

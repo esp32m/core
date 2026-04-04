@@ -2,6 +2,7 @@
 
 #include "esp32m/app.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/io/pins.hpp"
 #include "esp32m/dev/hbridge.hpp"
 
 namespace esp32m {
@@ -68,6 +69,7 @@ namespace esp32m {
           ESP_CHECK_RETURN(_rev->pwm()->enable(rev));
         }
       }
+      io::pin::Tx tx(io::pin::Tx::Type::Write);
       ESP_CHECK_RETURN(_fwd->digital()->write(fwd));
       ESP_CHECK_RETURN(_rev->digital()->write(rev));
       return ESP_OK;

@@ -12,9 +12,9 @@
 namespace esp32m {
   namespace net {
 
-    const char *DefaultNtpHost = "pool.ntp.org";
+    const char* DefaultNtpHost = "pool.ntp.org";
 
-    void sync_time_cb(struct timeval *tv) {
+    void sync_time_cb(struct timeval* tv) {
       Sntp::instance().synced(tv);
     }
 
@@ -23,14 +23,14 @@ namespace esp32m {
       sntp_set_time_sync_notification_cb(sync_time_cb);
     }
 
-    void Sntp::handleEvent(Event &ev) {
+    void Sntp::handleEvent(Event& ev) {
       if (IpEvent::is(ev, IP_EVENT_STA_GOT_IP, nullptr))
         xTimerPendFunctionCall(
-            [](void *self, uint32_t a) { ((Sntp *)self)->update(); }, this, 0,
+            [](void* self, uint32_t a) { ((Sntp*)self)->update(); }, this, 0,
             pdMS_TO_TICKS(1000));
     }
 
-    bool Sntp::handleRequest(Request &req) {
+    bool Sntp::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("sync")) {
@@ -41,7 +41,7 @@ namespace esp32m {
       return false;
     }
 
-    void time2str(char *buf, size_t bufsize) {
+    void time2str(char* buf, size_t bufsize) {
       time_t now;
       time(&now);
       struct tm timeinfo;
@@ -49,12 +49,13 @@ namespace esp32m {
       strftime(buf, bufsize, "%F %T", &timeinfo);
     }
 
-    void Sntp::synced(struct timeval *tv) {
+    void Sntp::synced(struct timeval* tv) {
+      static EventTimeSync evs;
       _syncedAt = millis();
       char buf[32];
       time2str(buf, sizeof(buf));
       logD("local time/date was set to %s, (TZ=%s)", buf, _tze.c_str());
-      EventStateChanged::publish(this);
+      evs.publish();
     }
 
     int Sntp::tzOfs() {
@@ -67,7 +68,7 @@ namespace esp32m {
       return (int)(difftime(rawtime, gmt) / 60);
     }
 
-    JsonDocument *Sntp::getState(RequestContext &ctx) {
+    JsonDocument* Sntp::getState(RequestContext& ctx) {
       char buf[32];
       time2str(buf, sizeof(buf));
       // size_t size = JSON_OBJECT_SIZE(3) + JSON_STRING_SIZE(strlen(buf));
@@ -80,7 +81,7 @@ namespace esp32m {
       return doc;
     }
 
-    JsonDocument *Sntp::getConfig(RequestContext &ctx) {
+    JsonDocument* Sntp::getConfig(RequestContext& ctx) {
       /*size_t size =
           JSON_OBJECT_SIZE(1 + 5 ) + // enabled, host, tzr, tze, interval
           JSON_STRING_SIZE(_host.size()) + JSON_STRING_SIZE(_tzr.size()) +
@@ -98,7 +99,7 @@ namespace esp32m {
       return doc;
     }
 
-    bool Sntp::setConfig(RequestContext &ctx) {
+    bool Sntp::setConfig(RequestContext& ctx) {
       JsonObjectConst obj = ctx.data.as<JsonObjectConst>();
       bool changed = false;
       json::from(obj["enabled"], _enabled, &changed);
@@ -141,12 +142,12 @@ namespace esp32m {
       }
     }
 
-    Sntp &Sntp::instance() {
+    Sntp& Sntp::instance() {
       static Sntp i;
       return i;
     }
 
-    Sntp *useSntp() {
+    Sntp* useSntp() {
       return &Sntp::instance();
     }
   }  // namespace net

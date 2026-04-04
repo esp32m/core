@@ -151,10 +151,7 @@ namespace esp32m {
 
     Sht3x::Sht3x(i2c::MasterDev* i2c, io::IPin* resetPin, const char* name)
         : _temperature(this, "temperature"), _humidity(this, "humidity") {
-      auto group = sensor::nextGroup();
-      _temperature.group = group;
       _temperature.precision = 2;
-      _humidity.group = group;
       _humidity.precision = 0;
       Device::init(Flags::HasSensors);
       sht3x::Core::init(i2c, resetPin, name);

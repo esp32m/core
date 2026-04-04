@@ -160,7 +160,6 @@ namespace esp32m {
       bool initSensors() override;
 
      private:
-      int _sensorGroup;
       Sensor &getSensor(const dsts::Probe &probe);
     };
 

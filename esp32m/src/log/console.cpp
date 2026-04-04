@@ -4,14 +4,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
 
-#include <esp_rom_uart.h>
+#include <esp_rom_serial_output.h>
 #include <string.h>
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 3, 0)
-#  define ESP_ROM_PUTC esp_rom_output_putc
-#else
-#  define ESP_ROM_PUTC esp_rom_uart_putc
-#endif
+#define ESP_ROM_PUTC esp_rom_output_putc
 namespace esp32m {
 
   namespace log {

@@ -19,14 +19,14 @@ namespace esp32m {
 
         class Dev {
          public:
-          std::string stateTopic;
+          std::string stateTopic, componentId;
           ~Dev() {
             if (_sub)
               delete _sub;
           }
           Dev(std::string name, std::string stateTopic,
-              std::string commandTopic)
-              : stateTopic(stateTopic), _name(name) {
+              std::string commandTopic, std::string componentId)
+              : stateTopic(stateTopic), componentId(componentId), _name(name) {
             if (!commandTopic.empty()) {
               auto& mqtt = net::Mqtt::instance();
               _sub = mqtt.subscribe(
@@ -59,7 +59,7 @@ namespace esp32m {
                 new JsonDocument(); /* JSON_STRING_SIZE(payload.size()) */
             auto root = doc->to<JsonVariant>();
             root.set(payload);
-            CommandRequest ev(name(), root);
+            CommandRequest ev(name(), componentId, root);
             ev.publish();
             delete doc;
           }
@@ -204,8 +204,8 @@ namespace esp32m {
               auto id = component->uid();
               auto it = req.responses.find(id);
               if (it == req.responses.end()) {
-                auto doc = describeSensor(component);
-                json::check(this, doc, "describeSensor");
+                auto doc = describeComponent(component);
+                json::check(this, doc, "describeComponent");
                 auto data = doc->as<JsonVariantConst>();
                 publishConfig(id.c_str(), data);
                 delete doc;
@@ -226,7 +226,7 @@ namespace esp32m {
             auto it = _devices.find(id);
             if (it == _devices.end()) {
               _devices[id] = std::unique_ptr<mqtt::Dev>(new mqtt::Dev(
-                  data["name"], builder.stateTopic, builder.commandTopic));
+                  data["name"], builder.stateTopic, builder.commandTopic, builder.componentId));
             }
             std::lock_guard<std::mutex> lock(_publishedConfigsMutex);
             _publishedConfigs[builder.configTopic] |= FlagConfigValid;

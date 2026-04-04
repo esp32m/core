@@ -17,7 +17,7 @@ namespace esp32m {
         Mqtt::instance().respond(source, seq(), data, isError);
       }
       Response *makeResponseImpl() override {
-        return new Response(Mqtt::instance().name(), name(), target(), seq());
+        return new Response(Mqtt::instance().name(), *this, target());
       }
     };
 
