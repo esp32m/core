@@ -1,5 +1,6 @@
 #include <esp_http_client.h>
 #include <esp_https_ota.h>
+#include <esp_ota_ops.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
 
@@ -13,6 +14,7 @@
 #include "esp32m/net/net.hpp"
 #include "esp32m/net/ota.hpp"
 #include "esp32m/resources.hpp"
+#include "esp32m/ui/httpd.hpp"
 #include "esp32m/url.hpp"
 #include "esp32m/version.hpp"
 
@@ -253,11 +255,25 @@ namespace esp32m {
     const char *Ota::KeyOtaBegin = "begin";
     const char *Ota::KeyOtaEnd = "end";
 
+    namespace {
+      class OtaUploadHandler : public ui::IHttpHandler {
+       public:
+        OtaUploadHandler() : ui::IHttpHandler("/ota-upload", HTTP_POST) {}
+        esp_err_t handle(httpd_req_t *req) override {
+          return Ota::instance().handleUpload(req);
+        }
+      };
+    }  // namespace
+
     Ota::Ota() {
       _mutex = &locks::get(ota::Name);
 #if CONFIG_ESP32M_NET_OTA_CHECK_FOR_UPDATES
       ota::Check::instance();
 #endif
+      // Register HTTP binary upload endpoint
+      static OtaUploadHandler uploadHandler;
+      if (auto *httpd = ui::Httpd::instance())
+        httpd->addHttpHandler(uploadHandler);
       xTaskCreate([](void *self) { ((Ota *)self)->run(); }, "m/ota", 4096, this,
                   tskIDLE_PRIORITY + 1,
                   &_task);  // 2kb stack is not enough
@@ -272,6 +288,8 @@ namespace esp32m {
 #if CONFIG_ESP32M_NET_OTA_CHECK_FOR_UPDATES
       ota::Check::instance().getFeatures(f);
 #endif
+      if (!f.vendorOnly)
+        f.fileUpload = true;
       return f;
     }
 
@@ -285,8 +303,7 @@ namespace esp32m {
     }
 
     JsonDocument *Ota::getState(RequestContext &ctx) {
-      // auto size = JSON_OBJECT_SIZE(1 /*flags*/ + (_updating ? 2 : 0));
-      auto doc = new JsonDocument(); /* size */
+      auto doc = new JsonDocument(); 
       auto root = doc->to<JsonObject>();
       json::to(root, "flags", flags().value);
       if (_updating) {
@@ -298,9 +315,6 @@ namespace esp32m {
 
     JsonDocument *Ota::getConfig(RequestContext &ctx) {
       auto dl = _savedUrl.size();
-      /*auto size = JSON_OBJECT_SIZE(1);
-      if (dl)
-        size += JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(dl);*/
       auto doc = new JsonDocument(); /* size */
       auto root = doc->to<JsonObject>();
       json::to(root, "features", features().value);
@@ -362,7 +376,9 @@ namespace esp32m {
 #if CONFIG_ESP32M_NET_OTA_CHECK_FOR_UPDATES
         ota::Check::instance().run(_pendingUrl);
 #endif
-        if (!_pendingUrl.empty())
+        if (_asyncReq != nullptr)
+          performUploadAsync();
+        else if (!_pendingUrl.empty())
           perform(_pendingUrl.c_str());
 
         esp_task_wdt_reset();
@@ -437,6 +453,93 @@ namespace esp32m {
             .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
             .trigger_panic = true};
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_task_wdt_reconfigure(&wdtc));
+      }
+    }
+
+    esp_err_t Ota::handleUpload(httpd_req_t *req) {
+      auto sf = flags();
+      if (sf.checking || sf.updating || !_pendingUrl.empty() ||
+          _asyncReq != nullptr) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Busy");
+        return ESP_OK;
+      }
+      auto f = features();
+      if (f.vendorOnly) {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Vendor only");
+        return ESP_OK;
+      }
+      _total = req->content_len > 0 ? (unsigned int)req->content_len : 0;
+      // Release the httpd task immediately so it can service WebSocket
+      // broadcasts and state-poll requests during the upload.
+      httpd_req_t *asyncReq = nullptr;
+      esp_err_t err = httpd_req_async_handler_begin(req, &asyncReq);
+      if (err != ESP_OK) {
+        logE("httpd_req_async_handler_begin failed: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                            esp_err_to_name(err));
+        return ESP_OK;
+      }
+      _asyncReq = asyncReq;
+      xTaskNotifyGive(_task);
+      return ESP_OK;
+    }
+
+    void Ota::performUploadAsync() {
+      auto *req = _asyncReq;
+      _asyncReq = nullptr;
+      begin();
+
+      const esp_partition_t *partition =
+          esp_ota_get_next_update_partition(NULL);
+      esp_err_t err = ESP_ERR_NOT_FOUND;
+      esp_ota_handle_t otaHandle = 0;
+      _progress = 0;
+
+      if (partition) {
+        err = esp_ota_begin(partition, OTA_WITH_SEQUENTIAL_WRITES, &otaHandle);
+        if (err == ESP_OK) {
+          const size_t bufSize = 2048;
+          char *buf = (char *)malloc(bufSize);
+          if (!buf) {
+            err = ESP_ERR_NO_MEM;
+          } else {
+            int received;
+            while ((received = httpd_req_recv(req, buf, bufSize)) > 0) {
+              err = esp_ota_write(otaHandle, buf, (size_t)received);
+              if (err != ESP_OK)
+                break;
+              _progress += (unsigned int)received;
+              esp_task_wdt_reset();
+            }
+            free(buf);
+            if (received < 0)
+              err = ESP_FAIL;
+          }
+          if (err == ESP_OK)
+            err = esp_ota_end(otaHandle);
+          else
+            esp_ota_abort(otaHandle);
+          if (err == ESP_OK)
+            err = esp_ota_set_boot_partition(partition);
+        }
+      }
+
+      if (err == ESP_OK) {
+        httpd_resp_sendstr(req, "OK");
+        logI("OTA upload successful, rebooting...");
+      } else {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                            esp_err_to_name(err));
+        logE("OTA upload failed: %s", esp_err_to_name(err));
+      }
+      // Return the connection to httpd before broadcasting end so the httpd
+      // task is back in select() and can drain its work queue.
+      httpd_req_async_handler_complete(req);
+      end();
+
+      if (err == ESP_OK) {
+        delay(1000);
+        App::restart();
       }
     }
 

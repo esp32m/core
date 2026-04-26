@@ -96,21 +96,21 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    const char *Relay::toString(State s) {
-      static const char *names[] = {"unknown", "on", "off"};
+    const char* Relay::toString(State s) {
+      static const char* names[] = {"unknown", "on", "off"};
       int si = (int)s;
       if (si < 0 || si > 2)
         si = 0;
       return names[si];
     }
 
-    const char *Relay::stateName() {
+    const char* Relay::stateName() {
       return toString(refreshState());
     }
 
-    esp_err_t getStateFromPins(io::pin::IDigital *on, io::pin::IDigital *off,
+    esp_err_t getStateFromPins(io::pin::IDigital* on, io::pin::IDigital* off,
                                bool levelOn, bool levelOff,
-                               Relay::State &state) {
+                               Relay::State& state) {
       bool onLevel = false, offLevel = false;
       if (on)
         ESP_CHECK_RETURN(on->read(onLevel));
@@ -160,23 +160,23 @@ namespace esp32m {
       return _state;
     }
 
-    void Relay::setState(RequestContext &ctx) {
+    void Relay::setState(RequestContext& ctx) {
       auto state = ctx.data;
       JsonVariantConst v = state["state"];
       if (!v)
         v = state;
-      if (v.is<const char *>())
-        ctx.errors.check(turn(v.as<const char *>()));
+      if (v.is<const char*>())
+        ctx.errors.check(turn(v.as<const char*>()));
     }
 
-    JsonDocument *Relay::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); 
+    JsonDocument* Relay::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument();
       JsonObject info = doc->to<JsonObject>();
       info["state"] = toString(refreshState());
       return doc;
     }
 
-    esp_err_t Relay::turn(const char *action) {
+    esp_err_t Relay::turn(const char* action) {
       if (!strcmp(action, "on") || !strcmp(action, "ON"))
         return turn(true);
       if (!strcmp(action, "off") || !strcmp(action, "OFF"))
@@ -185,7 +185,7 @@ namespace esp32m {
       return ESP_FAIL;
     }
 
-    bool Relay::setConfig(RequestContext &ctx) {
+    bool Relay::setConfig(RequestContext& ctx) {
       if (isPersistent()) {
         setState(ctx);
         return true;
@@ -193,29 +193,17 @@ namespace esp32m {
       return false;
     }
 
-    JsonDocument *Relay::getConfig(RequestContext &ctx) {
+    JsonDocument* Relay::getConfig(RequestContext& ctx) {
       if (isPersistent())
         return getState(ctx);
       return nullptr;
     }
 
-    bool Relay::handleRequest(Request &req) {
+    bool Relay::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
-      /*if (req.is(integrations::ha::DescribeRequest::Name)) {
-        JsonDocument *doc = new JsonDocument(); 
-        auto root = doc->to<JsonObject>();
-        root["component"] = "switch";
-        auto config = root["config"].to<JsonObject>();
-        config["payload_on"] = "on";
-        config["payload_off"] = "off";
-        config["state_on"] = "on";
-        config["state_off"] = "off";
-        req.respond(name(), doc->as<JsonVariantConst>());
-        delete doc;
-        return true;
-      } else*/ if (req.is(integrations::ha::CommandRequest::Name)) {
-        auto state = req.data().as<const char *>();
+      if (req.is(integrations::ha::CommandRequest::Name)) {
+        auto state = req.data().as<const char*>();
         if (state)
           turn(state);
         req.respond();
@@ -224,16 +212,16 @@ namespace esp32m {
       return false;
     }
 
-    Relay *useRelay(const char *name, io::IPin *pin) {
+    Relay* useRelay(const char* name, io::IPin* pin) {
       return new Relay(name, pin->digital());
     }
 
-    Relay *useRelay(const char *name, io::IPin *pinOn, io::IPin *pinOff) {
+    Relay* useRelay(const char* name, io::IPin* pinOn, io::IPin* pinOff) {
       return new Relay(name, pinOn->digital(), pinOff->digital());
     }
 
-    Relay *useRelay(const char *name, io::IPin *pinOn, io::IPin *pinOff,
-                    io::IPin *pinSenseOn, io::IPin *pinSenseOff) {
+    Relay* useRelay(const char* name, io::IPin* pinOn, io::IPin* pinOff,
+                    io::IPin* pinSenseOn, io::IPin* pinSenseOff) {
       return new Relay(name, pinOn->digital(), pinOff->digital(),
                        pinSenseOn->digital(), pinSenseOff->digital());
     }

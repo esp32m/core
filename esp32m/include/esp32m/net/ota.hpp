@@ -7,6 +7,7 @@
 #include <string>
 
 #include <esp_http_client.h>
+#include <esp_http_server.h>
 
 namespace esp32m {
   namespace net {
@@ -20,6 +21,8 @@ namespace esp32m {
           /** If set, the user is allowed to burn only the firmware downloaded
              from the vendor's server */
           bool vendorOnly : 1;
+          /** If set, the user may upload a binary directly from the browser */
+          bool fileUpload : 1;
         };
         int value;
       };
@@ -46,6 +49,7 @@ namespace esp32m {
       ota::StateFlags flags();
 
       static Ota &instance();
+      esp_err_t handleUpload(httpd_req_t *req);
 
      protected:
       JsonDocument *getState(RequestContext &ctx) override;
@@ -62,11 +66,13 @@ namespace esp32m {
       bool _updating = false;
       esp_http_client_handle_t _httpClient = nullptr;
       unsigned int _progress = 0, _total = 0;
+      httpd_req_t *_asyncReq = nullptr;
       Ota();
       void run();
       void begin();
       void end();
       void perform(const char *url);
+      void performUploadAsync();
 
       friend esp_err_t _http_client_init_cb(
           esp_http_client_handle_t http_client);

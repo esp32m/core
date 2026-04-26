@@ -11,6 +11,14 @@ idf_component_register(
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_23)
 target_compile_options(${COMPONENT_LIB} PRIVATE -std=gnu++23)
 
+# Redirect _esp_error_check_failed[_without_abort] through esp32m logging so
+# that ESP_ERROR_CHECK(_WITHOUT_ABORT) messages reach all registered appenders
+# (e.g. UDP/syslog) instead of going only to esp_rom_printf / UART.
+target_link_options(${COMPONENT_LIB} INTERFACE
+    "-Wl,--wrap=_esp_error_check_failed_without_abort"
+    "-Wl,--wrap=_esp_error_check_failed"
+)
+
 set(web_ui_build_dir "${CMAKE_BINARY_DIR}/web-ui")
 file(MAKE_DIRECTORY "${web_ui_build_dir}")
 set(web_ui_resources "dist/index.html.S" "dist/main.js.S")

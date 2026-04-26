@@ -48,7 +48,7 @@ namespace esp32m {
 
     bool Udp::append(const LogMessage *message) {
       if (!_enabled)
-        return true;
+        return message != nullptr;  // readiness probe (null msg) returns false so BufferedAppender keeps messages until enabled
       if (!xPortCanYield())  // called from ISR
         return false;
       if (net::ota::isRunning())

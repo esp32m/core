@@ -9,8 +9,9 @@ namespace esp32m {
   namespace dev {
     esp_err_t HBridge::init() {
       if (!isPwm()) {
-        ESP_CHECK_RETURN(_fwd->pwm()->enable(false));
-        ESP_CHECK_RETURN(_rev->pwm()->enable(false));
+        // don't call pwm()->enable(false) because it will reconfigure pin for pwm output, and we want to keep it as digital output
+        //ESP_CHECK_RETURN(_fwd->pwm()->enable(false));
+        //ESP_CHECK_RETURN(_rev->pwm()->enable(false));
         ESP_CHECK_RETURN(_fwd->digital()->setDirection(true, true));
         ESP_CHECK_RETURN(_rev->digital()->setDirection(true, true));
       }

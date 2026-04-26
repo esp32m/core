@@ -99,9 +99,8 @@ namespace esp32m {
       if (!strcmp(reference_uri, UriRoot))
         return !isWsRequest;
 
-      logw("no handler for: %s, match: %s, size: %d", reference_uri,
-           uri_to_match, match_upto);
-      return false;
+      // All other registered HTTP handlers: exact URI match
+      return uri_to_match && !strcmp(reference_uri, uri_to_match);
     }
 
     esp_err_t wsHandler(httpd_req_t* req) {
@@ -116,6 +115,28 @@ namespace esp32m {
         return ESP_FAIL;
       }
       return httpd->incomingWs(req);
+    }
+
+    esp_err_t Httpd::httpHandlerCustom(httpd_req_t* req) {
+      Httpd* httpd = nullptr;
+      for (Httpd* i : _httpdServers)
+        if (i->_server == req->handle) {
+          httpd = i;
+          break;
+        }
+      if (!httpd) {
+        logw("httpHandlerCustom: no httpd for handle");
+        return ESP_FAIL;
+      }
+      bool accessGranted = false;
+      ESP_CHECK_RETURN(httpd->authenticate(req, accessGranted));
+      if (!accessGranted)
+        return ESP_OK;
+      for (auto* h : httpd->_httpHandlers)
+        if (h && h->uri() && !strcmp(h->uri(), req->uri))
+          return h->handle(req);
+      logw("httpHandlerCustom: no handler for %s", req->uri);
+      return ESP_ERR_NOT_FOUND;
     }
 
     esp_err_t Httpd::wsHandlerCustom(httpd_req_t* req) {
@@ -274,6 +295,7 @@ namespace esp32m {
       net::useNetif();
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_start(&_server, &_config)) ==
           ESP_OK) {
+        // Register WebSocket handler
         httpd_uri_t uh = {.uri = UriWs,
                           .method = HTTP_GET,
                           .handler = wsHandler,
@@ -281,10 +303,6 @@ namespace esp32m {
                           .is_websocket = true,
                           .handle_ws_control_frames = false,
                           .supported_subprotocol = 0};
-        ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
-        uh.uri = UriRoot;
-        uh.is_websocket = false;
-        uh.handler = httpHandler;
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
 
 #ifdef CONFIG_HTTPD_WS_SUPPORT
@@ -303,6 +321,27 @@ namespace esp32m {
               httpd_register_uri_handler(_server, &wh));
         }
 #endif
+
+        // Register custom HTTP handlers before root so exact URIs take priority
+        for (auto* e : _httpHandlers) {
+          if (!e)
+            continue;
+          httpd_uri_t hh = {.uri = e->uri(),
+                            .method = e->method(),
+                            .handler = Httpd::httpHandlerCustom,
+                            .user_ctx = this,
+                            .is_websocket = false,
+                            .handle_ws_control_frames = false,
+                            .supported_subprotocol = 0};
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              httpd_register_uri_handler(_server, &hh));
+        }
+
+        // Root handler registered last so it acts as a catch-all
+        uh.uri = UriRoot;
+        uh.is_websocket = false;
+        uh.handler = httpHandler;
+        ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
       }
     }
 
@@ -341,6 +380,32 @@ namespace esp32m {
       }
       return ESP_OK;
 #endif
+    }
+
+    esp_err_t Httpd::addHttpHandler(IHttpHandler& handler) {
+      _httpHandlers.push_back(&handler);
+      if (_server) {
+        // Unregister root catch-all so the new exact handler takes priority
+        httpd_unregister_uri_handler(_server, UriRoot, HTTP_GET);
+        httpd_uri_t hh = {.uri = handler.uri(),
+                          .method = handler.method(),
+                          .handler = Httpd::httpHandlerCustom,
+                          .user_ctx = this,
+                          .is_websocket = false,
+                          .handle_ws_control_frames = false,
+                          .supported_subprotocol = 0};
+        ESP_CHECK_RETURN(httpd_register_uri_handler(_server, &hh));
+        // Re-register root handler last
+        httpd_uri_t rootUh = {.uri = UriRoot,
+                              .method = HTTP_GET,
+                              .handler = httpHandler,
+                              .user_ctx = this,
+                              .is_websocket = false,
+                              .handle_ws_control_frames = false,
+                              .supported_subprotocol = 0};
+        ESP_CHECK_RETURN(httpd_register_uri_handler(_server, &rootUh));
+      }
+      return ESP_OK;
     }
 
     esp_err_t Httpd::incomingReq(httpd_req_t* req) {

@@ -11,6 +11,10 @@ export const i18n = {
         'Firmware update is irreversible, it cannot be un-done.',
       OTA_DISCLAIMER_I5:
         'Your device may be permanently damaged by this update method.',
+      'Update firmware': 'Update firmware',
+      'From URL': 'From URL',
+      'From file': 'From file',
+      'Select firmware file...': 'Select firmware file...',
     },
     de: {
       'Do you really want to perform firmware update ?':
@@ -27,6 +31,10 @@ export const i18n = {
       configure: 'konfigurieren',
       'check now': 'Jetzt prüfen',
       'Update firmware from URL': 'Aktualisieren Sie die Firmware über die URL',
+      'Update firmware': 'Firmware aktualisieren',
+      'From URL': 'Von URL',
+      'From file': 'Von Datei',
+      'Select firmware file...': 'Firmware-Datei auswählen...',
       'Remember this URL for future use':
         'Merken Sie sich diese URL für die zukünftige Verwendung',
       'I understand and agree': 'Ich verstehe und stimme zu',
@@ -60,6 +68,10 @@ export const i18n = {
       configure: 'Налаштувати',
       'check now': 'Перевірити зараз',
       'Update firmware from URL': 'Оновити мікропрограму з URL',
+      'Update firmware': 'Оновити мікропрограму',
+      'From URL': 'З URL',
+      'From file': 'З файлу',
+      'Select firmware file...': 'Виберіть файл мікропрограми...',
       'Remember this URL for future use':
         "Запам'ятати адресу для використання у майбутньому",
       'I understand and agree': 'Я розумію і погоджуюсь',

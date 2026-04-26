@@ -26,6 +26,7 @@ export enum OtaFeatures {
   None = 0,
   CheckForUpdates = 1 << 0,
   VendorOnly = 1 << 1,
+  FileUpload = 1 << 2,
 }
 
 export type TOtaConfig = {

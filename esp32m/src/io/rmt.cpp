@@ -13,7 +13,7 @@ namespace esp32m {
         logd("%s (%d rmt symbols):", msg, count);
         for (auto i = 0; i < count; i++) {
           auto& s = syms[i];
-          logd(" * %d %d (%dms %dms)", s.level0, s.level1, s.duration0,
+          logd(" * %d %d (%dµs %dµs)", s.level0, s.level1, s.duration0,
                s.duration1);
         }
       }

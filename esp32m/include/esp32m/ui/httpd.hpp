@@ -33,6 +33,29 @@ namespace esp32m {
       std::string _uri;
     };
 
+    class IHttpHandler {
+     public:
+      explicit IHttpHandler(const char *uri,
+                            httpd_method_t method = HTTP_POST)
+          : _uri(uri ? uri : ""), _method(method) {}
+      virtual ~IHttpHandler() = default;
+      IHttpHandler(const IHttpHandler &) = delete;
+      IHttpHandler &operator=(const IHttpHandler &) = delete;
+
+      const char *uri() const {
+        return _uri.c_str();
+      }
+      httpd_method_t method() const {
+        return _method;
+      }
+
+      virtual esp_err_t handle(httpd_req_t *req) = 0;
+
+     private:
+      std::string _uri;
+      httpd_method_t _method;
+    };
+
     class Httpd : public Transport {
      public:
       static Httpd *instance();
@@ -48,6 +71,9 @@ namespace esp32m {
        */
       esp_err_t addWsHandler(IWSHandler &handler);
 
+      /** Register a plain HTTP endpoint (e.g. for binary file upload). */
+      esp_err_t addHttpHandler(IHttpHandler &handler);
+
      protected:
       void init(Ui *ui) override;
       esp_err_t sendTo(uint32_t cid, const char *text) override;
@@ -57,6 +83,7 @@ namespace esp32m {
       httpd_config_t _config;
       httpd_handle_t _server = nullptr;
       std::list<IWSHandler *> _wsHandlers;
+      std::list<IHttpHandler *> _httpHandlers;
       std::mutex _wsSessionMutex;
       std::map<int, IWSHandler *> _wsSessions;
       esp_err_t incomingReq(httpd_req_t *req);
@@ -64,6 +91,7 @@ namespace esp32m {
       esp_err_t authenticate(httpd_req_t *req, bool &result);
       void wsSessionClosed(int sockfd);
       static esp_err_t wsHandlerCustom(httpd_req_t *req);
+      static esp_err_t httpHandlerCustom(httpd_req_t *req);
       friend esp_err_t wsHandler(httpd_req_t *req);
       friend esp_err_t httpHandler(httpd_req_t *req);
       friend void closeFn(httpd_handle_t hd, int sockfd);

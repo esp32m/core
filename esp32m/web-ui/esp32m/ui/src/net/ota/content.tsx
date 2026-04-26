@@ -18,54 +18,157 @@ import {
   FormControlLabel,
   Grid,
   Switch,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
 } from '@mui/material';
 import { useTranslation } from '@ts-libs/ui-i18n';
 import * as Yup from 'yup';
-import { OtaCheckName, TOtaCheckConfig, TOtaCheckState } from './types';
+import { OtaCheckName, OtaFeatures, TOtaCheckConfig, TOtaCheckState } from './types';
 import { Expander, MessageBox, useMessageBox } from '@ts-libs/ui-base';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSnackApi } from '@ts-libs/ui-snack';
 import { errorToString } from '@ts-libs/tools';
+import { useFormikContext } from 'formik';
 
 const validationSchema = Yup.object().shape({
-  url: Yup.string().required('URL must not be empty'),
+  url: Yup.string().when('source', {
+    is: 'url',
+    then: (schema) => schema.required('URL must not be empty'),
+    otherwise: (schema) => schema.optional(),
+  }),
+  file: Yup.mixed<File>().when('source', {
+    is: 'file',
+    then: (schema) => schema.required('Please select a firmware file'),
+    otherwise: (schema) => schema.optional(),
+  }),
 });
 
-export const FirmwareUpdateButton = ({ url }: { url?: string }) => {
+const SourceToggle = () => {
+  const { values, setFieldValue } = useFormikContext<any>();
+  const { t } = useTranslation();
+  return (
+    <Grid size={{ xs: 12 }}>
+      <ToggleButtonGroup
+        value={values.source}
+        exclusive
+        onChange={(_, v) => v && setFieldValue('source', v)}
+        size="small"
+      >
+        <ToggleButton value="url">{t('From URL')}</ToggleButton>
+        <ToggleButton value="file">{t('From file')}</ToggleButton>
+      </ToggleButtonGroup>
+    </Grid>
+  );
+};
+
+const UrlFields = () => {
+  const { values } = useFormikContext<any>();
+  if (values.source !== 'url') return null;
+  return (
+    <>
+      <Grid size={{ xs: 12 }}>
+        <FieldText name="url" label="Firmware URL" fullWidth />
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <FieldSwitch name="save" label="Remember this URL for future use" />
+      </Grid>
+    </>
+  );
+};
+
+const FilePickerField = () => {
+  const { values, setFieldValue, errors, touched } = useFormikContext<any>();
+  const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
+  if (values.source !== 'file') return null;
+  return (
+    <Grid size={{ xs: 12 }}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".bin"
+        style={{ display: 'none' }}
+        onChange={(e) => setFieldValue('file', e.target.files?.[0] ?? null)}
+      />
+      <Button variant="outlined" onClick={() => inputRef.current?.click()}>
+        {values.file ? values.file.name : t('Select firmware file...')}
+      </Button>
+      {touched.file && errors.file && (
+        <Typography variant="caption" color="error" display="block">
+          {errors.file as string}
+        </Typography>
+      )}
+    </Grid>
+  );
+};
+
+export const FirmwareUpdateButton = ({
+  url,
+  features = 0,
+}: {
+  url?: string;
+  features?: number;
+}) => {
   const { t } = useTranslation();
   const api = useBackendApi();
+  const snackApi = useSnackApi();
+  const showFileUpload = (features & OtaFeatures.FileUpload) !== 0;
   const [hook, open] = useDialogForm({
-    initialValues: { url, save: !!url },
+    initialValues: {
+      source: showFileUpload ? 'file' : 'url',
+      url: url || '',
+      file: null,
+      save: !!url,
+      confirm: false,
+    },
     onSubmit: async (values) => {
-      const { url, confirm, save } = values;
+      const { source, url, file, confirm, save } = values;
       if (!confirm) throw new Error('Please read the disclaimer and agree');
-      await api.request(Name, 'update', { url, save });
+      if (source === 'file') {
+        if (!file) throw new Error('Please select a firmware file');
+        // Start upload without awaiting — dialog closes immediately and the
+        // OTA progress overlay takes over. Errors are reported via snack.
+        fetch('/ota-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: file,
+        })
+          .then((resp) => {
+            if (!resp.ok)
+              snackApi.error(new Error(`Upload failed: ${resp.statusText}`));
+          })
+          .catch((e) => snackApi.error(e));
+      } else {
+        await api.request(Name, 'update', { url, save });
+      }
     },
     validationSchema,
   });
   return (
     <>
-      <Button onClick={() => open()}>{t('Update firmware from URL')}</Button>
-      <DialogForm title="Update firmware from URL" hook={hook}>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 'grow' }}>
-            <FieldText name="url" label="Firmware URL" fullWidth />
+      <Button onClick={() => open()}>{t('Update firmware')}</Button>
+      <DialogForm title="Update firmware" hook={hook}>
+        <Grid container spacing={2}>
+          {showFileUpload && <SourceToggle />}
+          <UrlFields />
+          <FilePickerField />
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="warning">
+              <strong>{t('OTA_DISCLAIMER_TITLE')}</strong>
+              <ul>
+                <li>{t('OTA_DISCLAIMER_I1')}</li>
+                <li>{t('OTA_DISCLAIMER_I2')}</li>
+                <li>{t('OTA_DISCLAIMER_I3')}</li>
+                <li>{t('OTA_DISCLAIMER_I4')}</li>
+                <li>{t('OTA_DISCLAIMER_I5')}</li>
+              </ul>
+            </Alert>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <FieldSwitch name="confirm" label="I understand and agree" />
           </Grid>
         </Grid>
-        <Grid size={{ xs: 'grow' }}>
-          <FieldSwitch name="save" label="Remember this URL for future use" />
-        </Grid>
-        <Alert severity="warning">
-          <strong>{t('OTA_DISCLAIMER_TITLE')}</strong>
-          <ul>
-            <li>{t('OTA_DISCLAIMER_I1')}</li>
-            <li>{t('OTA_DISCLAIMER_I2')}</li>
-            <li>{t('OTA_DISCLAIMER_I3')}</li>
-            <li>{t('OTA_DISCLAIMER_I4')}</li>
-            <li>{t('OTA_DISCLAIMER_I5')}</li>
-          </ul>
-        </Alert>
-        <FieldSwitch name="confirm" label="I understand and agree" />
       </DialogForm>
     </>
   );

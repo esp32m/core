@@ -44,7 +44,7 @@ export const Admin = () => {
         </Grid>
         {((config?.features || 0) & OtaFeatures.VendorOnly) == 0 && (
           <Grid >
-            <FirmwareUpdateButton url={config?.url} />
+            <FirmwareUpdateButton url={config?.url} features={config?.features} />
           </Grid>
         )}
         <Grid >

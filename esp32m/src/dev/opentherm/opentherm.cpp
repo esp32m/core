@@ -6,10 +6,10 @@
 namespace esp32m {
   namespace opentherm {
 
-    static const char *MessageTypeNames[] = {"r",  "w",  "-",  "?",
+    static const char* MessageTypeNames[] = {"r",  "w",  "-",  "?",
                                              "r+", "w+", "d-", "--"};
 
-    static const char *RecvStateNames[] = {
+    static const char* RecvStateNames[] = {
         "initial",      "in-message",   "valid",
         "no-start-bit", "interference", "no-stop-bit",
         "parity-err",   "incomplete",   "timeout"};
@@ -35,7 +35,7 @@ namespace esp32m {
       return (uint16_t)(v * 256);
     }
 
-    uint16_t toF88(float v, MessageType &rt) {
+    uint16_t toF88(float v, MessageType& rt) {
       if (isnan(v)) {
         rt = MessageType::DataInvalid;
         return 0;
@@ -43,7 +43,7 @@ namespace esp32m {
       return (uint16_t)(v * 256);
     }
 
-    bool Range::fromJson(JsonArrayConst arr, bool *changed) {
+    bool Range::fromJson(JsonArrayConst arr, bool* changed) {
       if (arr && arr.size() == 2) {
         json::from(arr[0], lower, changed);
         json::from(arr[1], upper, changed);
@@ -69,7 +69,7 @@ namespace esp32m {
             n * (JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(2));
       return n;
     }*/
-    bool Bounds::fromJson(JsonObjectConst hvac, bool *changed) {
+    bool Bounds::fromJson(JsonObjectConst hvac, bool* changed) {
       auto bounds = hvac["bounds"].as<JsonObjectConst>();
       if (!bounds)
         return false;
@@ -92,7 +92,7 @@ namespace esp32m {
       }
     }
 
-    void toJson(JsonObject o, const char *key, std::vector<uint8_t> &v) {
+    void toJson(JsonObject o, const char* key, std::vector<uint8_t>& v) {
       if (v.size()) {
         auto arr = o[key].to<JsonArray>();
         for (auto i : v) arr.add(i);
@@ -186,7 +186,7 @@ namespace esp32m {
           return JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(IdInfoArrayLength);
       return 0;
     }*/
-    bool IdInfoArray::fromJson(JsonObjectConst obj, bool *changed) {
+    bool IdInfoArray::fromJson(JsonObjectConst obj, bool* changed) {
       auto ids = obj["ids"].as<JsonArrayConst>();
       if (!ids)
         return false;
@@ -201,8 +201,8 @@ namespace esp32m {
     }
     void IdInfoArray::toJson(JsonObject obj) {
       /*if (jsonSize()) {*/
-        auto ids = obj["ids"].to<JsonArray>();
-        for (int i = 0; i < IdInfoArrayLength; i++) ids.add(_arr[i]);
+      auto ids = obj["ids"].to<JsonArray>();
+      for (int i = 0; i < IdInfoArrayLength; i++) ids.add(_arr[i]);
       //}
     }
 
@@ -278,7 +278,7 @@ namespace esp32m {
       }
     }
 
-    esp_err_t Core::init(IDriver *driver, const char *name) {
+    esp_err_t Core::init(IDriver* driver, const char* name) {
       _name = name;
       _driver = driver;
       _outgoing.invalidate();
@@ -328,8 +328,8 @@ namespace esp32m {
 
     /* --- SLAVE --- */
 
-    esp_err_t Slave::init(opentherm::IDriver *driver,
-                          opentherm::ISlaveModel *model, const char *name) {
+    esp_err_t Slave::init(opentherm::IDriver* driver,
+                          opentherm::ISlaveModel* model, const char* name) {
       ESP_CHECK_RETURN(Core::init(
           driver, name ? name : (model ? model->name() : "ot-slave")));
       _model = model;
@@ -338,12 +338,12 @@ namespace esp32m {
       _hvac.bounds.dhw.clamp(_hvac.tDhwSet);
       _hvac.bounds.ch.clamp(_hvac.maxTSet);
       _hvac.bounds.hcr.clamp(_hvac.hcratio);
-      xTaskCreate([](void *self) { ((Slave *)self)->run(); },
+      xTaskCreate([](void* self) { ((Slave*)self)->run(); },
                   makeTaskName(this->name()), 4096, this, 2, &_task);
       return ESP_OK;
     }
 
-    void Slave::processRequest(Message &msg) {
+    void Slave::processRequest(Message& msg) {
       if (_model)
         if (_model->processRequest(msg))
           return;
@@ -633,29 +633,30 @@ namespace esp32m {
           } else
             dumpFrame(0);
         }
-        delay(
-            100);  // delay after the request according to OT spec - 20..800 ms
+        // delay after the request according to OT spec - 20..800 ms
+        delay(100);
         transmit();
-        delay(50);  // min. delay before next request from master is 100ms, but
-                    // we wait half of that just in case
+        // min. delay before next request from master is 100ms, but
+        // we wait half of that just in case
+        delay(50);
       }
     }
 
     /* --- MASTER --- */
-    esp_err_t Master::init(opentherm::IDriver *driver,
-                           opentherm::IMasterModel *model, const char *name) {
+    esp_err_t Master::init(opentherm::IDriver* driver,
+                           opentherm::IMasterModel* model, const char* name) {
       ESP_CHECK_RETURN(Core::init(
           driver, name ? name : (model ? model->name() : "ot-master")));
       _model = model;
       if (!_model)
         _model = new GenericMaster();
       _model->init(this);
-      xTaskCreate([](void *self) { ((Master *)self)->run(); },
+      xTaskCreate([](void* self) { ((Master*)self)->run(); },
                   makeTaskName(this->name()), 4096, this, 10, &_task);
       return ESP_OK;
     }
 
-    bool Master::isSupported(Message &msg) {
+    bool Master::isSupported(Message& msg) {
       auto idInfo = _ids.get(msg.id);
       switch (msg.type) {
         case MessageType::ReadData:
@@ -668,7 +669,7 @@ namespace esp32m {
       }
     }
 
-    esp_err_t Master::setJob(IMasterModel *job) {
+    esp_err_t Master::setJob(IMasterModel* job) {
       if (!job)
         return ESP_ERR_INVALID_ARG;
       job->init(this);
@@ -683,7 +684,7 @@ namespace esp32m {
       return ESP_ERR_INVALID_ARG;
     }
 
-    void Master::processResponse(Message &msg) {
+    void Master::processResponse(Message& msg) {
       if (_logTraffic)
         logD("ID %i: %s %i -> %s %i", static_cast<int>(_outgoing.id),
              MessageTypeNames[static_cast<int>(_outgoing.type)],
@@ -723,7 +724,7 @@ namespace esp32m {
           break;
       }
       _ids.update(msg.id, idInfo);
-      IMasterModel *job;
+      IMasterModel* job;
       {
         std::lock_guard lock(_mutex);
         job = _job;
@@ -877,7 +878,7 @@ namespace esp32m {
     }
 
     void Master::commSlot() {
-      IMasterModel *job;
+      IMasterModel* job;
       {
         std::lock_guard lock(_mutex);
         job = _job;
@@ -941,10 +942,10 @@ namespace esp32m {
       ScanJob() {
         _commDelay = MinCommDelay;
       }
-      const char *name() const override {
+      const char* name() const override {
         return "scan";
       }
-      bool nextRequest(Message &msg) override {
+      bool nextRequest(Message& msg) override {
         for (;;) {
           if (_index >= 256)
             return false;
@@ -958,7 +959,7 @@ namespace esp32m {
         _index++;
         return true;
       }
-      bool processResponse(Message &msg) override {
+      bool processResponse(Message& msg) override {
         return false;
       }
 
@@ -971,10 +972,10 @@ namespace esp32m {
       SnapshotJob() {
         _commDelay = MinCommDelay;
       }
-      const char *name() const override {
+      const char* name() const override {
         return "snapshot";
       }
-      bool nextRequest(Message &msg) override {
+      bool nextRequest(Message& msg) override {
         for (;;) {
           if (_index >= 256)
             return false;
@@ -988,7 +989,7 @@ namespace esp32m {
         _index++;
         return true;
       }
-      bool processResponse(Message &msg) override {
+      bool processResponse(Message& msg) override {
         if (msg.type == MessageType::ReadAck)
           values[_index] = msg.value;
         return true;
@@ -999,8 +1000,8 @@ namespace esp32m {
       int _index = 0;
     };
 
-    bool GenericMaster::nextRequest(Message &msg) {
-      auto &hvac = _master->hvac();
+    bool GenericMaster::nextRequest(Message& msg) {
+      auto& hvac = _master->hvac();
       if (_index < 0)
         _index = 0;
       switch (_index++) {
@@ -1020,14 +1021,14 @@ namespace esp32m {
       return true;
     }
 
-    typedef opentherm::IDriver *(*DriverConstructor)(gpio_num_t rxPin,
+    typedef opentherm::IDriver* (*DriverConstructor)(gpio_num_t rxPin,
                                                      gpio_num_t txPin);
 #ifdef ESP32M_USE_DEPRECATED_RMT
-    extern opentherm::IDriver *newDeprecatedRmtDriver(gpio_num_t rxPin,
+    extern opentherm::IDriver* newDeprecatedRmtDriver(gpio_num_t rxPin,
                                                       gpio_num_t txPin);
     DriverConstructor createDriver = newDeprecatedRmtDriver;
 #else
-    extern opentherm::IDriver *newRmtDriver(gpio_num_t rxPin, gpio_num_t txPin);
+    extern opentherm::IDriver* newRmtDriver(gpio_num_t rxPin, gpio_num_t txPin);
     DriverConstructor createDriver = newRmtDriver;
 #endif
 
@@ -1035,13 +1036,13 @@ namespace esp32m {
 
   namespace dev {
 
-    OpenthermSlave::OpenthermSlave(opentherm::IDriver *driver,
-                                   opentherm::ISlaveModel *model,
-                                   const char *name) {
+    OpenthermSlave::OpenthermSlave(opentherm::IDriver* driver,
+                                   opentherm::ISlaveModel* model,
+                                   const char* name) {
       opentherm::Slave::init(driver, model, name);
     }
 
-    void OpenthermSlave::setState(RequestContext &ctx) {
+    void OpenthermSlave::setState(RequestContext& ctx) {
       JsonVariantConst hvac = ctx.data["hvac"];
       if (hvac) {
         json::from(hvac["status"], _hvac.status.value);
@@ -1050,14 +1051,14 @@ namespace esp32m {
       }
     }
 
-    JsonDocument *OpenthermSlave::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* _hvac.jsonSize() */
+    JsonDocument* OpenthermSlave::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* _hvac.jsonSize() */
       JsonObject root = doc->to<JsonObject>();
       _hvac.toJson(root);
       return doc;
     }
 
-    bool OpenthermSlave::setConfig(RequestContext &ctx) {
+    bool OpenthermSlave::setConfig(RequestContext& ctx) {
       JsonObjectConst hvac = ctx.data["hvac"];
       bool changed = false;
       if (hvac) {
@@ -1068,11 +1069,10 @@ namespace esp32m {
       return changed;
     }
 
-    JsonDocument *OpenthermSlave::getConfig(
-        RequestContext &ctx) {
+    JsonDocument* OpenthermSlave::getConfig(RequestContext& ctx) {
       /*size_t docsize = JSON_OBJECT_SIZE(1 + 2 ) +
                        _hvac.bounds.jsonSize();*/
-      JsonDocument *doc = new JsonDocument(); /* docsize */
+      JsonDocument* doc = new JsonDocument(); /* docsize */
       JsonObject root = doc->to<JsonObject>();
       auto hvac = root["hvac"].to<JsonObject>();
       json::to(hvac, "ts", _hvac.tSet);
@@ -1081,15 +1081,14 @@ namespace esp32m {
       return doc;
     }
 
-    OpenthermMaster::OpenthermMaster(opentherm::IDriver *driver,
-                                     opentherm::IMasterModel *model,
-                                     const char *name)
-    {
+    OpenthermMaster::OpenthermMaster(opentherm::IDriver* driver,
+                                     opentherm::IMasterModel* model,
+                                     const char* name) {
       Device::init(Flags::HasSensors);
       opentherm::Master::init(driver, model, name);
     }
 
-    bool OpenthermMaster::handleRequest(Request &req) {
+    bool OpenthermMaster::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
       std::lock_guard lock(_mutexPR);
@@ -1122,7 +1121,7 @@ namespace esp32m {
       return processed;
     }
 
-    void OpenthermMaster::setState(RequestContext &ctx) {
+    void OpenthermMaster::setState(RequestContext& ctx) {
       JsonVariantConst hvac = ctx.data["hvac"];
       if (hvac) {
         json::from(hvac["status"], _hvac.status.value);
@@ -1146,17 +1145,16 @@ namespace esp32m {
       }
     }
 
-    JsonDocument *OpenthermMaster::getState(
-        RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* _hvac.jsonSize() */
+    JsonDocument* OpenthermMaster::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* _hvac.jsonSize() */
       JsonObject root = doc->to<JsonObject>();
       _hvac.toJson(root);
       return doc;
     }
 
-    bool OpenthermMaster::setConfig(RequestContext &ctx) {
+    bool OpenthermMaster::setConfig(RequestContext& ctx) {
       bool changed = false;
-      auto cfg=ctx.data.as<JsonObjectConst>();
+      auto cfg = ctx.data.as<JsonObjectConst>();
       _ids.fromJson(cfg, &changed);
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
@@ -1172,9 +1170,8 @@ namespace esp32m {
       return changed;
     }
 
-    JsonDocument *OpenthermMaster::getConfig(
-        RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(
+    JsonDocument* OpenthermMaster::getConfig(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(
           /*JSON_OBJECT_SIZE(1 hvac + 4) + _ids.jsonSize()*/);
       JsonObject root = doc->to<JsonObject>();
       _ids.toJson(root);
@@ -1188,12 +1185,12 @@ namespace esp32m {
       return doc;
     }
 
-    void OpenthermMaster::processResponse(opentherm::Message &msg) {
+    void OpenthermMaster::processResponse(opentherm::Message& msg) {
       Master::processResponse(msg);
       std::lock_guard lock(_mutexPR);
       if (!_pendingResponse || !_pendingResponse->is("request"))
         return;
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(3) */
       auto root = doc->to<JsonObject>();
       root["type"] = static_cast<int>(msg.type);
       root["id"] = static_cast<int>(msg.id);
@@ -1208,7 +1205,7 @@ namespace esp32m {
       std::lock_guard lock(_mutexPR);
       if (!_pendingResponse || !_pendingResponse->is("request"))
         return;
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
       root["state"] = opentherm::RecvStateNames[static_cast<int>(_recv.state)];
       root["frame"] = _recv.buf;
@@ -1220,25 +1217,25 @@ namespace esp32m {
       _pendingResponse = nullptr;
     }
 
-    void OpenthermMaster::jobDone(opentherm::IMasterModel *job) {
+    void OpenthermMaster::jobDone(opentherm::IMasterModel* job) {
       Master::jobDone(job);
       std::lock_guard lock(_mutexPR);
-      const char *name = job->name();
+      const char* name = job->name();
       if (!_pendingResponse || !_pendingResponse->is(name))
         return;
-      JsonDocument *doc = nullptr;
+      JsonDocument* doc = nullptr;
       if (!strcmp(name, "scan")) {
         doc = new JsonDocument(); /* _ids.jsonSize() */
         auto root = doc->to<JsonObject>();
         _ids.toJson(root);
       } else if (!strcmp(name, "snapshot")) {
-        auto snapshot = (opentherm::SnapshotJob *)job;
+        auto snapshot = (opentherm::SnapshotJob*)job;
         doc =
             new JsonDocument(/*JSON_OBJECT_SIZE(snapshot->values.size()) +
                                     snapshot->values.size() * 4*/);
         auto root = doc->to<JsonObject>();
         char i[4];
-        for (auto const &x : snapshot->values) {
+        for (auto const& x : snapshot->values) {
           sprintf(i, "%d", x.first);
           root[i] = x.second;
         }
@@ -1260,18 +1257,18 @@ namespace esp32m {
       return true;
     }
 
-    OpenthermMaster *useOpenthermMaster(gpio_num_t rxPin, gpio_num_t txPin,
-                                        opentherm::IMasterModel *model,
-                                        const char *name) {
+    OpenthermMaster* useOpenthermMaster(gpio_num_t rxPin, gpio_num_t txPin,
+                                        opentherm::IMasterModel* model,
+                                        const char* name) {
       auto driver = opentherm::createDriver(rxPin, txPin);
       if (driver)
         return new OpenthermMaster(driver, model, name);
       return nullptr;
     }
 
-    OpenthermSlave *useOpenthermSlave(gpio_num_t rxPin, gpio_num_t txPin,
-                                      opentherm::ISlaveModel *model,
-                                      const char *name) {
+    OpenthermSlave* useOpenthermSlave(gpio_num_t rxPin, gpio_num_t txPin,
+                                      opentherm::ISlaveModel* model,
+                                      const char* name) {
       auto driver = opentherm::createDriver(rxPin, txPin);
       if (driver)
         return new OpenthermSlave(driver, model, name);

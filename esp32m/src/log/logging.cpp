@@ -633,9 +633,22 @@ namespace esp32m {
           h->_pendingLevel = Level::None;
           h->_pendingName = nullptr;
         } else if (!strcmp(str, "%c (%d) %s:")) {
+          // IDF v4 legacy two-call format: first call carries level+tag
           charToLevel((char)va_arg(arg, int), h->_pendingLevel);
           va_arg(arg, long);
           h->_pendingName = va_arg(arg, const char*);
+        } else if (!strcmp(str, "%s%c %s%s%s%s%s")) {
+          // IDF v5+ LOG_VERSION_2 header call: "%s%c %s%s%s%s%s"
+          // args: color, level_char, ts_open, timestamp, ts_close, tag, sep
+          va_arg(arg, const char*);  // skip color
+          charToLevel((char)va_arg(arg, int), h->_pendingLevel);
+          va_arg(arg, const char*);  // skip ts_open
+          va_arg(arg, const char*);  // skip timestamp
+          va_arg(arg, const char*);  // skip ts_close
+          const char* tag = va_arg(arg, const char*);
+          h->_pendingName = (tag && *tag) ? tag : nullptr;
+          if (!h->_pendingName)
+            h->_pendingLevel = Level::None;
         } else {
           const char* mptr = str;
           auto level = detectLevel(&mptr);

@@ -822,6 +822,7 @@ namespace esp32m {
             _errReason = (wifi_err_reason_t)r->reason;
             xEventGroupClearBits(_eventGroup,
                                  WifiFlags::StaConnected | WifiFlags::StaGotIp);
+            logW("STA disconnected, reason=%u", (unsigned)_errReason);
             break;
           }
           case WIFI_EVENT_STA_BSS_RSSI_LOW: {
@@ -1077,10 +1078,9 @@ namespace esp32m {
         strlcpy(reinterpret_cast<char*>(conf.sta.ssid), ssid,
                 sizeof(conf.sta.ssid));
 
-        // Prefer the strongest AP when multiple BSSIDs share the same SSID.
-        // This is handled by the ESP-IDF Wi-Fi stack during connect.
-        conf.sta.scan_method = WIFI_FAST_SCAN;
+        conf.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
         conf.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+        conf.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
         const uint8_t* bssid = ap->bssid();
         char bssidStr[net::MacMaxChars] = "any";
@@ -1099,10 +1099,10 @@ namespace esp32m {
             strlcpy(reinterpret_cast<char*>(conf.sta.password), password,
                     sizeof(conf.sta.password));
         }
-        // conf.sta.rm_enabled = 1;
-        // conf.sta.btm_enabled = 1;
-        // conf.sta.mbo_enabled = 1;
-        conf.sta.pmf_cfg.capable = 1;
+        // Keep the STA auth path conservative for better compatibility with
+        // routers that behave differently under IDF 6 defaults.
+        conf.sta.pmf_cfg.capable = false;
+        conf.sta.pmf_cfg.required = false;
 
         wifi_config_t current_conf;
         ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -1123,6 +1123,7 @@ namespace esp32m {
         logI("connecting to %s [%s], channel %d", ssid, bssidStr,
              (int)_channel);
       }
+      _errReason = (wifi_err_reason_t)0;
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_connect()) != ESP_OK)
         return false;
       int i = 30;
@@ -1131,7 +1132,6 @@ namespace esp32m {
         esp_task_wdt_reset();
       }
       i = 100;
-      _errReason = (wifi_err_reason_t)0;
       while (!isConnected() && !_errReason && --i) {
         delay(100);
         esp_task_wdt_reset();
