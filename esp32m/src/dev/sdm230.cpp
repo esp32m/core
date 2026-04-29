@@ -18,6 +18,15 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    void Sdm230::setOfflineMeasurements() {
+      _v = 0;
+      _i = 0;
+      _ap = 0;
+      _rap = 0;
+      _pf = 1;
+      _f = 0;
+    }
+
     Sdm230::Sdm230(uint8_t addr)
         : _addr(addr),
           _energyImp(this, "energy", "energy_imp"),
@@ -79,27 +88,66 @@ namespace esp32m {
 
     bool Sdm230::pollSensors() {
       modbus::Master& mb = modbus::Master::instance();
-      bool ok = false;
-      if (mb.isRunning()) {
-        if (read(Register::Voltage, _v) != ESP_OK)
-          _v = 0;
-        else
-          ok = true;
-        if (read(Register::Current, _i) != ESP_OK)
-          _i = 0;
-        if (read(Register::Power, _ap) != ESP_OK)
-          _ap = 0;
-        if (read(Register::ReactivePower, _rap) != ESP_OK)
-          _rap = 0;
-        if (read(Register::PowerFactor, _pf) != ESP_OK)
-          _pf = 1;
-        if (read(Register::Frequency, _f) != ESP_OK)
-          _f = 0;
-        read(Register::ImpActiveEnergy, _ie);
-        read(Register::ExpActiveEnergy, _ee);
-        read(Register::TotalActiveEnergy, _te);
-        if (ok)
+      if (!mb.isRunning()) {
+        bool changed = false;
+        _energyExp.set(_ee, &changed);
+        _energyImp.set(_ie, &changed);
+        _voltage.set(_v, &changed);
+        _current.set(_i, &changed);
+        _powerActive.set(_ap, &changed);
+        _powerApparent.set(_ap / _pf, &changed);
+        _powerReactive.set(_rap, &changed);
+        _powerFactor.set(_pf, &changed);
+        _frequency.set(_f, &changed);
+        return false;
+      }
+
+      {
+        float te = _te;
+        float ee = _ee;
+        float ie = _ie;
+        float v = _v;
+        float i = _i;
+        float ap = _ap;
+        float rap = _rap;
+        float pf = _pf;
+        float f = _f;
+        auto fail = [&](esp_err_t err) {
+          if (err == ESP_OK)
+            return false;
+          if (err == ESP_ERR_TIMEOUT) {
+            if (_timeoutStreak < std::numeric_limits<uint8_t>::max())
+              _timeoutStreak++;
+            if (_timeoutStreak >= OfflineTimeoutThreshold)
+              setOfflineMeasurements();
+          } else {
+            _timeoutStreak = 0;
+          }
+          return true;
+        };
+
+        if (fail(read(Register::Voltage, v))) {
+        } else if (fail(read(Register::Current, i))) {
+        } else if (fail(read(Register::Power, ap))) {
+        } else if (fail(read(Register::ReactivePower, rap))) {
+        } else if (fail(read(Register::PowerFactor, pf))) {
+        } else if (fail(read(Register::Frequency, f))) {
+        } else if (fail(read(Register::ImpActiveEnergy, ie))) {
+        } else if (fail(read(Register::ExpActiveEnergy, ee))) {
+        } else if (fail(read(Register::TotalActiveEnergy, te))) {
+        } else {
+          _timeoutStreak = 0;
+          _te = te;
+          _ee = ee;
+          _ie = ie;
+          _v = v;
+          _i = i;
+          _ap = ap;
+          _rap = rap;
+          _pf = pf;
+          _f = f;
           _stamp = millis();
+        }
       }
       bool changed = false;
       _energyExp.set(_ee, &changed);
@@ -111,7 +159,7 @@ namespace esp32m {
       _powerReactive.set(_rap, &changed);
       _powerFactor.set(_pf, &changed);
       _frequency.set(_f, &changed);
-      return ok;
+      return true;
     }
 
     Sdm230* useSdm230(uint8_t addr) {

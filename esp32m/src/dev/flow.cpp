@@ -27,7 +27,9 @@ namespace esp32m {
       if (!pcnt)
         return false;
       ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setEdgeAction(
-          PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
+          PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_HOLD));
+      ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setLevelAction(
+          PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_KEEP));
       ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setFilter(12 * 1000));  // 12 us is as high as it can go
       if (!pcnt->isEnabled())
         ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->enable(true));
@@ -35,7 +37,7 @@ namespace esp32m {
     }
 
     JsonDocument *FlowSensor::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
+      JsonDocument *doc = new JsonDocument(); 
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);

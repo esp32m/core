@@ -42,6 +42,15 @@ namespace esp32m {
       return (float)((ptr[0] << 16) | ptr[1]) / 100.0;
     }
 
+    void Dds238::setOfflineMeasurements() {
+      _v = 0;
+      _i = 0;
+      _ap = 0;
+      _rap = 0;
+      _pf = 1;
+      _f = 0;
+    }
+
     bool Dds238::initSensors() {
       modbus::Master& mb = modbus::Master::instance();
       if (mb.isRunning())
@@ -70,33 +79,44 @@ namespace esp32m {
 
     bool Dds238::pollSensors() {
       modbus::Master& mb = modbus::Master::instance();
-      bool ok = false;
-      if (mb.isRunning()) {
-        uint16_t reg[0x18];
-        memset(reg, 0, sizeof(reg));
-        ok = mb.request(_addr, modbus::Command::ReadHolding, 0, 0x18, &reg) ==
-             ESP_OK;
-        if (ok) {
-          _te = readFloat(reg + 0x0);
-          _ee = readFloat(reg + 0x8);
-          _ie = readFloat(reg + 0xA);
-          _v = (float)reg[0xC] / 10;
-          _i = (float)reg[0xD] / 100;
-          _ap = (float)(int16_t)reg[0xE] / 1000;
-          _rap = (float)(int16_t)reg[0xF] / 1000;
-          _pf = (float)reg[0x10] / 1000;
-          _f = (float)reg[0x11] / 100;
-          _stamp = millis();
-        }
+      if (!mb.isRunning()) {
+        bool changed = false;
+        _energyExp.set(_ee, &changed);
+        _energyImp.set(_ie, &changed);
+        _voltage.set(_v, &changed);
+        _current.set(_i, &changed);
+        _powerActive.set(_ap, &changed);
+        _powerApparent.set(_ap / _pf, &changed);
+        _powerReactive.set(_rap, &changed);
+        _powerFactor.set(_pf, &changed);
+        _frequency.set(_f, &changed);
+        return false;
       }
-      if (!ok) {
-        _v = 0;
-        _i = 0;
-        _ap = 0;
-        _rap = 0;
-        _pf = 1;
-        _f = 0;
+
+      uint16_t reg[0x18];
+      memset(reg, 0, sizeof(reg));
+      auto err = mb.request(_addr, modbus::Command::ReadHolding, 0, 0x18, &reg);
+      if (err == ESP_OK) {
+        _timeoutStreak = 0;
+        _te = readFloat(reg + 0x0);
+        _ee = readFloat(reg + 0x8);
+        _ie = readFloat(reg + 0xA);
+        _v = (float)reg[0xC] / 10;
+        _i = (float)reg[0xD] / 100;
+        _ap = (float)(int16_t)reg[0xE] / 1000;
+        _rap = (float)(int16_t)reg[0xF] / 1000;
+        _pf = (float)reg[0x10] / 1000;
+        _f = (float)reg[0x11] / 100;
+        _stamp = millis();
+      } else if (err == ESP_ERR_TIMEOUT) {
+        if (_timeoutStreak < std::numeric_limits<uint8_t>::max())
+          _timeoutStreak++;
+        if (_timeoutStreak >= OfflineTimeoutThreshold)
+          setOfflineMeasurements();
+      } else {
+        _timeoutStreak = 0;
       }
+
       bool changed = false;
       _energyExp.set(_ee, &changed);
       _energyImp.set(_ie, &changed);
@@ -107,7 +127,7 @@ namespace esp32m {
       _powerReactive.set(_rap, &changed);
       _powerFactor.set(_pf, &changed);
       _frequency.set(_f, &changed);
-      return ok;
+      return true;
     }
 
     Dds238* useDds238(uint8_t addr) {

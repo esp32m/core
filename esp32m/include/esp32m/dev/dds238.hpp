@@ -12,22 +12,26 @@ namespace esp32m {
     class Dds238 : public Device {
      public:
       Dds238(uint8_t addr = 1);
-      Dds238(const Dds238 &) = delete;
-      const char *name() const override {
+      Dds238(const Dds238&) = delete;
+      const char* name() const override {
         return "DDS238";
       }
 
      protected:
       bool pollSensors() override;
       bool initSensors() override;
-      JsonDocument *getState(RequestContext &ctx) override;
+      JsonDocument* getState(RequestContext& ctx) override;
 
      private:
+      static constexpr uint8_t OfflineTimeoutThreshold = 2;
       uint8_t _addr;
+      uint8_t _timeoutStreak = 0;
       float _te = 0, _ee = 0, _ie = 0, _v = 0, _i = 0, _ap = 0, _rap = 0,
             _pf = 1, _f = 0;
       unsigned long _stamp = 0;
-      Sensor _energyImp, _energyExp, _voltage, _current, _powerActive, _powerApparent, _powerReactive, _powerFactor, _frequency;
+      Sensor _energyImp, _energyExp, _voltage, _current, _powerActive,
+          _powerApparent, _powerReactive, _powerFactor, _frequency;
+      void setOfflineMeasurements();
     };
 
     Dds238* useDds238(uint8_t addr = 1);

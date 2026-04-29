@@ -22,8 +22,9 @@ const validationSchema = Yup.object().shape({
     reg3: Yup.number().integer().min(0).max(255),
 });
 
-const Motor = ({ index, ms, mi, config, setConfig }: { index: number, ms: TMotorState, mi: TMotorInfo, config?: TWindowConfig, setConfig: (config: TWindowConfig) => void }) => {
-    const [, , current, fastCurrent, eventKind, eventDirection, elapsedMs, peakCurrent, confidence, , openState] = ms;
+
+const Motor = ({ index, ms, mi, config, setConfig }: { index: number, ms: TMotorState, mi: TMotorInfo, config?: TWindowConfig, setConfig: (config: TWindowConfig) => Promise<void> }) => {
+    const [, , current, fastCurrent, eventKind, eventDirection, elapsedMs, peakCurrent, confidence, , openState, position=0] = ms;
     const [state, setState] = useState(ms[0]);
     const [speed, setSpeed] = useState(ms[1]);
     const [disabled, setDisabled] = useState(false);
@@ -73,13 +74,14 @@ const Motor = ({ index, ms, mi, config, setConfig }: { index: number, ms: TMotor
                         </Select>
                     </FormControl>
                 </Grid>
-                <Grid size={{ xs: 4 }} style={{ display: 'flex', alignItems: 'center' }}>
+                <Grid size={{ xs: 5 }} style={{ display: 'flex', alignItems: 'center' }}>
                     {!!mi.pwm &&
                         <Slider aria-label="Speed" value={speed} valueLabelDisplay="auto" defaultValue={100} disabled={disabled}
                             valueLabelFormat={(v) => `${v}%`} onChange={(_: Event, newValue: number) => { setSpeed(newValue); }} onChangeCommitted={handleSpeedChange} />
                     }
+                    {Number.isInteger(position) && <LinearProgress variant="determinate" value={position} sx={{ width: '100%', mt: 1 }} />}
                 </Grid>
-                <Grid size={{ xs: 4 }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <Grid size={{ xs: 3 }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                     <Chip label={`${current} mA`} variant="outlined" sx={telemetryChipSx} />
                     <IconButton onClick={() => openSettings()}>
                         <Settings />
@@ -131,7 +133,7 @@ const Motors = ({ state }: { state: TState }) => {
     const setWindowConfig = (index: number) => (windowConfig: Partial<TWindowConfig>) => {
         const windows = [];
         windows[index] = windowConfig
-        setConfig({ windows });
+        return setConfig({ windows });
     }
     if (!info) return null;
     const list = [];

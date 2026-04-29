@@ -66,6 +66,7 @@ export type TMotorState = [
     confidence: number,
     eventSeq: number,
     open: OpenState,
+    position: number,
 ];
 
 export type TState = {

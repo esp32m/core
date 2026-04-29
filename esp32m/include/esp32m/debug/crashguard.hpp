@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <stdio.h>
 #include <string>
 #include <vector>
 
@@ -76,6 +77,54 @@ namespace esp32m {
       } _info;
       std::string _uid;
 
+#if CONFIG_ESP_COREDUMP_ENABLE
+      void tryReadChecksumUid(const esp_partition_t* part, size_t addr,
+                             size_t size) {
+  #  if CONFIG_ESP_COREDUMP_CHECKSUM_SHA256
+        const size_t sum_len = 32;
+  #  elif CONFIG_ESP_COREDUMP_CHECKSUM_CRC32
+        const size_t sum_len = 4;
+  #  else
+        const size_t sum_len = 0;
+  #  endif
+        if (sum_len == 0 || size < sum_len)
+          return;
+
+        uint8_t sum[sum_len];
+        const size_t rel_off = (addr - part->address);
+        const size_t sum_off = rel_off + size - sum_len;
+        if (esp_partition_read(part, sum_off, sum, sum_len) == ESP_OK)
+          _uid = hex_encode(sum, sum_len);
+      }
+
+      void tryBuildSummaryUid() {
+        esp_core_dump_summary_t summary{};
+        if (esp_core_dump_get_summary(&summary) != ESP_OK)
+          return;
+
+        const char* sha = reinterpret_cast<const char*>(summary.app_elf_sha256);
+        if (sha && *sha) {
+          char buf[APP_ELF_SHA256_SZ + 32];
+          snprintf(buf, sizeof(buf), "%s:%08lx", sha,
+                   (unsigned long)summary.exc_pc);
+          _uid = buf;
+        } else {
+          char buf[32];
+          snprintf(buf, sizeof(buf), "pc:%08lx", (unsigned long)summary.exc_pc);
+          _uid = buf;
+        }
+      }
+#else
+      void tryReadChecksumUid(const esp_partition_t* part, size_t addr,
+                             size_t size) {
+        (void)part;
+        (void)addr;
+        (void)size;
+      }
+
+      void tryBuildSummaryUid() {}
+#endif
+
       CoreDump() {
         ui::AssetInfo info{"/debug/coredump.bin", "application/octet-stream",
                            nullptr, nullptr};
@@ -113,20 +162,11 @@ namespace esp32m {
         if (rel + size > part->size)
           return ESP_ERR_INVALID_SIZE;
 
-#  if CONFIG_ESP_COREDUMP_CHECKSUM_SHA256
-        const size_t sum_len = 32;
-#  elif CONFIG_ESP_COREDUMP_CHECKSUM_CRC32
-        const size_t sum_len = 4;
-#  else
-        const size_t sum_len = 0;
-#  endif
-        if (sum_len > 0) {
-          uint8_t sum[sum_len];
-          const size_t rel_off = (addr - part->address);
-          const size_t sum_off = rel_off + size - sum_len;
-          ESP_CHECK_RETURN(esp_partition_read(part, sum_off, sum, sum_len));
-          _uid = hex_encode(sum, sum_len);
-        }
+        tryReadChecksumUid(part, addr, size);
+        if (_uid.empty())
+          tryBuildSummaryUid();
+        if (_uid.empty())
+          _uid = string_printf("flash:%zx:%zu", addr, size);
 
         _info.part = part;
         _info.addr = addr;

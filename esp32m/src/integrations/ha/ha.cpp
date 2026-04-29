@@ -61,6 +61,11 @@ namespace esp32m {
         root["component"] = component->component();
         root["has_state"] = component->hasState(  );
         root["accepts_commands"] = component->acceptsCommands(  );
+        if (component->isComponent(ComponentType::Cover)) {
+          auto stateTopicNames = root["stateTopicNames"].to<JsonArray>();
+          stateTopicNames.add("state_topic");
+          stateTopicNames.add("position_topic");
+        }
         auto config = root["config"].to<JsonObject>();
         if (title)
           config["name"] = title;
@@ -73,9 +78,16 @@ namespace esp32m {
         if (stateClassName)
           config["state_class"] = stateClassName;
         if (component->isComponent(ComponentType::BinarySensor) ||
-            component->isComponent(ComponentType::Switch)) {
+          component->isComponent(ComponentType::Switch)) {
           config["value_template"] =
               string_printf("{{ 'ON' if value_json['%s'] else 'OFF' }}", id);
+        } else if (component->isComponent(ComponentType::Cover)) {
+          config["value_template"] = string_printf(
+            "{{ value_json['%s'].get('state') if value_json['%s'] is mapping else none }}",
+            id, id);
+          config["position_template"] = string_printf(
+            "{{ value_json['%s'].get('position') if value_json['%s'] is mapping else none }}",
+            id, id);
         } else
           config["value_template"] = string_printf("{{value_json['%s']}}", id);
         if (component->isComponent(ComponentType::Select)) {

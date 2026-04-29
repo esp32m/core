@@ -84,13 +84,16 @@ namespace esp32m {
       JsonDocument* getState(RequestContext& ctx) override;
 
      private:
+      static constexpr uint8_t OfflineTimeoutThreshold = 2;
       uint8_t _addr;
+      uint8_t _timeoutStreak = 0;
       float _te = 0, _ee = 0, _ie = 0, _v = 0, _i = 0, _ap = 0, _rap = 0,
             _pf = 1, _f = 0;
       unsigned long _stamp = 0;
       Sensor _energyImp, _energyExp, _voltage, _current, _powerActive,
           _powerApparent, _powerReactive, _powerFactor, _frequency;
       esp_err_t read(Register reg, float& res);
+      void setOfflineMeasurements();
     };
 
     Sdm230* useSdm230(uint8_t addr = 1);

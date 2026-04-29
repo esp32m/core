@@ -567,31 +567,30 @@ namespace esp32m {
       const char* component() const override {
         return ComponentType::Cover;
       }
-      void set(CoverState value, bool* changed = nullptr) {
-        const char* strValue = nullptr;
-        switch (value) {
-          case CoverState::Opening:
-            strValue = "opening";
-            break;
-          case CoverState::Open:
-            strValue = "open";
-            break;
-          case CoverState::Closing:
-            strValue = "closing";
-            break;
-          case CoverState::Closed:
-            strValue = "closed";
-            break;
-          case CoverState::Stopped:
-            strValue = "stopped";
-            break;
-          default:
-            break;
+      void set(CoverState value, int position, bool* changed = nullptr) {
+        const char* strValue = stateName(value);
+        if (!strValue) {
+          resetState(changed);
+          return;
         }
-        setState(strValue, changed);
+        JsonDocument doc;
+        auto root = doc.to<JsonObject>();
+        root["state"] = strValue;
+        if (position >= 0)
+          root["position"] = position;
+        setState(doc.as<JsonVariantConst>(), changed);
       }
-      CoverState get() {
-        auto strValue = getState().as<std::string>();
+      void set(CoverState value, bool* changed = nullptr) {
+        set(value, position(), changed);
+      }
+      void setPosition(int value, bool* changed = nullptr) {
+        set(get(), value, changed);
+      }
+      CoverState get() const {
+        auto state = getState();
+        if (!state.is<JsonObjectConst>())
+          return CoverState::Unknown;
+        auto strValue = state["state"].as<std::string>();
         if (strValue == "opening")
           return CoverState::Opening;
         if (strValue == "open")
@@ -604,9 +603,44 @@ namespace esp32m {
           return CoverState::Stopped;
         return CoverState::Unknown;
       }
+      int position() const {
+        auto state = getState();
+        if (state.is<JsonObjectConst>() && state["position"].is<int>()) {
+          auto value = state["position"].as<int>();
+          if (value < 0)
+            return 0;
+          if (value > 100)
+            return 100;
+          return value;
+        }
+        switch (get()) {
+          case CoverState::Open:
+            return 100;
+          case CoverState::Closed:
+            return 0;
+          default:
+            return -1;
+        }
+      }
 
      private:
       const char* _type;
+      static const char* stateName(CoverState value) {
+        switch (value) {
+          case CoverState::Opening:
+            return "opening";
+          case CoverState::Open:
+            return "open";
+          case CoverState::Closing:
+            return "closing";
+          case CoverState::Closed:
+            return "closed";
+          case CoverState::Stopped:
+            return "stopped";
+          default:
+            return nullptr;
+        }
+      }
     };
 
   }  // namespace dev
