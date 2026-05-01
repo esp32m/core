@@ -62,8 +62,8 @@ export const Hbridge = ({ name, title }: IProps) => {
 
   return (
     <Grid container>
-      <Title item> {title} </Title>
-      <StyledButtons item>
+      <Title> {title} </Title>
+      <StyledButtons>
         <Buttons
           mode={state.mode}
           onChange={async (mode: Mode) => {

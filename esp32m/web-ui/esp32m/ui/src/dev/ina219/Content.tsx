@@ -4,7 +4,7 @@ import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
 export default ({ title, addr }: IProps) => {
-  const state=useModuleState<IState>(Name);
+  const state=useModuleState(Name) as IState | undefined;
   if (!state) return null;
   const { addr: a, current, voltage, shuntVoltage, power } = state;
   if (addr && addr != a) return null;

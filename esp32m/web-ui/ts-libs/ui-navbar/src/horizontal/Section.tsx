@@ -21,12 +21,11 @@ function NavSectionHorizontal({ navConfig }: NavSectionProps) {
   return (
     <Stack
       direction="row"
-      justifyContent="center"
-      sx={{ bgcolor: 'background.neutral', borderRadius: 1, px: 0.5 }}
+      sx={{ justifyContent: "center", bgcolor: 'background.neutral', borderRadius: 1, px: 0.5 }}
     >
       <Stack direction="row" sx={{ ...hideScrollbar, py: 1 }}>
         {navConfig.map((group) => (
-          <Stack key={group.subheader} direction="row" flexShrink={0}>
+          <Stack key={group.subheader} direction="row" sx={{ flexShrink: 0 }}>
             {group.items.map((list) => (
               <NavListRoot key={list.title} list={list} />
             ))}

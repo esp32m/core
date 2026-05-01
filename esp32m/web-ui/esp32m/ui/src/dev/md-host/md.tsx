@@ -99,7 +99,7 @@ export const Dev = ({ name }: { name: string }) => {
         <NameValueList list={list} />
         <Motor name={name} num={1} state={state.m1} disabled={disabled} />
         <Motor name={name} num={2} state={state.m2} disabled={disabled} />
-        <Grid container justifyContent="flex-end" spacing={2}>
+        <Grid container spacing={2} sx={{ justifyContent: "flex-end" }}>
             <Grid>
                 <Button
                     onClick={() => open('enterBootloader')}

@@ -12,7 +12,6 @@ import { useSnackApi } from '@ts-libs/ui-snack';
 import { isNumber, noop, TJsonValue } from '@ts-libs/tools';
 import { Name, TBackendStateRoot } from './state';
 import { ActionCreator, UnknownAction } from 'redux';
-import { setIn } from 'formik';
 
 export const ClientContext = createContext<IBackendApi | undefined>(undefined);
 

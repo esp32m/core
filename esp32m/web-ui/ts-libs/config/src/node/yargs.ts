@@ -1,23 +1,23 @@
 import { getPlugins, TPlugin } from '@ts-libs/plugins';
-import yargs from 'yargs';
+import yargs, { type Arguments } from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-let argv: ReturnType<typeof yargs.parse>;
-let resolveArgv: ((value: ReturnType<typeof yargs.parse>) => void) | undefined;
+let argv: Arguments;
+let resolveArgv: ((value: Arguments) => void) | undefined;
 
-const argvPromise = new Promise<ReturnType<typeof yargs.parse>>((resolve) => {
+const argvPromise = new Promise<Arguments>((resolve) => {
     resolveArgv = resolve;
 });
 
 type TYargsInit = (instance: ReturnType<typeof yargs>) => void;
-type TYargsParsed = (instance: ReturnType<typeof yargs.parse>) => void;
+type TYargsParsed = (instance: Arguments) => void;
 
 export type TYargsPlugin = TPlugin & {
     readonly yargs: { readonly init?: TYargsInit, readonly parsed?: TYargsParsed  };
 };
 
 
-export const initYargs = () => {
+export const initYargs = async () => {
     if (argv)
         throw new Error('BUG: Yargs already initialized');
     const y = yargs(hideBin(process.argv));
@@ -27,7 +27,7 @@ export const initYargs = () => {
     } catch (e) {
         console.warn(`Yargs plugin ${p.name} init error:`, e);
     }
-    argv = y.help().alias('help', 'h').parse();
+    argv = await y.help().alias('help', 'h').parseAsync();
     for (const p of plugins) try {
         p.yargs.parsed?.(argv);
     } catch (e) {

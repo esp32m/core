@@ -139,7 +139,7 @@ const content = (props: { name: string; title?: string }) => {
         {NoteNames.map(toNoteButton)}
       </Grid>
       <StyledDivider/>
-      <Grid container spacing={3} alignItems="flex-end">
+      <Grid container spacing={3} sx={{ alignItems: "flex-end" }}>
         <Grid size={{ xs: 10 }}>
           <TextField
             variant="standard"

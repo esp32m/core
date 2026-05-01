@@ -1,7 +1,7 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../backend';
 import { formatBytes } from '../utils';
-import { Name, THardwareState, Models, Features, ResetReason } from './types';
+import { Name, THardwareState, Features, ResetReason, ChipModel } from './types';
 import { flashMode } from './utils';
 import { NameValueList } from '../app';
 import { useTranslation } from '@ts-libs/ui-i18n';
@@ -22,7 +22,7 @@ export const HardwareSummary = () => {
     if (chip.revision || chip.freq)
       list.push([
         'CPU / features',
-        `${Models[chip.model] || test('unknown')} r.${chip.revision} (${
+        `${ChipModel[chip.model] || t('unknown')} r.${chip.revision} (${
           chip.cores
         } ${t('cores')}) / ${features(chip.features)}`,
       ]);

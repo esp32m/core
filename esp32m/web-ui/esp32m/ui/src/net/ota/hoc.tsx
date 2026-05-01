@@ -53,11 +53,11 @@ export const Hoc = ({ children }: React.PropsWithChildren<unknown>) => {
       {children}
       <ProgressDialog open={isRunning}>
         <DialogTitle>{t('Firmware update is in progress')}</DialogTitle>
-        <ProgressBox display="flex" alignItems="center">
-          <Box width="100%" mr={1}>
+        <ProgressBox sx={{ display: "flex", alignItems: "center" }}>
+          <Box sx={{ width: "100%", mr: 1 }}>
             <BorderLinearProgress variant="determinate" value={percent} />
           </Box>
-          <Box minWidth={35}>
+          <Box sx={{ minWidth: 35 }}>
             <Percent variant="body2" color="textSecondary">{`${Math.round(
               percent
             )}%`}</Percent>

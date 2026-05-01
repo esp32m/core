@@ -55,9 +55,11 @@ export function NavListRoot({ list }: NavListRootProps) {
           anchorEl={menuRef.current}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-          PaperProps={{
-            onMouseEnter: handleOpen,
-            onMouseLeave: handleClose,
+          slotProps={{
+            paper: {
+              onMouseEnter: handleOpen,
+              onMouseLeave: handleClose,
+            },
           }}
         >
           {(list.children || []).map((item) => (
@@ -113,9 +115,11 @@ function NavListSub({ list }: NavListSubProps) {
           anchorEl={menuRef.current}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-          PaperProps={{
-            onMouseEnter: handleOpen,
-            onMouseLeave: handleClose,
+          slotProps={{
+            paper: {
+              onMouseEnter: handleOpen,
+              onMouseLeave: handleClose,
+            },
           }}
         >
           {(list.children || []).map((item) => (

@@ -84,14 +84,16 @@ const Inner = ({ updateConfig }: { updateConfig: VoidFunction }) => {
             label="Host name"
             fullWidth
             disabled={requestInProgress}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <ResetButton onClick={() => open('reset')}>
-                    {t('Reset')}
-                  </ResetButton>
-                </InputAdornment>
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <ResetButton onClick={() => open('reset')}>
+                      {t('Reset')}
+                    </ResetButton>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
         </Grid>

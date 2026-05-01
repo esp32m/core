@@ -71,8 +71,7 @@ export default function NavbarVertical({
       >
         <Stack
           direction="row"
-          alignItems="center"
-          justifyContent="space-between"
+          sx={{ alignItems: "center", justifyContent: "space-between" }}
         >
           {theme.config.navbar.header}
           <Box sx={{ flexGrow: 1 }} />
@@ -108,7 +107,7 @@ export default function NavbarVertical({
         <Drawer
           open={isOpenSidebar}
           onClose={onCloseSidebar}
-          PaperProps={{ sx: { width: theme.config.navbar.width } }}
+          slotProps={{ paper: { sx: { width: theme.config.navbar.width } } }}
         >
           {renderContent}
         </Drawer>
@@ -120,22 +119,24 @@ export default function NavbarVertical({
           variant="persistent"
           onMouseEnter={onHoverEnter}
           onMouseLeave={onHoverLeave}
-          PaperProps={{
-            sx: {
-              width: theme.config.navbar.width,
-              borderRightStyle: 'dashed',
-              bgcolor: 'background.default',
-              transition: (theme) =>
-                theme.transitions.create('width', {
-                  duration: theme.transitions.duration.standard,
+          slotProps={{
+            paper: {
+              sx: {
+                width: theme.config.navbar.width,
+                borderRightStyle: 'dashed',
+                bgcolor: 'background.default',
+                transition: (theme: Parameters<typeof cssStyles>[0]) =>
+                  theme!.transitions.create('width', {
+                    duration: theme!.transitions.duration.standard,
+                  }),
+                ...(isCollapse && {
+                  width: theme.config.navbar.collapseWidth,
                 }),
-              ...(isCollapse && {
-                width: theme.config.navbar.collapseWidth,
-              }),
-              ...(collapseHover && {
-                ...cssStyles(theme).bgBlur(),
-                boxShadow: (theme) => theme.customShadows.z24,
-              }),
+                ...(collapseHover && {
+                  ...cssStyles(theme).bgBlur(),
+                  boxShadow: (theme: Parameters<typeof cssStyles>[0]) => (theme as any).customShadows.z24,
+                }),
+              },
             },
           }}
         >

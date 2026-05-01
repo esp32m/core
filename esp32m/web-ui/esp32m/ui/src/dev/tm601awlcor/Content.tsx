@@ -1,12 +1,11 @@
 import { IProps, TState, TConfig } from './types';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useModuleConfig, useModuleState } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
-import { Grid, IconButton, MenuItem } from '@mui/material';
+import { Grid, IconButton } from '@mui/material';
 import { Settings } from '@mui/icons-material';
 import {
   DialogForm,
-  FieldSelect,
   FieldText,
   useDialogForm,
 } from '@ts-libs/ui-forms';

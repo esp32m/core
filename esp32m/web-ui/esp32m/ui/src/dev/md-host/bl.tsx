@@ -13,7 +13,7 @@ import { FwUpdateButton } from "./fwup";
 export const Bl = ({ uid, seen }: { uid: number, seen: number }) => {
     return <CardBox title={`bootloader node ${uid.toString(16).padEnd(8, '0')}`}>
         <NameValueList list={[["Last seen", `${millisToStr(seen)} ago`]]} />
-        <Grid container justifyContent="flex-end" spacing={2} sx={{ marginTop: 10 }}>
+        <Grid container spacing={2} sx={{ justifyContent: "flex-end", marginTop: 10 }}>
             <Grid>
                 <FwUpdateButton uid={uid} />
             </Grid>

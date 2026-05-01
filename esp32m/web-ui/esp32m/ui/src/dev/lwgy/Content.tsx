@@ -2,7 +2,7 @@ import { Name, TState, TProps, TConfig } from './types';
 import { useBackendApi, useModuleConfig, useModuleState } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
-import { Button, Grid, IconButton, MenuItem } from '@mui/material';
+import { Grid, IconButton, MenuItem } from '@mui/material';
 import { Settings } from '@mui/icons-material';
 import {
   DialogForm,

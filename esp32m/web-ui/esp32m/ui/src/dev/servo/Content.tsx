@@ -6,7 +6,7 @@ import { Slider, Grid } from "@mui/material";
 import { CardBox } from "@ts-libs/ui-app";
 
 export default ({ name, title }: IProps) => {
-  const state = useModuleState<IState>(name);
+  const state = useModuleState(name) as IState | undefined;
   const [disabled, setDisabled] = React.useState(false);
   const api = Backend.useBackendApi();
   if (!state) return null;
@@ -14,7 +14,7 @@ export default ({ name, title }: IProps) => {
   return (
     <CardBox title={title || name}>
       <Grid container>
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Slider
             min={0}
             max={180}

@@ -7,15 +7,19 @@ export type THeapState = {
   max: number;
 }
 
-export const enum ChipModel {
+export enum ChipModel {
   ESP32 = 1,
   ESP32S2 = 2,
   ESP32C3 = 5,
-  ESP32H4 = 6,
   ESP32S3 = 9,
   ESP32C2 = 12,
   ESP32C6 = 13,
   ESP32H2 = 16,
+  ESP32P4 = 18,
+  ESP32C61 = 20,
+  ESP32C5 = 23,
+  ESP32H21 = 25,
+  ESP32H4 = 28,
   POSIX = 999,
 }
 
@@ -29,7 +33,7 @@ export const enum ChipFeatures {
 }
 
 export enum ResetReason {
-  Unknown = 1,
+  Unknown = 0,
   PowerOn,
   ExtPin,
   Software,
@@ -40,6 +44,11 @@ export enum ResetReason {
   DeepSleep,
   Brownout,
   SDIO,
+  USB,
+  JTAG,
+  EFuse,
+  PowerGlitch,
+  CPULockup,
 }
 
 export type TChipState = {
@@ -94,17 +103,6 @@ export interface ISystemConfig {
   pm: [number, number, boolean];
 }
 
-export const Models = {
-  [ChipModel.ESP32]: 'ESP32',
-  [ChipModel.ESP32S2]: 'ESP32S2',
-  [ChipModel.ESP32C3]: 'ESP32C3',
-  [ChipModel.ESP32H4]: 'ESP32H4',
-  [ChipModel.ESP32S3]: 'ESP32S3',
-  [ChipModel.ESP32C2]: 'ESP32C2',
-  [ChipModel.ESP32C6]: 'ESP32C6',
-  [ChipModel.ESP32H2]: 'ESP32H2',
-  [ChipModel.POSIX]: 'POSIX',
-};
 export const Features: { [key: number]: string } = {
   [ChipFeatures.EmbFlash]: 'EMB_FLASH',
   [ChipFeatures.WifiBgn]: '802.11bgn',

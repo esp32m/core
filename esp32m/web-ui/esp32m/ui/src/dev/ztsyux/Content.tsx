@@ -15,7 +15,7 @@ const validationSchema = Yup.object().shape({
 });
 
 export const Content = ({ name = Name, title, addr }: TProps) => {
-  const api = useBackendApi();
+  useBackendApi();
   const { config, setConfig } = useModuleConfig<TConfig>(name);
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},

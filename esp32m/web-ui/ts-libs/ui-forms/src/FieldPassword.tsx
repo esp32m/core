@@ -29,10 +29,12 @@ export const FieldPassword = (
   const p: FieldProps<TextFieldProps> = {
     type: showPass ? 'text' : 'password',
     autoComplete: 'off',
-    InputProps: {
-      endAdornment: revealable && (
-        <VisibilitySwitch showPass={showPass} setShowPass={setShowPass} />
-      ),
+    slotProps: {
+      input: {
+        endAdornment: revealable && (
+          <VisibilitySwitch showPass={showPass} setShowPass={setShowPass} />
+        ),
+      },
     },
     ...rest,
   };

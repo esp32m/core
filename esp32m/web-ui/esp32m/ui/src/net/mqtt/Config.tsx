@@ -87,7 +87,7 @@ export const Config = () => {
           </>
         )}
       </FormikConsumer>
-      <ButtonBar container justifyContent="flex-end" spacing={2}>
+      <ButtonBar container spacing={2} sx={{ justifyContent: "flex-end" }}>
         <Grid>
           <Button
             onClick={() => open('clearCache')}

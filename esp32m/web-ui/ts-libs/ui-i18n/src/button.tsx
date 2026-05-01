@@ -33,8 +33,10 @@ export const I18nButton = () => {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
-        MenuListProps={{
-          'aria-labelledby': 'auth-button',
+        slotProps={{
+          list: {
+            'aria-labelledby': 'auth-button',
+          },
         }}
       >
         {languages.map((l) => (

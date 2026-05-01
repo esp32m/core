@@ -2,7 +2,6 @@ import { List, RowComponentProps } from 'react-window';
 import { CardBox } from '@ts-libs/ui-app';
 import { useModuleState } from '../../../backend';
 import { Name, NeighState, TDest, TNd6State, TNeigh, TPrefix } from './types';
-import { data } from 'react-router';
 
 const NeighRow = ({
   data,

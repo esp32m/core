@@ -43,21 +43,21 @@ const slice = createSlice({
       { payload: [name, moduleState] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = state.modules[name] ??= {};
-      ds.state = moduleState;
+      (ds as any).state = moduleState;
     },
     moduleConfig: (
       state,
       { payload: [name, config] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = state.modules[name] ??= {};
-      ds.config = config;
+      (ds as any).config = config;
     },
     moduleInfo: (
       state,
       { payload: [name, info] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = state.modules[name] ??= {};
-      ds.info = info;
+      (ds as any).info = info;
     },
   },
   extraReducers: (builder) => {

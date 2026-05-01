@@ -95,7 +95,7 @@ const FilePickerField = () => {
         {values.file ? values.file.name : t('Select firmware file...')}
       </Button>
       {touched.file && errors.file && (
-        <Typography variant="caption" color="error" display="block">
+        <Typography variant="caption" color="error" sx={{ display: "block" }}>
           {errors.file as string}
         </Typography>
       )}
@@ -291,7 +291,7 @@ export const OtaCheck = () => {
             label={t('Install automatically')}
           />
         </Grid>
-        <Grid size={{xs:12}} container justifyContent={'flex-end'}>
+        <Grid size={{xs:12}} container sx={{ justifyContent: 'flex-end' }}>
           <Button onClick={() => openConfig()} disabled={waitingResponse}>
             {t('configure')}
           </Button>

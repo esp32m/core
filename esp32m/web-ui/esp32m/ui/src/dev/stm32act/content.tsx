@@ -1,6 +1,6 @@
 import { MessageBox, useMessageBox } from "@ts-libs/ui-base";
 import { useModuleInfo, useModuleState, useModuleApi, useBackendApi, useModuleConfig } from "../../backend";
-import { MotionEventKind, MotorState, Name, OpenState, TBootloaderInfo, TConfig, TInfo, TMotorInfo, TMotorState, TState, TWindowConfig } from "./types";
+import { MotorState, Name, OpenState, TBootloaderInfo, TConfig, TInfo, TMotorInfo, TMotorState, TState, TWindowConfig } from "./types";
 import { NameValueList } from "../../app";
 import { CardBox } from "@ts-libs/ui-app";
 import { formatBytes, millisToStr } from "../..";
@@ -24,7 +24,7 @@ const validationSchema = Yup.object().shape({
 
 
 const Motor = ({ index, ms, mi, config, setConfig }: { index: number, ms: TMotorState, mi: TMotorInfo, config?: TWindowConfig, setConfig: (config: TWindowConfig) => Promise<void> }) => {
-    const [, , current, fastCurrent, eventKind, eventDirection, elapsedMs, peakCurrent, confidence, , openState, position=0] = ms;
+    const [, , current, _fastCurrent, _eventKind, _eventDirection, _elapsedMs, _peakCurrent, _confidence, , openState, position=0] = ms;
     const [state, setState] = useState(ms[0]);
     const [speed, setSpeed] = useState(ms[1]);
     const [disabled, setDisabled] = useState(false);
@@ -162,7 +162,7 @@ const Motors = ({ state }: { state: TState }) => {
         <CardBox title={"STM32 Actuators"}>
             <NameValueList list={list} />
             {motors}
-            <Grid container justifyContent="flex-end" spacing={2}>
+            <Grid container spacing={2} sx={{ justifyContent: "flex-end" }}>
                 <Grid>
                     <Button
                         onClick={() => open('stm32reset')}
@@ -364,7 +364,7 @@ const Bootloader = () => {
         }
     };
     return <CardBox title={"STM32 Actuators bootloader"}>
-        <Grid container justifyContent="flex-end" spacing={2}>
+        <Grid container spacing={2} sx={{ justifyContent: "flex-end" }}>
             <Grid>
                 <Button
                     onClick={() => stm32req('stm32reset')}

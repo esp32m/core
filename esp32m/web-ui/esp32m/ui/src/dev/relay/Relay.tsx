@@ -28,7 +28,7 @@ const Buttons = ({ state, onChange, disabled }: IButtonsProps) => {
 };
 
 export default ({ name, title }: IProps) => {
-  const state = useModuleState<IState>(name);
+  const state = useModuleState(name) as IState | undefined;
   const [disabled, setDisabled] = React.useState(false);
   const api = Backend.useBackendApi();
   if (!state) return null;

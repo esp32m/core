@@ -36,7 +36,7 @@ export const Content = ({
     []
   );
 
-  const api = useBackendApi();
+  useBackendApi();
   const { config, setConfig } = useModuleConfig<TConfig>(name);
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},

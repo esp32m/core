@@ -154,7 +154,7 @@ export const Content = () => {
 
     return (
         <Grid container spacing={2}>
-            <Grid size={{ xs: 12 }} container spacing={1} alignItems="center">
+            <Grid size={{ xs: 12 }} container spacing={1} sx={{ alignItems: "center" }}>
                 <Grid>
                     <TextField
                         size="small"
