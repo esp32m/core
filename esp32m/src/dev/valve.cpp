@@ -1,5 +1,6 @@
 #include "esp32m/dev/valve.hpp"
 #include "esp32m/base.hpp"
+#include "esp32m/integrations/ha/ha.hpp"
 
 #include <esp_task_wdt.h>
 #include <limits>
@@ -68,7 +69,7 @@ namespace esp32m {
 
     Valve::Valve(const char *name, valve::IWiring *wiring,
                  valve::ISensor *sensor)
-        : _name(name), _wiring(wiring), _sensor(sensor) {
+        : _name(name), _wiring(wiring), _sensor(sensor), _component(this, "") {
       xTaskCreate([](void *self) { ((Valve *)self)->run(); }, "m/valve", 4096,
                   this, tskIDLE_PRIORITY + 1, &_task);
     };
@@ -246,6 +247,23 @@ namespace esp32m {
       }
       //      logD("state transition %d->%d", _state, state);
       _state = state;
+      switch (state) {
+        case State::Opening:
+          _component.set(ValveState::Opening);
+          break;
+        case State::Opened:
+          _component.set(ValveState::Open);
+          break;
+        case State::Closing:
+          _component.set(ValveState::Closing);
+          break;
+        case State::Closed:
+          _component.set(ValveState::Closed);
+          break;
+        default:
+          _component.resetState();
+          break;
+      }
       if (isPersistent())
         switch (state) {
           case State::Opened:
@@ -300,6 +318,25 @@ namespace esp32m {
         auto delay = (_state > State::Invalid) ? 10 : 1000;
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(delay));
       }
+    }
+
+    bool Valve::handleRequest(Request &req) {
+      if (AppObject::handleRequest(req))
+        return true;
+      if (req.is(integrations::ha::CommandRequest::Name)) {
+        auto cmd = req.data().as<const char *>();
+        if (cmd) {
+          if (!strcasecmp(cmd, "open"))
+            set(valve::Cmd::Open, false);
+          else if (!strcasecmp(cmd, "close"))
+            set(valve::Cmd::Close, false);
+          else
+            logW("unrecognized valve command: %s", cmd);
+        }
+        req.respond();
+        return true;
+      }
+      return false;
     }
 
     Valve *useValve(const char *name, valve::IWiring *wiring, io::IPin *isOpen,

@@ -130,6 +130,7 @@ namespace esp32m {
       constexpr const char* Select = "select";
       constexpr const char* Cover = "cover";
       constexpr const char* BinarySensor = "binary_sensor";
+      constexpr const char* Valve = "valve";
     }  // namespace ComponentType
 
     enum class StateClass { Undefined, Measurement, Total, TotalIncreasing };
@@ -637,6 +638,64 @@ namespace esp32m {
             return "closed";
           case CoverState::Stopped:
             return "stopped";
+          default:
+            return nullptr;
+        }
+      }
+    };
+
+    enum class ValveState { Unknown, Opening, Open, Closing, Closed };
+
+    class ValveComponent : public Component {
+     public:
+      ValveComponent(Device* device, const char* type, const char* id = nullptr)
+          : Component(id), _type(type) {
+        Component::init(device);
+        _flags |= Flags::RetainState | Flags::HasState | Flags::AcceptsCommands;
+      }
+      ValveComponent(const ValveComponent&) = delete;
+      const char* type() const override {
+        return _type;
+      }
+      const char* component() const override {
+        return ComponentType::Valve;
+      }
+      void set(ValveState value, bool* changed = nullptr) {
+        const char* strValue = stateName(value);
+        if (!strValue) {
+          resetState(changed);
+          return;
+        }
+        setState(strValue, changed);
+      }
+      ValveState get() const {
+        auto state = getState();
+        if (!state.is<const char*>())
+          return ValveState::Unknown;
+        auto strValue = state.as<std::string>();
+        if (strValue == "opening")
+          return ValveState::Opening;
+        if (strValue == "open")
+          return ValveState::Open;
+        if (strValue == "closing")
+          return ValveState::Closing;
+        if (strValue == "closed")
+          return ValveState::Closed;
+        return ValveState::Unknown;
+      }
+
+     private:
+      const char* _type;
+      static const char* stateName(ValveState value) {
+        switch (value) {
+          case ValveState::Opening:
+            return "opening";
+          case ValveState::Open:
+            return "open";
+          case ValveState::Closing:
+            return "closing";
+          case ValveState::Closed:
+            return "closed";
           default:
             return nullptr;
         }

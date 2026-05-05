@@ -26,6 +26,7 @@ export * from './em';
 export * from './ntc';
 export * from './ztsyux';
 export * from './rsecth';
+export * from './pmws';
 export * from './ptmb';
 export * from './lwgy';
 export * from './soil5';

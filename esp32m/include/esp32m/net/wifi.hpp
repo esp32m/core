@@ -263,6 +263,9 @@ namespace esp32m {
       dev::Sensor _rssi;
 
       std::unique_ptr<JsonDocument> _delayedConfig;
+      uint8_t _lastBssid[6] = {};
+      bool _roaming = false;
+      int8_t _rssiThreshold = -75;  // dBm; 0 = disabled
 
       Wifi();
       esp_err_t init();
@@ -275,9 +278,6 @@ namespace esp32m {
       ApInfo* addOrUpdateAp(ApInfo* ap);
       ApInfo* addOrUpdateAp(JsonArrayConst source, bool& changed);
       void ensureId(ApInfo* ap);
-      char* btmNeighborList(uint8_t* report, size_t report_len);
-      friend void neighbor_report_recv_cb(void* ctx, const uint8_t* report,
-                                          size_t report_len);
       friend class wifi::Ap;
       friend class wifi::Sta;
     };

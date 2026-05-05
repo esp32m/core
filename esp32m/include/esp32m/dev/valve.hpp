@@ -69,6 +69,7 @@ namespace esp32m {
       enum State { Unknown, Opened, Closed, Invalid, Opening, Closing };
       Valve(const char *name, valve::IWiring *wiring, valve::ISensor *sensor);
       Valve(const Valve &) = delete;
+
       const char *name() const override {
         return _name;
       }
@@ -96,11 +97,13 @@ namespace esp32m {
       void setState(RequestContext &ctx) override;
       bool setConfig(RequestContext &ctx) override;
       JsonDocument *getConfig(RequestContext &ctx) override;
+      bool handleRequest(Request &req) override;
 
      private:
       const char *_name;
       std::unique_ptr<valve::IWiring> _wiring;
       std::unique_ptr<valve::ISensor> _sensor;
+      ValveComponent _component;
       TaskHandle_t _task = nullptr;
       bool _persistent = true;
       float _value = -1, _targetValue = NAN;

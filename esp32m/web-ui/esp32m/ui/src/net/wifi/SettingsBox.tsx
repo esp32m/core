@@ -13,7 +13,7 @@ import { TWifiConfig, Name, WifiPower, ApEntries, ApEntryFlags } from './types';
 import { Alert, Expander, useAlert } from '@ts-libs/ui-base';
 import { useBackendApi, useModuleConfig } from '../../backend';
 import { ConfigBox } from '../../app';
-import { FieldSelect, FieldSwitch } from '@ts-libs/ui-forms';
+import { FieldSelect, FieldSwitch, FieldText } from '@ts-libs/ui-forms';
 import { getDefines } from '../../utils';
 
 const PowerOptions = [
@@ -97,6 +97,7 @@ export const SettingsBox = () => {
     'wifi.txp.hidden',
     'wifi.channel.hidden',
   ]);
+  const showRssiThreshold = config.rssiThreshold !== undefined;
   return (
     <ConfigBox
       name={Name}
@@ -136,6 +137,14 @@ export const SettingsBox = () => {
       )}
       {config.xiaoRFExt !== undefined && (
         <FieldSwitch name="xiaoRFExt" label="Use UFL external antenna on XIAO board" />
+      )}
+      {showRssiThreshold && (
+        <FieldText
+          fullWidth
+          name="rssiThreshold"
+          label="Roaming RSSI threshold (dBm, 0 = disabled)"
+          type="number"
+        />
       )}
     </ConfigBox>
   );

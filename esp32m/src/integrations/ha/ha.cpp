@@ -97,6 +97,8 @@ namespace esp32m {
             options.add(opt);
         } else if (component->isComponent(ComponentType::Cover)) {
           config["platform"] = "cover";
+        } else if (component->isComponent(ComponentType::Valve)) {
+          config["platform"] = "valve";
         }
         return doc;
       }

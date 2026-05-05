@@ -522,163 +522,6 @@ namespace esp32m {
       IpEvent::publish(wifi->sta().handle(), (ip_event_t)event_id, event_data);
     }
 
-    static inline uint32_t WPA_GET_LE32(const uint8_t* a) {
-      return ((uint32_t)a[3] << 24) | (a[2] << 16) | (a[1] << 8) | a[0];
-    }
-#ifndef WLAN_EID_MEASURE_REPORT
-#  define WLAN_EID_MEASURE_REPORT 39
-#endif
-#ifndef MEASURE_TYPE_LCI
-#  define MEASURE_TYPE_LCI 9
-#endif
-#ifndef MEASURE_TYPE_LOCATION_CIVIC
-#  define MEASURE_TYPE_LOCATION_CIVIC 11
-#endif
-#ifndef WLAN_EID_NEIGHBOR_REPORT
-#  define WLAN_EID_NEIGHBOR_REPORT 52
-#endif
-#ifndef ETH_ALEN
-#  define ETH_ALEN 6
-#endif
-#define MAX_NEIGHBOR_LEN 512
-    char* Wifi::btmNeighborList(uint8_t* report, size_t report_len) {
-      size_t len = 0;
-      const uint8_t* data;
-      int ret = 0;
-
-      /*
-       * Neighbor Report element (IEEE P802.11-REVmc/D5.0)
-       * BSSID[6]
-       * BSSID Information[4]
-       * Operating Class[1]
-       * Channel Number[1]
-       * PHY Type[1]
-       * Optional Subelements[variable]
-       */
-#define NR_IE_MIN_LEN (ETH_ALEN + 4 + 1 + 1 + 1)
-
-      if (!report || report_len == 0) {
-        logI("RRM neighbor report is not valid");
-        return nullptr;
-      }
-
-      char* buf = (char*)calloc(1, MAX_NEIGHBOR_LEN);
-      data = report;
-
-      while (report_len >= 2 + NR_IE_MIN_LEN) {
-        const uint8_t* nr;
-        char lci[256 * 2 + 1];
-        char civic[256 * 2 + 1];
-        uint8_t nr_len = data[1];
-        const uint8_t *pos = data, *end;
-
-        if (pos[0] != WLAN_EID_NEIGHBOR_REPORT || nr_len < NR_IE_MIN_LEN) {
-          logI("CTRL: Invalid Neighbor Report element: id=%u len=%u", data[0],
-               nr_len);
-          ret = -1;
-          goto cleanup;
-        }
-
-        if (2U + nr_len > report_len) {
-          logI("CTRL: Invalid Neighbor Report element: id=%u len=%zu nr_len=%u",
-               data[0], report_len, nr_len);
-          ret = -1;
-          goto cleanup;
-        }
-        pos += 2;
-        end = pos + nr_len;
-
-        nr = pos;
-        pos += NR_IE_MIN_LEN;
-
-        lci[0] = '\0';
-        civic[0] = '\0';
-        while (end - pos > 2) {
-          uint8_t s_id, s_len;
-
-          s_id = *pos++;
-          s_len = *pos++;
-          if (s_len > end - pos) {
-            ret = -1;
-            goto cleanup;
-          }
-          if (s_id == WLAN_EID_MEASURE_REPORT && s_len > 3) {
-            /* Measurement Token[1] */
-            /* Measurement Report Mode[1] */
-            /* Measurement Type[1] */
-            /* Measurement Report[variable] */
-            switch (pos[2]) {
-              case MEASURE_TYPE_LCI:
-                if (lci[0])
-                  break;
-                memcpy(lci, pos, s_len);
-                break;
-              case MEASURE_TYPE_LOCATION_CIVIC:
-                if (civic[0])
-                  break;
-                memcpy(civic, pos, s_len);
-                break;
-            }
-          }
-
-          pos += s_len;
-        }
-
-        logI("RMM neigbor report bssid=" MACSTR
-             " info=0x%x op_class=%u chan=%u phy_type=%u%s%s%s%s",
-             MAC2STR(nr), WPA_GET_LE32(nr + ETH_ALEN), nr[ETH_ALEN + 4],
-             nr[ETH_ALEN + 5], nr[ETH_ALEN + 6], lci[0] ? " lci=" : "", lci,
-             civic[0] ? " civic=" : "", civic);
-
-        /* neighbor start */
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, " neighbor=");
-        /* bssid */
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, MACSTR, MAC2STR(nr));
-        /* , */
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
-        /* bssid info */
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "0x%04x",
-                        (unsigned int)WPA_GET_LE32(nr + ETH_ALEN));
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
-        /* operating class */
-        len +=
-            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 4]);
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
-        /* channel number */
-        len +=
-            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 5]);
-        len += snprintf(buf + len, MAX_NEIGHBOR_LEN - len, ",");
-        /* phy type */
-        len +=
-            snprintf(buf + len, MAX_NEIGHBOR_LEN - len, "%u", nr[ETH_ALEN + 6]);
-        /* optional elements, skip */
-
-        data = end;
-        report_len -= 2 + nr_len;
-      }
-
-    cleanup:
-      if (ret < 0) {
-        free(buf);
-        buf = nullptr;
-      }
-      return buf;
-    }
-
-    void neighbor_report_recv_cb(void* ctx, const uint8_t* report,
-                                 size_t report_len) {
-      if (ctx != &Wifi::instance() || !report)
-        return;
-      uint8_t* pos = (uint8_t*)report;
-      char* neighbor_list =
-          ((Wifi*)ctx)->btmNeighborList(pos + 1, report_len - 1);
-      if (neighbor_list) {
-        esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS, neighbor_list,
-                                               0);
-        free(neighbor_list);
-      }
-    }
-
     esp_err_t Wifi::init() {
       static bool inited = false;
       if (inited)
@@ -741,8 +584,18 @@ namespace esp32m {
 
       if (_txp)
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_max_tx_power(_txp));
-      else
+      else {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_get_max_tx_power(&_txp));
+        // Normalize to the quantized representative values per ESP-IDF mapping table:
+        // {set range, actual} = {[80,84]→80, [72,79]→72, [66,71]→66, [60,65]→60,
+        //  [56,59]→56, [52,55]→52, [44,51]→44, [34,43]→34, [28,33]→28, [20,27]→20, [8,19]→8}
+        static constexpr int8_t kTxpLevels[] = {80, 72, 66, 60, 56, 52, 44, 34, 28, 20, 8};
+        for (auto l : kTxpLevels)
+          if (_txp >= l) {
+            _txp = l;
+            break;
+          }
+      }
       if (_task)
         xTaskNotifyGive(_task);
       return ESP_OK;
@@ -809,34 +662,63 @@ namespace esp32m {
           case WIFI_EVENT_STA_STOP:
             xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
             break;
-          case WIFI_EVENT_STA_CONNECTED:
-            // esp_wifi_set_rssi_threshold(-67);
+          case WIFI_EVENT_STA_CONNECTED: {
+            _roaming = false;
+            if (_rssiThreshold)
+              ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_rssi_threshold(_rssiThreshold));
+            auto* sc = (wifi_event_sta_connected_t*)wifi->data();
+            if (sc) {
+              bool hadBssid = _lastBssid[0] | _lastBssid[1] | _lastBssid[2] |
+                              _lastBssid[3] | _lastBssid[4] | _lastBssid[5];
+              if (hadBssid && memcmp(_lastBssid, sc->bssid, 6) != 0)
+                logI("roamed: " MACSTR " -> " MACSTR " ch=%u",
+                     MAC2STR(_lastBssid), MAC2STR(sc->bssid), sc->channel);
+              else
+                logI("connected: bssid=" MACSTR " ch=%u",
+                     MAC2STR(sc->bssid), sc->channel);
+              memcpy(_lastBssid, sc->bssid, sizeof(_lastBssid));
+            }
             xEventGroupSetBits(_eventGroup, WifiFlags::StaConnected);
 #if CONFIG_LWIP_IPV6_AUTOCONFIG
             if (_sta.role() == Interface::Role::DhcpClient)
               esp_netif_create_ip6_linklocal(_sta.handle());
 #endif
-            break;
+          } break;
           case WIFI_EVENT_STA_DISCONNECTED: {
             auto r = (wifi_event_sta_disconnected_t*)wifi->data();
             _errReason = (wifi_err_reason_t)r->reason;
             xEventGroupClearBits(_eventGroup,
                                  WifiFlags::StaConnected | WifiFlags::StaGotIp);
-            logW("STA disconnected, reason=%u", (unsigned)_errReason);
+            if (_errReason == WIFI_REASON_ROAMING) {
+              _roaming = true;
+              logI("roaming: leaving bssid=" MACSTR " rssi=%d",
+                   MAC2STR(r->bssid), (int)r->rssi);
+            } else
+              logW("STA disconnected: bssid=" MACSTR " rssi=%d reason=%u",
+                   MAC2STR(r->bssid), (int)r->rssi, (unsigned)_errReason);
             break;
           }
           case WIFI_EVENT_STA_BSS_RSSI_LOW: {
+            auto* re = (wifi_event_bss_rssi_low_t*)wifi->data();
+            logI("RSSI low (%d dBm), requesting neighbor report",
+                 re ? (int)re->rssi : 0);
             int e = esp_rrm_send_neighbor_report_request();
             if (e < 0) {
-              /* failed to send neighbor report request */
               logW("failed to send neighbor report request: %i", e);
               e = esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
                                                          NULL, 0);
               if (e < 0) {
-                logI("failed to send btm query: %i", e);
+                logW("failed to send btm query: %i", e);
               }
             }
           } break;
+#if CONFIG_WPA_11KV_SUPPORT
+          case WIFI_EVENT_STA_NEIGHBOR_REP: {
+            auto* nr = (wifi_event_neighbor_report_t*)wifi->data();
+            logI("neighbor report received, len=%u",
+                 nr ? (unsigned)nr->report_len : 0u);
+          } break;
+#endif
           case WIFI_EVENT_STA_WPS_ER_SUCCESS: {
             logW("WPS succeeded");
             wifi_event_sta_wps_er_success_t* evt =
@@ -1004,6 +886,7 @@ namespace esp32m {
       auto cr = doc->to<JsonObject>();
       cr["txp"] = _txp;
       cr["channel"] = _channel;
+      cr["rssiThreshold"] = _rssiThreshold;
 #if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
       cr["xiaoRFExt"] = _xiaoRFExt;
 #endif
@@ -1032,14 +915,23 @@ namespace esp32m {
 
       int8_t txp = ca["txp"];
       bool changed = false;
-      esp_err_t err = ESP_OK;
       if (txp != _txp)
-        if (!txp || (err = ESP_ERROR_CHECK_WITHOUT_ABORT(
-                         esp_wifi_set_max_tx_power(txp))) == ESP_OK) {
+        if (!txp || ctx.errors.check(ESP_ERROR_CHECK_WITHOUT_ABORT(
+                                         esp_wifi_set_max_tx_power(txp)),
+                                     "set tx power to %d", (int)txp) == ESP_OK) {
           _txp = txp;
           changed = true;
         }
       json::from(ca["channel"], _channel, &changed);
+      {
+        int8_t prev = _rssiThreshold;
+        if (json::from(ca["rssiThreshold"], _rssiThreshold, &changed) &&
+            isConnected() &&
+            ctx.errors.check(ESP_ERROR_CHECK_WITHOUT_ABORT(
+                                 esp_wifi_set_rssi_threshold(_rssiThreshold)),
+                             "set RSSI threshold to %d", (int)_rssiThreshold) != ESP_OK)
+          _rssiThreshold = prev;
+      }
 #if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
       if (json::from(ca["xiaoRFExt"], _xiaoRFExt, &changed)) {
         auto rfSwitchDisable = gpio::pin(GPIO_NUM_3)->digital();
@@ -1061,7 +953,6 @@ namespace esp32m {
       JsonArrayConst aps = ca["aps"];
       if (aps)
         for (JsonArrayConst v : aps) addOrUpdateAp(v, changed);
-      ctx.errors.check(err);
       return changed;
     }
 
@@ -1099,10 +990,20 @@ namespace esp32m {
             strlcpy(reinterpret_cast<char*>(conf.sta.password), password,
                     sizeof(conf.sta.password));
         }
-        // Keep the STA auth path conservative for better compatibility with
-        // routers that behave differently under IDF 6 defaults.
+        // PMF left as not-capable: setting capable=true causes ESP-IDF's WPA
+        // supplicant to call esp_wifi_set_config() internally at the end of
+        // the 4-way EAPOL handshake (PMKSA caching) while the driver state
+        // machine still holds the "connecting" lock, producing a harmless but
+        // noisy "sta is connecting, cannot set config" warning.
+        // 802.11k and 802.11v work without PMF; only MBO mandates it, which is
+        // why mbo_enabled is also omitted here.
         conf.sta.pmf_cfg.capable = false;
         conf.sta.pmf_cfg.required = false;
+        // Enable 802.11k (RRM) and 802.11v (BTM) so the WPA supplicant
+        // advertises support to the AP and the RSSI-low handler
+        // (WIFI_EVENT_STA_BSS_RSSI_LOW) can drive seamless roaming.
+        conf.sta.rm_enabled = 1;
+        conf.sta.btm_enabled = 1;
 
         wifi_config_t current_conf;
         ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -1114,10 +1015,6 @@ namespace esp32m {
         }
         ErrorList errl;
         _sta.apply(errl);
-        /*_sta.stopDhcp();
-        _sta.apply(Interface::ConfigItem::Ip, errl);
-        _sta.apply(Interface::ConfigItem::Dns, errl);
-        _sta.apply(Interface::ConfigItem::Role, errl);*/
         if (!errl.check(this))
           return false;
         logI("connecting to %s [%s], channel %d", ssid, bssidStr,
@@ -1344,7 +1241,7 @@ namespace esp32m {
                 _sta.setStatus(StaStatus::Initial);
               break;
             case StaStatus::Connected:
-              if (!isConnected())
+              if (!isConnected() && !_roaming)
                 _sta.setStatus(StaStatus::Initial);
               break;
           }
