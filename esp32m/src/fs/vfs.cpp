@@ -9,56 +9,50 @@
 namespace esp32m {
   namespace io {
 
-    Vfs &Vfs::instance() {
+    Vfs& Vfs::instance() {
       static Vfs i;
       return i;
     }
 
-    Vfs &useVfs() {
+    Vfs& useVfs() {
       return Vfs::instance();
     }
 
-    bool Vfs::handleRequest(Request &req) {
+    bool Vfs::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("readdir")) {
-        const char *dir = nullptr;
+        const char* dir = nullptr;
         auto reqdata = req.data();
         json::from(reqdata["dir"], dir, "/");
-        DIR *dp = opendir(dir);
+        DIR* dp = opendir(dir);
         if (dp) {
-          //size_t docsize = 0;
-          struct dirent *ep;
-          /*while ((ep = readdir(dp)))
-            docsize += JSON_ARRAY_SIZE(1) + JSON_ARRAY_SIZE(3) +
-                       JSON_STRING_SIZE(strlen(ep->d_name));*/
-          //if (docsize) {
-            seekdir(dp, 0);
-            char *path = nullptr;
-            size_t pathBufSuze = 0;
-            auto doc = new JsonDocument(); /* docsize */
-            auto root = doc->to<JsonArray>();
-            while ((ep = readdir(dp))) {
-              auto a = root.add<JsonArray>();
-              a.add(ep->d_type);
-              a.add(ep->d_name);
-              auto ps = strlen(dir) + 1 + strlen(ep->d_name) + 1;
-              if (ps > pathBufSuze) {
-                if (path)
-                  free(path);
-                path = (char *)malloc(ps);
-                pathBufSuze = path ? ps : 0;
-              }
-              if (path) {
-                strcpy(path, dir);
-                if (path[strlen(dir) - 1] != '/')
-                  strcat(path, "/");
-                strcat(path, ep->d_name);
-                struct stat st;
-                if (!stat(path, &st))
-                  a.add(st.st_size);
-              }
-            // }
+          struct dirent* ep;
+          seekdir(dp, 0);
+          char* path = nullptr;
+          size_t pathBufSuze = 0;
+          auto doc = new JsonDocument(); /* docsize */
+          auto root = doc->to<JsonArray>();
+          while ((ep = readdir(dp))) {
+            auto a = root.add<JsonArray>();
+            a.add(ep->d_type);
+            a.add(ep->d_name);
+            auto ps = strlen(dir) + 1 + strlen(ep->d_name) + 1;
+            if (ps > pathBufSuze) {
+              if (path)
+                free(path);
+              path = (char*)malloc(ps);
+              pathBufSuze = path ? ps : 0;
+            }
+            if (path) {
+              strcpy(path, dir);
+              if (path[strlen(dir) - 1] != '/')
+                strcat(path, "/");
+              strcat(path, ep->d_name);
+              struct stat st;
+              if (!stat(path, &st))
+                a.add(st.st_size);
+            }
             if (path)
               free(path);
             req.respond(doc->as<JsonVariantConst>(), false);
@@ -67,7 +61,7 @@ namespace esp32m {
           closedir(dp);
         }
       } else if (req.is("readfile")) {
-        const char *path = nullptr;
+        const char* path = nullptr;
         long int offset = 0;
         size_t length = 0;
         auto reqdata = req.data();
@@ -84,14 +78,14 @@ namespace esp32m {
             if (!length || length > st.st_size - offset)
               length = st.st_size - offset;
             if (length) {
-              FILE *file = fopen(path, "r");
+              FILE* file = fopen(path, "r");
               if (!file) {
                 logW("file %s could not be opened: %d", path, errno);
                 req.respond(ESP_ERR_NOT_FOUND);
               } else {
                 if (offset)
                   fseek(file, offset, SEEK_SET);
-                char *buf = (char *)malloc(length + 1);
+                char* buf = (char*)malloc(length + 1);
                 if (buf) {
                   size_t tr = 0;
                   size_t r = 0;
@@ -102,8 +96,8 @@ namespace esp32m {
                     tr += r;
                   }
                   buf[tr] = 0;
-                  auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
-                  doc->set((const char *)buf);
+                  auto doc = new JsonDocument(); 
+                  doc->set((const char*)buf);
                   req.respond(doc->as<JsonVariantConst>(), false);
                   delete doc;
                   free(buf);

@@ -180,12 +180,6 @@ namespace esp32m {
       uint32_t mask = 15 << shift;
       _arr[i >> 3] = (slot & ~mask) | (neu << shift);
     }
-    /*size_t IdInfoArray::jsonSize() {
-      for (int i = 0; i < IdInfoArrayLength; i++)
-        if (_arr[i] != 0)
-          return JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(IdInfoArrayLength);
-      return 0;
-    }*/
     bool IdInfoArray::fromJson(JsonObjectConst obj, bool* changed) {
       auto ids = obj["ids"].as<JsonArrayConst>();
       if (!ids)
@@ -200,10 +194,8 @@ namespace esp32m {
       return true;
     }
     void IdInfoArray::toJson(JsonObject obj) {
-      /*if (jsonSize()) {*/
       auto ids = obj["ids"].to<JsonArray>();
       for (int i = 0; i < IdInfoArrayLength; i++) ids.add(_arr[i]);
-      //}
     }
 
     void Message::init(MessageType type, DataId id, uint16_t value) {
@@ -1032,6 +1024,10 @@ namespace esp32m {
     DriverConstructor createDriver = newRmtDriver;
 #endif
 
+    IDriver* newDriver(gpio_num_t rxPin, gpio_num_t txPin) {
+      return createDriver(rxPin, txPin);
+    }
+
   }  // namespace opentherm
 
   namespace dev {
@@ -1250,10 +1246,6 @@ namespace esp32m {
     }
 
     bool OpenthermMaster::pollSensors() {
-      /*sensor("tboiler", _hvac.tBoiler);
-      sensor("rm", _hvac.relMod);
-      sensor("chp", _hvac.chPressure);
-      sensor("bfc", _hvac.bfCurrent);*/
       return true;
     }
 

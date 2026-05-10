@@ -764,6 +764,14 @@ namespace esp32m {
         return false;
       }
     };
+
+    /**
+     * Creates an OT hardware driver for the given RX/TX GPIO pins.
+     * This is the preferred way to create a driver for use with custom master
+     * or slave implementations (e.g. in the debug namespace).
+     */
+    IDriver* newDriver(gpio_num_t rxPin, gpio_num_t txPin);
+
   }  // namespace opentherm
 
   namespace dev {
