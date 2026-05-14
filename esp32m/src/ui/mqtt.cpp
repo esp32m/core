@@ -24,9 +24,10 @@ namespace esp32m {
     void Mqtt::init(Ui *ui) {
       Transport::init(ui);
       auto name = App::instance().hostname();
-      if (asprintf(&_requestTopic, "esp32m/request/%s/#", name) < 0)
+      auto prefix = net::Mqtt::instance().topicPrefix().c_str();
+      if (asprintf(&_requestTopic, "%s/request/%s/#", prefix, name) < 0)
         _requestTopic = nullptr;
-      if (asprintf(&_responseTopic, "esp32m/response/%s/", name) < 0)
+      if (asprintf(&_responseTopic, "%s/response/%s/", prefix, name) < 0)
         _responseTopic = nullptr;
       net::Mqtt::instance().subscribe(_requestTopic);
       EventManager::instance().subscribe([this](Event &ev) {

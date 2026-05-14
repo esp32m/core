@@ -13,8 +13,8 @@ namespace esp32m {
         if (!mqtt.isReady() || line.empty())
           return;
 
-        auto topic =
-            string_printf("esp32m/%s/uart", App::instance().hostname());
+        auto topic = string_printf("%s/%s/uart", mqtt.topicPrefix().c_str(),
+                                   App::instance().hostname());
         mqtt.enqueue(topic.c_str(), line.c_str());
       }
 
