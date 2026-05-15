@@ -108,28 +108,15 @@ namespace esp32m {
 
         bool setConfig(RequestContext &ctx) override {
           bool changed = false;
+          auto cfg = ctx.data.as<JsonObjectConst>();
           json::from(cfg["autoupdate"], _autoUpdate, &changed);
           json::from(cfg["autocheck"], _autoCheck, &changed);
           json::from(cfg["checkinterval"], _checkInterval, &changed);
           return changed;
         }
 
-        size_t stateSize() {
-          return 0;
-        }
-        JsonDocument *getState(const JsonVariantConst args) override {
-          auto size = 0;
-          if (_running)
-            size += JSON_OBJECT_SIZE(1);
-          if (_lastCheck)
-            size += JSON_OBJECT_SIZE(1);
-          if (newVersion)
-            size += JSON_OBJECT_SIZE(1) +
-                    JSON_STRING_SIZE(newVersion->version.toString().size());
-          auto errsize = _errors.jsonSize();
-          if (errsize)
-            size += JSON_OBJECT_SIZE(1) + errsize;
-          auto doc = new JsonDocument(); /* size */
+        JsonDocument *getState(RequestContext &ctx) override {
+          auto doc = new JsonDocument();
           auto root = doc->to<JsonObject>();
           if (_running)
             json::to(root, "running", _running);
@@ -137,7 +124,7 @@ namespace esp32m {
             json::to(root, "newver", newVersion->version.toString());
           if (_lastCheck)
             json::to(root, "lastcheck", _lastCheck);
-          if (errsize)
+          if (!_errors.empty())
             _errors.toJson(root);
           return doc;
         }
@@ -243,8 +230,18 @@ namespace esp32m {
           return error(_errors);
         }
         esp_err_t error(ErrorList &list) {
-          if (_manualCheck)
-            Response::respondError(_manualCheck, list);
+          if (_manualCheck) {
+            // Response::respondError(unique_ptr&, ErrorList&) is
+            // commented out in upstream events/response.hpp. Build
+            // the error JSON manually and route via setError to
+            // mark the response as an error.
+            auto errDoc = new JsonDocument();
+            auto root = errDoc->to<JsonObject>();
+            list.toJson(root);
+            _manualCheck->setError(errDoc);
+            _manualCheck->publish();
+            _manualCheck.reset();
+          }
           return ESP_FAIL;
         }
       };
