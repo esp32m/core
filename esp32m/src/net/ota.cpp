@@ -398,7 +398,9 @@ namespace esp32m {
       ota_config.http_client_init_cb = _http_client_init_cb;
       esp_https_ota_handle_t https_ota_handle = NULL;
       esp_err_t err = esp_https_ota_begin(&ota_config, &https_ota_handle);
+      const char *stage = "begin";
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(err) == ESP_OK) {
+        stage = "perform";
         while (1) {
           err = esp_https_ota_perform(https_ota_handle);
           if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS)
@@ -409,10 +411,39 @@ namespace esp32m {
           delay(1);
           esp_task_wdt_reset();
         }
-        if (err == ESP_OK)
+        if (err == ESP_OK) {
+          stage = "finish";
           err = esp_https_ota_finish(https_ota_handle);
-        else
+        } else
           esp_https_ota_abort(https_ota_handle);
+      }
+      // On failure, broadcast a diagnostic event so an MQTT-attached
+      // operator can identify the failure mode without serial access.
+      // The payload carries which stage of the install pipeline tripped
+      // (begin / perform / finish), the esp_err_t and its symbolic
+      // name, the socket-level errno and last HTTP status the client
+      // saw, plus image-progress counters — enough to distinguish a
+      // TLS handshake abort from a partition write fault from a server
+      // 5xx without further instrumentation.
+      if (err != ESP_OK) {
+        int sock_errno = 0;
+        int status = 0;
+        if (_httpClient) {
+          sock_errno = esp_http_client_get_errno(_httpClient);
+          status = esp_http_client_get_status_code(_httpClient);
+        }
+        logE("OTA failed at stage=%s err=%s (0x%x) sock_errno=%d status=%d",
+             stage, esp_err_to_name(err), err, sock_errno, status);
+        JsonDocument doc;
+        auto obj = doc.to<JsonObject>();
+        obj["stage"] = stage;
+        obj["err"] = (int)err;
+        obj["name"] = esp_err_to_name(err);
+        obj["sock_errno"] = sock_errno;
+        obj["status"] = status;
+        obj["progress"] = _progress;
+        obj["total"] = _total;
+        Broadcast::publish(name(), "error", doc.as<JsonVariantConst>());
       }
       end();
       if (err == ESP_OK) {
