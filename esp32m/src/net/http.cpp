@@ -1,5 +1,6 @@
 #include "esp32m/net/http.hpp"
 #include <map>
+#include <esp_crt_bundle.h>
 #include "esp32m/defs.hpp"
 
 namespace esp32m {
@@ -155,6 +156,13 @@ namespace esp32m {
         config.event_handler = http_event_handler;
         config.user_data = this;
         config.url = request->url();
+        // Attach the mbedTLS bundle so HTTPS URLs signed by a public
+        // CA (Let's Encrypt etc.) verify without each caller having
+        // to bundle a pinned cert. Without this, every Client::obtain
+        // / Client::describe against an https:// endpoint aborts at
+        // the TLS handshake with ESP_ERR_HTTP_CONNECT — same pattern
+        // we already fixed in net/ota.cpp Ota::perform.
+        config.crt_bundle_attach = esp_crt_bundle_attach;
       }
 
       Resource* Client::describe(ResourceRequest& req) {
