@@ -1,3 +1,4 @@
+#include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 #include <esp_https_ota.h>
 #include <esp_ota_ops.h>
@@ -393,6 +394,11 @@ namespace esp32m {
       config.url = url;
       config.timeout_ms = 60 * 1000;
       config.skip_cert_common_name_check = true;
+      // Attach the mbedTLS bundle so HTTPS OTA URLs signed by public
+      // CAs (Let's Encrypt etc.) verify without bundling a pinned
+      // cert in firmware. Without this, esp_https_ota_begin aborts
+      // at the TLS handshake on any standard https:// OTA host.
+      config.crt_bundle_attach = esp_crt_bundle_attach;
       esp_https_ota_config_t ota_config = {};
       ota_config.http_config = &config;
       ota_config.http_client_init_cb = _http_client_init_cb;
