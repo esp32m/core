@@ -393,11 +393,15 @@ namespace esp32m {
       esp_http_client_config_t config = {};
       config.url = url;
       config.timeout_ms = 60 * 1000;
-      config.skip_cert_common_name_check = true;
       // Attach the mbedTLS bundle so HTTPS OTA URLs signed by public
       // CAs (Let's Encrypt etc.) verify without bundling a pinned
       // cert in firmware. Without this, esp_https_ota_begin aborts
       // at the TLS handshake on any standard https:// OTA host.
+      // NOTE: do NOT set skip_cert_common_name_check together with
+      // crt_bundle_attach — that combination causes esp_http_client_open
+      // to abort with ESP_ERR_HTTP_CONNECT before the TLS layer ever
+      // sees the server cert. With a public-CA-backed bundle we want
+      // the CN check on (cert must be issued for the URL's hostname).
       config.crt_bundle_attach = esp_crt_bundle_attach;
       esp_https_ota_config_t ota_config = {};
       ota_config.http_config = &config;
