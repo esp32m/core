@@ -206,8 +206,28 @@ namespace esp32m {
     }
 
     bool Ble::init() {
-      ESP_CHECK_RETURN_BOOL(esp_nimble_hci_init());
-      nimble_port_init();
+      // On IDF v6 nimble_port_init() owns the entire bring-up:
+      //   esp_bt_controller_mem_release(CLASSIC_BT)
+      //   esp_bt_controller_init
+      //   esp_bt_controller_enable(BLE)
+      //   esp_nimble_hci_init
+      //   os_mempool_module_init / npl_freertos_funcs_init
+      //   ble_npl_eventq_init(&g_eventq_dflt)
+      // (see bt/host/nimble/nimble/porting/nimble/src/nimble_port.c)
+      // So we must NOT duplicate any of those calls. The old upstream
+      // ble.cpp split bring-up across explicit hci_init + port_init
+      // because earlier IDFs didn't fold them; that path now causes
+      // the second internal controller_init to return
+      // ESP_ERR_INVALID_STATE, nimble_port_init bails before
+      // ble_npl_eventq_init runs, g_eventq_dflt stays uninitialised,
+      // and the host task we spawn next trips a LoadProhibited at
+      // nimble_port.c:420 (ble_npl_eventq_get on a null head).
+      esp_err_t init_err = nimble_port_init();
+      if (init_err != ESP_OK) {
+        ESP_LOGE(name(), "nimble_port_init failed: %s",
+                 esp_err_to_name(init_err));
+        return false;
+      }
       ble_hs_cfg.reset_cb = on_reset;
       ble_hs_cfg.sync_cb = on_sync;
       ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
@@ -224,14 +244,19 @@ namespace esp32m {
       /* Figure out address to use while advertising (no privacy for now) */
       ESP_CHECK_RETURN(ble_hs_id_infer_auto(0, &own_addr_type));
 
-      ble_gap_disc_params disc_params = {
-          .itvl = data["itvl"].as<uint16_t>(),
-          .window = data["window"].as<uint16_t>(),
-          .filter_policy = 0,
-          .limited = data["limited"].as<bool>() ? (uint8_t)1 : (uint8_t)0,
-          .passive = data["active"].as<bool>() ? (uint8_t)0 : (uint8_t)1,
-          .filter_duplicates = 1,
-      };
+      // Zero-init then assign individually: IDF v6's ble_gap_disc_params
+      // added a new field (disable_observer_mode); designated-initializer
+      // form above is rejected by C++ as out-of-order / incomplete. Plain
+      // member assignment is forward-compatible with future field adds.
+      ble_gap_disc_params disc_params = {};
+      disc_params.itvl = data["itvl"].as<uint16_t>();
+      disc_params.window = data["window"].as<uint16_t>();
+      disc_params.filter_policy = 0;
+      disc_params.limited =
+          data["limited"].as<bool>() ? (uint8_t)1 : (uint8_t)0;
+      disc_params.passive =
+          data["active"].as<bool>() ? (uint8_t)0 : (uint8_t)1;
+      disc_params.filter_duplicates = 1;
 
       ESP_CHECK_RETURN(ble_gap_disc(own_addr_type,
                                     data["duration"] | BLE_HS_FOREVER,
