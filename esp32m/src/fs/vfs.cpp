@@ -31,7 +31,7 @@ namespace esp32m {
           seekdir(dp, 0);
           char* path = nullptr;
           size_t pathBufSuze = 0;
-          auto doc = new JsonDocument(); /* docsize */
+          auto doc = new JsonDocument(); 
           auto root = doc->to<JsonArray>();
           while ((ep = readdir(dp))) {
             auto a = root.add<JsonArray>();

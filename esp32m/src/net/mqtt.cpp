@@ -27,37 +27,6 @@ namespace esp32m {
         auto& mqtt = Mqtt::instance();
         if (!mqtt.isReady())
           return;
-        /*// first publish non-grouped sensors and remove them from the list
-        for (auto it = sensors.begin(); it != sensors.end();)
-          if ((*it)->group == 0) {
-            auto doc = new JsonDocument();
-            auto root = doc->to<JsonObject>();
-            (*it)->to(root);
-            publish((*it)->device()->name(), root);
-            delete doc;
-            it = sensors.erase(it);
-          } else
-            ++it;
-        // now publish grouped sensors
-        while (!sensors.empty()) {
-          auto group = sensors.front()->group;
-          auto device = sensors.front()->device();
-
-          auto doc = new JsonDocument();
-          auto root = doc->to<JsonObject>();
-          AllComponents all;
-          // confused and complains about missing sensors
-          // we have to publish all sensors in the group, otherwise HA gets
-        confused and complains about missing sensors for (auto sensor : all) if
-        (sensor->device() == device && sensor->group == group) sensor->to(root);
-          publish(device->name(), root);
-          delete doc;
-          for (auto it = sensors.begin(); it != sensors.end();)
-            if ((*it)->device() == device && (*it)->group == group) {
-              it = sensors.erase(it);
-            } else
-              ++it;
-        }*/
         while (!components.empty()) {
           auto device = components.front()->device();
 
@@ -96,13 +65,6 @@ namespace esp32m {
       }
 
       void StatePublisher::handleEvent(Event& ev) {
-        /*EventStateChanged* stc;
-        if (EventStateChanged::is(ev, &stc)) {
-          auto state = stc->state();
-          auto obj = stc->object();
-          if (!state.isUnbound() && obj)
-            publish(obj->name(), state);
-        }*/
         StateEmitter::handleEvent(ev);
       }
     }  // namespace mqtt
@@ -186,7 +148,6 @@ namespace esp32m {
       } else if (isConnected()) {
         Broadcast* b = nullptr;
         if (Broadcast::is(ev, &b)) {
-          // char *ds = json::allocSerialize(b->data());
           std::string ds;
           serializeJson(b->data(), ds);
           size_t tl = strlen(_broadcastTopic) + strlen(b->source()) + 1 +
@@ -196,8 +157,6 @@ namespace esp32m {
                    b->name());
           publish(topic, ds.c_str());
           free(topic);
-          /*if (ds)
-            free(ds);*/
         }
       }
     }
@@ -281,9 +240,7 @@ namespace esp32m {
 
     JsonDocument* Mqtt::getState(RequestContext& ctx) {
       char* client = (char*)effectiveClient();
-      /*size_t size = JSON_OBJECT_SIZE(5 + 1) + JSON_STRING_SIZE(_uri.size()) +
-                    JSON_STRING_SIZE(strlen(client));*/
-      auto doc = new JsonDocument(); /* size */
+      auto doc = new JsonDocument(); 
       auto cr = doc->to<JsonObject>();
       bool ready = _status == Status::Ready;
       cr["ready"] = ready;
@@ -297,15 +254,7 @@ namespace esp32m {
     }
 
     JsonDocument* Mqtt::getConfig(RequestContext& ctx) {
-      /*size_t size =
-          JSON_OBJECT_SIZE(1 + 8) +  // mqtt: enabled, uri, username, password,
-                                     // client, cert_url, keepalive, timeout
-          JSON_STRING_SIZE(_uri.size()) + JSON_STRING_SIZE(_username.size()) +
-          JSON_STRING_SIZE(_password.size()) +
-          JSON_STRING_SIZE(_client.size()) +
-         JSON_STRING_SIZE(_certurl.size());*/
-
-      auto doc = new JsonDocument(); /* size */
+      auto doc = new JsonDocument(); 
       auto cr = doc->to<JsonObject>();
       cr["enabled"] = _enabled;
       json::to(cr, "uri", _uri);

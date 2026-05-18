@@ -66,7 +66,7 @@ namespace esp32m {
       int16_t regs[3] = {};
       JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(4) */
       auto root = doc->to<JsonObject>();
-      auto res = mb.request(_addr, modbus::Command::ReadHolding, 0x02, 3, regs);
+      auto res = mb.request(_addr, modbus::Command::ReadHolding, 0x02, 2, regs);
       if (res == ESP_OK) {
         json::to(root, "unit", regs[0]);
         json::to(root, "decimals", regs[1]);
