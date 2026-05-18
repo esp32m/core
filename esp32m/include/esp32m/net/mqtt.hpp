@@ -217,6 +217,19 @@ namespace esp32m {
         return _cfg;
       }
 
+      /**
+       * Root topic prefix used for all auto-generated topics
+       * (broadcast, availability/LWT, device state, UI request/response,
+       * UART, influx sensor measurement). Defaults to "esp32m";
+       * runtime-configurable via the "topic_prefix" config field.
+       * Downstream integrations (ui::Mqtt, net::term::MqttConsumer,
+       * integrations::influx::Mqtt) read this instead of hard-coding
+       * "esp32m" so a single switch renames every topic.
+       */
+      const std::string &topicPrefix() const {
+        return _topicPrefix;
+      }
+
      protected:
       void handleEvent(Event &ev) override;
       bool handleRequest(Request &req) override;
@@ -236,6 +249,7 @@ namespace esp32m {
 
       bool _enabled = true, _configChanged = false;
       std::string _uri, _username, _password, _client, _certurl;
+      std::string _topicPrefix = "esp32m";
       mqtt::Message _birth;
       mqtt::Message _lwt;
       std::unique_ptr<Resource> _cert;

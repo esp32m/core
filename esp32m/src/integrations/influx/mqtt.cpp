@@ -68,7 +68,8 @@ using namespace dev;
       void Mqtt::handleEvent(Event& ev) {
         if (EventInit::is(ev, 0)) {
           auto name = App::instance().hostname();
-          if (asprintf(&_sensorsTopic, "esp32m/sensor/%s", name) < 0)
+          auto prefix = net::Mqtt::instance().topicPrefix().c_str();
+          if (asprintf(&_sensorsTopic, "%s/sensor/%s", prefix, name) < 0)
             _sensorsTopic = nullptr;
         }
         dev::StateEmitter::handleEvent(ev);

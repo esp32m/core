@@ -55,7 +55,8 @@ namespace esp32m {
                                         JsonVariantConst state, bool retain) {
         auto& mqtt = Mqtt::instance();
         if (mqtt.isReady()) {
-          auto topic = string_printf("esp32m/%s/%s/state",
+          auto topic = string_printf("%s/%s/%s/state",
+                                     mqtt.topicPrefix().c_str(),
                                      App::instance().hostname(), name);
           std::string payload;
           serializeJson(state, payload);
@@ -130,7 +131,8 @@ namespace esp32m {
             },
             (void*)this);
         auto name = App::instance().hostname();
-        if (asprintf(&_broadcastTopic, "esp32m/broadcast/%s/", name) < 0)
+        if (asprintf(&_broadcastTopic, "%s/broadcast/%s/",
+                     _topicPrefix.c_str(), name) < 0)
           _broadcastTopic = nullptr;
       } else if (EventDone::is(ev, &reason)) {
         if (reason != DoneReason::LightSleep) {
@@ -263,6 +265,7 @@ namespace esp32m {
       if (_client != App::instance().hostname())
         json::to(cr, "client", _client);
       json::to(cr, "cert_url", _certurl);
+      json::to(cr, "topic_prefix", _topicPrefix);
       cr["keepalive"] = _cfg.session.keepalive;
       cr["timeout"] = _timeout;
       return doc;
@@ -290,8 +293,8 @@ namespace esp32m {
           // printf("%s", (const char *)_cfg.broker.verification.certificate);
         }
       }
-      auto topic =
-          string_printf("esp32m/%s/availability", App::instance().hostname());
+      auto topic = string_printf("%s/%s/availability", _topicPrefix.c_str(),
+                                 App::instance().hostname());
       if (_lwt.topic.empty())
         setLwt(topic.c_str(), "offline");
       if (_birth.topic.empty() && _birth.qos >= 0)
@@ -309,6 +312,29 @@ namespace esp32m {
       json::from(ca["password"], _password, &changed);
       json::from(ca["client"], _client, &changed);
       json::from(ca["cert_url"], _certurl, &changed);
+      bool prefixChanged = false;
+      json::from(ca["topic_prefix"], _topicPrefix, &prefixChanged);
+      if (_topicPrefix.empty())
+        _topicPrefix = "esp32m";
+      if (prefixChanged) {
+        changed = true;
+        // Topics derived from the prefix need to be regenerated so the
+        // new value takes effect on the next publish. LWT/availability
+        // are rebuilt by prepareCfg() on reconnect; _broadcastTopic is
+        // built once in EventInit and we have to refresh it here. The
+        // birth/LWT topic strings are cleared so prepareCfg() repaints
+        // them on the next reconnect cycle.
+        if (_broadcastTopic) {
+          free(_broadcastTopic);
+          _broadcastTopic = nullptr;
+        }
+        auto name = App::instance().hostname();
+        if (asprintf(&_broadcastTopic, "%s/broadcast/%s/",
+                     _topicPrefix.c_str(), name) < 0)
+          _broadcastTopic = nullptr;
+        _lwt.topic.clear();
+        _birth.topic.clear();
+      }
       json::from(ca["keepalive"], _cfg.session.keepalive, &changed);
       json::from(ca["timeout"], _timeout, &changed);
       if (_timeout < 1)
