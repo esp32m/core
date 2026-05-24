@@ -20,5 +20,8 @@ coverage/
 
 dependencies.lock
 sdkconfig
+sdkconfig.old
+version.txt
 
-build.cmd
+*.cmd
+

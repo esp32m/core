@@ -27,16 +27,7 @@ namespace esp32m {
           return true;
         if (req.is("enum")) {
           auto providers = pins::getProviders();
-          /*size_t size = 0;
-          for (auto const &[name, pins] : providers) {
-            size += JSON_OBJECT_SIZE(1);
-            for (int i = 0; i < pins->count(); i++) {
-              auto pin = pins->pin(i);
-              if (pin)
-                size += JSON_ARRAY_SIZE(1);
-            }
-          }*/
-          auto doc = new JsonDocument(); /* size */
+          auto doc = new JsonDocument(); 
           auto root = doc->to<JsonObject>();
           for (auto const& [name, pins] : providers) {
             auto p = root[pins->name()].to<JsonArray>();
@@ -151,32 +142,7 @@ namespace esp32m {
         if (!pin || (type != pin::Type::Invalid &&
                      pin->featureStatus(type) != pin::FeatureStatus::Enabled))
           type = pin::Type::Invalid;
-        /*size_t size = JSON_OBJECT_SIZE(2) +                 // features, flags
-                      JSON_ARRAY_SIZE((int)pin::Type::MAX)  // features
-            ;
-        if (type != pin::Type::Invalid) {
-          size += JSON_OBJECT_SIZE(1);  // state
-          switch (type) {
-            case pin::Type::Digital:
-              size += JSON_OBJECT_SIZE(2);
-              break;
-            case pin::Type::ADC:
-              size += JSON_OBJECT_SIZE(4);
-              break;
-            case pin::Type::DAC:
-              size += JSON_OBJECT_SIZE(1);
-              break;
-            case pin::Type::PWM:
-              size += JSON_OBJECT_SIZE(3);
-              break;
-            case pin::Type::Pcnt:
-              size += JSON_OBJECT_SIZE(8);
-              break;
-            default:
-              break;
-          }
-        }*/
-        auto doc = new JsonDocument(); /* size */
+        auto doc = new JsonDocument(); 
         auto root = doc->to<JsonObject>();
         if (pin) {
           root["flags"] = (int)pin->flags();

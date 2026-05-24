@@ -433,6 +433,7 @@ namespace esp32m {
           : _channel(channel), _handle(handle) {}
     };
 #endif
+#if SOC_PCNT_SUPPORTED 
     class Pcnt : public pin::IPcnt {
      public:
       ~Pcnt() override {
@@ -551,7 +552,7 @@ namespace esp32m {
       Pcnt(Pin *pin, pcnt_unit_handle_t unit, pcnt_channel_handle_t channel)
           : _pin(pin), _unit(unit), _channel(channel) {}
     };
-
+#endif
     struct LedcTimer {
       ledc_timer_config_t c;
       int ref;
@@ -882,12 +883,14 @@ namespace esp32m {
           }
           break;
 #endif
+#if SOC_PCNT_SUPPORTED
         case pin::Type::Pcnt:
           if ((_features & pin::Flags::PulseCounter) != 0) {
             gpio::Pcnt::create(this, feature);
             return ESP_OK;
           }
           break;
+#endif
         case pin::Type::LEDC:
           if ((_features & pin::Flags::Output) != 0) {
             gpio::LEDC::create(this, feature);

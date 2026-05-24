@@ -8,7 +8,7 @@
 namespace esp32m {
   namespace dev {
 
-    FlowSensor::FlowSensor(const char *name, io::IPin *pin)
+    FlowSensor::FlowSensor(const char* name, io::IPin* pin)
         : _name(name),
           _sensorFlow(this, "volume_flow_rate", "flow"),
           _sensorConsumption(this, "water", "consumption") {
@@ -30,14 +30,15 @@ namespace esp32m {
           PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_HOLD));
       ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setLevelAction(
           PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_KEEP));
-      ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->setFilter(12 * 1000));  // 12 us is as high as it can go
+      ESP_ERROR_CHECK_WITHOUT_ABORT(
+          pcnt->setFilter(12 * 1000));  // 12 us is as high as it can go
       if (!pcnt->isEnabled())
         ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->enable(true));
       return pcnt->isEnabled();
     }
 
-    JsonDocument *FlowSensor::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); 
+    JsonDocument* FlowSensor::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);
@@ -57,8 +58,8 @@ namespace esp32m {
         _value = compute(pc, passed);
         _consumption += _value * passed / 1000 / 60;
         _stamp = ms;
-        _sensorFlow.set(_value);
-        _sensorConsumption.set(_consumption);
+        _sensorFlow.set(_value * 0.06);  // convert l/min to m³/h
+        _sensorConsumption.set(_consumption / 1000);  // convert l to m³
         if (ms - _lastDump > 10000 &&
             abs(_consumption - _dumpedConsumption) >
                 std::numeric_limits<float>::epsilon()) {
@@ -70,14 +71,14 @@ namespace esp32m {
       return true;
     }
 
-    bool FlowSensor::setConfig(RequestContext &ctx) {
+    bool FlowSensor::setConfig(RequestContext& ctx) {
       bool changed = false;
       json::from(ctx.data["consumption"], _consumption, &changed);
       return changed;
     }
 
-    JsonDocument *FlowSensor::getConfig(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
+    JsonDocument* FlowSensor::getConfig(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(1) */
       auto root = doc->to<JsonObject>();
       root["consumption"] = _consumption;
       return doc;
@@ -90,7 +91,7 @@ namespace esp32m {
       return (hz + 8) / 6;
     }
 
-    FlowSensor *useFlowSensor(const char *name, io::IPin *pin) {
+    FlowSensor* useFlowSensor(const char* name, io::IPin* pin) {
       return new FlowSensor(name, pin);
     }
   }  // namespace dev
