@@ -17,6 +17,7 @@ alongside this script (one level up from scripts/).
 """
 
 import os
+import re
 import sys
 import glob
 import json
@@ -26,6 +27,55 @@ import argparse
 # Package name prefixes that are always kept as "*" in project package.json
 # because they are resolved via yarn link to the local core installation.
 _INTERNAL_SCOPES = ('@esp32m/', '@ts-libs/')
+
+_LOCK_ENTRY_RE   = re.compile(r'^"([^"]+)":\s*$')
+_LOCK_VERSION_RE = re.compile(r'^\s{2}version:\s+(\S+)\s*$')
+
+def _version_key(ver_str):
+    try:
+        return tuple(int(x) for x in ver_str.split('.')[:3])
+    except (ValueError, AttributeError):
+        return (0, 0, 0)
+
+def _parse_yarn_lock(lockfile_path):
+    """Parse a Yarn v3+ lock file and return {pkg_name: '^resolved_version'}.
+    Used as a fallback for packages that are transitive dependencies and
+    therefore don't appear directly in any package.json file (e.g. lodash)."""
+    versions = {}
+    try:
+        with open(lockfile_path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+    except IOError:
+        return versions
+    i = 0
+    while i < len(lines):
+        m = _LOCK_ENTRY_RE.match(lines[i])
+        if m:
+            # Each spec looks like:  pkg@npm:range  or  @scope/pkg@npm:range
+            pkg_names = set()
+            for spec in m.group(1).split(', '):
+                for registry in ('@npm:', '@workspace:'):
+                    if registry in spec:
+                        name = spec.split(registry)[0].strip('"')
+                        if not any(name.startswith(s) for s in _INTERNAL_SCOPES):
+                            pkg_names.add(name)
+                        break
+            j = i + 1
+            resolved = None
+            while j < len(lines) and (not lines[j].strip() or lines[j][0] == ' '):
+                vm = _LOCK_VERSION_RE.match(lines[j])
+                if vm:
+                    resolved = vm.group(1)
+                    break
+                j += 1
+            if resolved and pkg_names:
+                constraint = f'^{resolved}'
+                for name in pkg_names:
+                    existing = versions.get(name)
+                    if existing is None or _version_key(resolved) > _version_key(existing.lstrip('^~=')):
+                        versions[name] = constraint
+        i += 1
+    return versions
 
 # Default esp32m dir is one level up from this script (i.e. core/esp32m/)
 _DEFAULT_ESP32M_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -55,6 +105,12 @@ def collect_versions(esp32m_dir):
                     continue
                 if name not in versions:
                     versions[name] = ver
+    # Fallback: fill in transitive deps (e.g. lodash) from yarn.lock
+    lockfile = os.path.join(web_ui_dir, 'yarn.lock')
+    if os.path.exists(lockfile):
+        for name, ver in _parse_yarn_lock(lockfile).items():
+            if name not in versions:
+                versions[name] = ver
     logging.info(f"Collected {len(versions)} package versions from {web_ui_dir}")
     return versions
 
