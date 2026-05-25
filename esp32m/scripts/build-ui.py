@@ -17,6 +17,10 @@ from packaging import version
 
 ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
+# Package name prefixes that are always kept as "*" in project package.json
+# because they are resolved via yarn link to the local core installation.
+_INTERNAL_SCOPES = ('@esp32m/', '@ts-libs/')
+
 # this is to strip non-ascii chars from yarn output because ESP-IDF doesn't seem to like it
 async def strip_non_ascii(input_stream, output_stream):
     ascii_chars = set(string.printable)
@@ -87,26 +91,37 @@ class PackageJson:
         if not self.json:
             with open(self.path, 'r') as f:
                 self.json = json.load(f)
-    def removeResolutions(self):
+    def syncVersions(self, versions):
+        """Replace dependency versions with those from the core package map.
+        Skips internal @esp32m/* and @ts-libs/* packages (resolved via yarn link).
+        Returns True if any version was changed."""
+        self.ensureLoaded()
+        changed = False
+        for section in ('dependencies', 'devDependencies'):
+            for name in self.json.get(section, {}):
+                if any(name.startswith(s) for s in _INTERNAL_SCOPES):
+                    continue
+                if name in versions and self.json[section][name] != versions[name]:
+                    self.json[section][name] = versions[name]
+                    changed = True
+        return changed
+    def removeResolutions(self, versions=None):
         self.ensureLoaded()
         if "resolutions" in self.json:
             del self.json["resolutions"]
-        self.json["resolutions"]={
-            "react":"*",
-            "lodash":"*",
-            "webpack":"*",
-            "webpack-cli":"*",
-            "webpack-dev-server":"*",
-        }
+        # The resolutions field forces specific versions across the entire dependency
+        # tree, preventing webpack from bundling multiple copies of the same package.
+        tracked = ["react", "react-dom", "lodash", "webpack", "webpack-cli", "webpack-dev-server"]
+        self.json["resolutions"] = {pkg: (versions or {}).get(pkg, "*") for pkg in tracked}
     def removeTypeModule(self):
         self.ensureLoaded()
         if self.json.get("type") == "module":
             del self.json["type"]
-    def dump(self):
+    def dump(self, indent=4):
         if not self.json:
             raise Exception("nothing to dump")
         with open(self.path, 'w') as f:
-            json.dump(self.json, f, indent=4)
+            json.dump(self.json, f, indent=indent)
 
 class Package:
     def __init__(self, dir):
@@ -120,15 +135,50 @@ class Esp32m:
     def __init__(self, dir):
         self.package=Package(os.path.join(dir, "web-ui"))
 
+    def collectVersions(self):
+        """Collect all 3rd-party dependency version constraints from the core web-ui
+        packages. Returns a dict mapping package name to version constraint string."""
+        versions = {}
+        pattern = os.path.join(self.package.dir, '**', 'package.json')
+        for path in glob.glob(pattern, recursive=True):
+            if 'node_modules' in path.replace('\\', '/'):
+                continue
+            try:
+                with open(path, 'r') as f:
+                    pkg = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                logging.warning(f"Could not read {path}: {e}")
+                continue
+            for section in ('dependencies', 'devDependencies'):
+                for name, ver in pkg.get(section, {}).items():
+                    if ver == '*':
+                        continue
+                    if any(name.startswith(s) for s in _INTERNAL_SCOPES):
+                        continue
+                    if name not in versions:
+                        versions[name] = ver
+        logging.info(f"Collected {len(versions)} package versions from core")
+        return versions
+
 class Project:
-    def __init__(self, dir, buildDir, buildMode):
+    def __init__(self, dir, buildDir, buildMode, versions=None):
         webUiDir=os.path.join(dir, "web-ui")
         buildWebUiDir=os.path.join(buildDir, "web-ui")
+        # Sync the source package.json with current core versions so that
+        # committed files have real version constraints (not "*"), which
+        # prevents GitHub Dependabot warnings and makes the version history
+        # track esp32m upgrades automatically.
+        if versions and buildDir != dir:
+            sourcePackageJson = PackageJson(os.path.join(webUiDir, "package.json"))
+            if sourcePackageJson.exists():
+                if sourcePackageJson.syncVersions(versions):
+                    logging.info(f"Synced package versions in {sourcePackageJson.path}")
+                    sourcePackageJson.dump(indent=2)
         package=Package(buildWebUiDir)
         if buildDir!=dir:
             if not package.packageJson.exists() or buildMode==BuildMode.Full:
                 copyPackage(webUiDir, buildWebUiDir)
-        package.packageJson.removeResolutions()
+        package.packageJson.removeResolutions(versions)
         package.packageJson.removeTypeModule()
         package.packageJson.dump()
         self.package=package
@@ -234,7 +284,8 @@ def main():
     args = parser.parse_args()
     esp32m=Esp32m(args.esp32mDir)
     buildMode=BuildMode(args.buildMode)
-    project=Project(args.sourceDir, args.buildDir, buildMode)
+    versions=esp32m.collectVersions()
+    project=Project(args.sourceDir, args.buildDir, buildMode, versions)
     buildUi=False
     if buildMode==BuildMode.Full:
         buildUi=True
