@@ -77,6 +77,10 @@ namespace esp32m {
             break;
 #if SOC_UART_HP_NUM > 2
           case UART_NUM_2:
+#if CONFIG_IDF_TARGET_ESP32S3
+            txp = 13;
+            rxp = 14;
+#endif
             break;
 #endif
           default:
@@ -191,10 +195,11 @@ namespace esp32m {
       std::lock_guard guard(*_mutex);
       if (!_running)
         ESP_CHECK_RETURN(startNoLock());
-      mb_param_request_t req = {.slave_addr = addr,
-                                .command = command,
-                                .reg_start = reg_start,
-                                .reg_size = reg_size};
+      mb_param_request_t req = {};
+      req.slave_addr = addr;
+      req.command = command;
+      req.reg_start = reg_start;
+      req.reg_size = reg_size;
       auto err = mbc_master_send_request(_handle, &req, data);
       if (err == ESP_ERR_TIMEOUT || err == ESP_ERR_INVALID_RESPONSE) {
         if (resetNoLock() == ESP_OK)

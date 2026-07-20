@@ -1,24 +1,24 @@
-import path from 'path';
-import TerserPlugin from 'terser-webpack-plugin';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import CompressionPlugin from 'compression-webpack-plugin';
-import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import { PackageJson } from 'types-package-json';
 import CopyWebpackPlugin from 'copy-webpack-plugin';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import path from 'path';
+import TerserPlugin from 'terser-webpack-plugin';
+import { PackageJson } from 'types-package-json';
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
 //import WebpackStringReplacer from 'webpack-string-replacer';
 
+import { existsSync } from 'fs';
 import {
-  ModuleOptions,
-  RuleSetRule,
   Configuration,
   DefinePlugin,
-  webpack,
+  ModuleOptions,
   optimize,
+  RuleSetRule,
+  webpack,
   WebpackPluginInstance,
 } from 'webpack';
 import 'webpack-dev-server';
-import { existsSync } from 'fs';
 
 enum Destination {
   Local = 'local',
@@ -211,33 +211,48 @@ export class WebpackConfigBuilder {
     let targets: any;
     if (this.hasNodeTarget()) targets = { node: true };
     else if (this.hasWebTargets()) targets = { browsers: '> 5%' };
-    const presets: Array<any> = [
-      [
-        '@babel/env',
-        {
-          modules: false,
-          targets,
-        },
-      ],
-      ['@babel/typescript', { optimizeConstEnums: true }],
+    const envPreset: any = [
+      '@babel/env',
+      {
+        modules: false,
+        targets,
+      },
     ];
-    if (this.package.dependencies?.['react'])
-      presets.push(['@babel/react', { runtime: 'automatic' }]);
+    // Babel 8 removed the isTSX/allExtensions options from
+    // @babel/preset-typescript, and it no longer prevents `<T>() => {}`
+    // generic arrow functions in plain `.ts` files from being parsed as
+    // ambiguous JSX when @babel/preset-react's JSX syntax plugin is also
+    // active. onlyRemoveTypeImports must also be explicit: without it,
+    // Babel 8.0.x doesn't elide type-only imports (e.g. `import type`-like
+    // usages of `import { X } from 'y'`), leaving them in the bundle and
+    // causing webpack to fail resolving types-only modules.
+    const tsPreset: any = [
+      '@babel/typescript',
+      { optimizeConstEnums: true, onlyRemoveTypeImports: false },
+    ];
+    const reactPreset: any = ['@babel/react', { runtime: 'automatic' }];
+    const hasReact = !!this.package.dependencies?.['react'];
     const plugins: Array<any> = [
       ['@babel/plugin-proposal-decorators', { version: 'legacy' }],
     ];
     if (this.package.dependencies?.['lodash']) plugins.push('lodash');
-    const rule: RuleSetRule = {
+    const makeBabelUse = (withReact: boolean) => ({
       loader: 'babel-loader',
       options: {
-        presets,
+        presets:
+          withReact && hasReact
+            ? [envPreset, tsPreset, reactPreset]
+            : [envPreset, tsPreset],
         plugins,
       },
-    };
+    });
     return {
       test: /\.tsx?$/,
       exclude: /node_modules/,
-      use: [rule],
+      oneOf: [
+        { test: /\.tsx$/, use: [makeBabelUse(true)] },
+        { use: [makeBabelUse(false)] },
+      ],
     };
   }
   private buildModule() {
@@ -260,6 +275,8 @@ export class WebpackConfigBuilder {
     built.push(...serialportFixLoaders);
     const url = findModuleRule(rules, 'url-loader');
     if (!url && this.hasWebTargets()) built.push(inlineImageLoader);
+    // Fix for strict ESM modules (e.g. @mui/material): allow imports without file extensions
+    built.push({ test: /\.m?js$/, resolve: { fullySpecified: false } });
     return { rules: [...rules, ...built], ...rest };
   }
   private buildOptimization() {
@@ -411,7 +428,7 @@ export class WebpackConfigBuilder {
           : undefined,
       } = this.baseConfig;
       const inferred = { devtool, devServer };
-      const built = {
+      const built: Record<string, any> = {
         module: this.buildModule(),
         optimization: this.buildOptimization(),
         performance: this.buildPerformance(),

@@ -12,8 +12,8 @@ export type TState = [
   pm25: number,
   pm10: number,
   pm1: number,
-  temperature?: number,
-  humidity?: number,
+  temperature: number,
+  humidity: number,
 ];
 
 export type TConfig = {

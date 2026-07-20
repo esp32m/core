@@ -208,7 +208,7 @@ const WriteForm = ({ name }: { name: string }) => {
   };
 
   return (
-    <Grid container spacing={2} alignItems="flex-end" sx={{ mt: 1 }}>
+    <Grid container spacing={2} sx={{ mt: 1, alignItems: "flex-end" }}>
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2">Write register</Typography>
       </Grid>

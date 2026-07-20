@@ -82,7 +82,7 @@ namespace esp32m {
             break;
           if (data.num_symbols > 0)
             break;  // got a real frame
-          // 0 symbols: 60ms signal_range_max idle gap fired; re-arm
+          // 0 symbols: 30ms signal_range_max idle gap fired; re-arm
         }
         // never leave receiver enabled, because it will collect phantom pulses
         // on rx line when we are transmitting
@@ -171,28 +171,43 @@ namespace esp32m {
           rxcfg.clk_src = RMT_CLK_SRC_DEFAULT;
           rxcfg.resolution_hz = RmtResolutonHz;  // in us
           // Worst-case OT frame is 34 bits × 2 RMT symbols = 68 symbols.
-          // Worst-case OT frame is 34 bits × 2 RMT symbols = 68 symbols.
           // mem_block_symbols must be ≥ 68 so the hardware never silently drops
-          // the tail of a frame before the ISR fires.  128 (2 × 64-word blocks)
-          // gives headroom and is supported on plain ESP32 without DMA.
-          rxcfg.mem_block_symbols = 128;
+          // the tail of a frame before the ISR fires.  Round up to a whole
+          // number of hardware memory blocks (64 words/channel on plain
+          // ESP32 → 128, 48 words/channel on ESP32-S3 → 96) instead of
+          // hardcoding 128: requesting more blocks than needed can starve
+          // other RMT drivers (e.g. the owb one-wire bus) of channels on
+          // SoCs that only have a handful of RX-capable channels.
+          const int MinRxSymbols = FrameSizeBits * 2;
+          rxcfg.mem_block_symbols =
+              ((MinRxSymbols + SOC_RMT_MEM_WORDS_PER_CHANNEL - 1) /
+               SOC_RMT_MEM_WORDS_PER_CHANNEL) *
+              SOC_RMT_MEM_WORDS_PER_CHANNEL;
           ESP_CHECK_RETURN(_rx->setConfig(rxcfg));
           // signal_range_min_ns: glitch filter – pulses shorter than this are
           // discarded in hardware.  The filter register uses the 80 MHz APB
           // clock (8-bit, max ~3187 ns); 2000 ns rejects sub-µs spikes safely.
           // signal_range_max_ns: end-of-frame idle detector – the RMT stops
-          // capturing when it sees a gap longer than this.  The hardware limit
-          // at 1 MHz resolution is 65535 µs; we use 60 ms which is comfortably
-          // above the max valid OT pulse (~1300 µs) and below the limit.
-          // The master→slave idle gap can be 20–800 ms, longer than this value,
-          // so receive() re-arms the hardware in a loop until actual frame
-          // symbols arrive or the overall deadline expires.
-          ESP_CHECK_RETURN(_rx->setSignalThresholds(2000, 60 * 1000 * 1000));
+          // capturing when it sees a gap longer than this.  At 1 MHz
+          // resolution the idle-threshold register holds up to 65535 µs on
+          // plain ESP32, but only 32767 µs on ESP32-S3 (15-bit vs 16-bit
+          // register) - using 60 ms unconditionally overflows the S3 register
+          // and makes rmt_receive() fail with ESP_ERR_INVALID_ARG.  30 ms
+          // fits both chips, is comfortably above the max valid OT pulse
+          // (~1300 µs) and below either limit.
+          // The master→slave idle gap can be 20–800 ms, longer than this
+          // value, so receive() re-arms the hardware in a loop until actual
+          // frame symbols arrive or the overall deadline expires.
+          ESP_CHECK_RETURN(_rx->setSignalThresholds(2000, 30 * 1000 * 1000));
           rmt_tx_channel_config_t txcfg = {};
           txcfg.gpio_num = _txPin;
           txcfg.clk_src = RMT_CLK_SRC_DEFAULT;
           txcfg.resolution_hz = RmtResolutonHz;  // in us
-          txcfg.mem_block_symbols = 64;
+          // A single hardware channel's worth of symbols (64 on plain
+          // ESP32, 48 on ESP32-S3) is always enough for a FrameSizeBits
+          // (34) symbol frame - see the RX comment above for why this is
+          // computed instead of hardcoded.
+          txcfg.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
           txcfg.trans_queue_depth = 4;
           ESP_CHECK_RETURN(_tx->setConfig(txcfg));
           rmt_transmit_config_t txconfig = {};

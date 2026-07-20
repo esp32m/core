@@ -8,7 +8,7 @@
     "./src/**/*"
   ],
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "nodenext",
     "outDir": "./cjs",
     "noEmit": false,
     "rootDir": "./src"

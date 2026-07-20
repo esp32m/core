@@ -5,17 +5,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebpackConfigBuilder = void 0;
 exports.runWebpack = runWebpack;
-const path_1 = __importDefault(require("path"));
-const terser_webpack_plugin_1 = __importDefault(require("terser-webpack-plugin"));
-const html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
 const clean_webpack_plugin_1 = require("clean-webpack-plugin");
 const compression_webpack_plugin_1 = __importDefault(require("compression-webpack-plugin"));
-const webpack_bundle_analyzer_1 = require("webpack-bundle-analyzer");
 const copy_webpack_plugin_1 = __importDefault(require("copy-webpack-plugin"));
+const html_webpack_plugin_1 = __importDefault(require("html-webpack-plugin"));
+const path_1 = __importDefault(require("path"));
+const terser_webpack_plugin_1 = __importDefault(require("terser-webpack-plugin"));
+const webpack_bundle_analyzer_1 = require("webpack-bundle-analyzer");
 //import WebpackStringReplacer from 'webpack-string-replacer';
+const fs_1 = require("fs");
 const webpack_1 = require("webpack");
 require("webpack-dev-server");
-const fs_1 = require("fs");
 var Destination;
 (function (Destination) {
     Destination["Local"] = "local";
@@ -196,34 +196,48 @@ class WebpackConfigBuilder {
             targets = { node: true };
         else if (this.hasWebTargets())
             targets = { browsers: '> 5%' };
-        const presets = [
-            [
-                '@babel/env',
-                {
-                    modules: false,
-                    targets,
-                },
-            ],
-            ['@babel/typescript', { optimizeConstEnums: true }],
+        const envPreset = [
+            '@babel/env',
+            {
+                modules: false,
+                targets,
+            },
         ];
-        if (this.package.dependencies?.['react'])
-            presets.push(['@babel/react', { runtime: 'automatic' }]);
+        // Babel 8 removed the isTSX/allExtensions options from
+        // @babel/preset-typescript, and it no longer prevents `<T>() => {}`
+        // generic arrow functions in plain `.ts` files from being parsed as
+        // ambiguous JSX when @babel/preset-react's JSX syntax plugin is also
+        // active. onlyRemoveTypeImports must also be explicit: without it,
+        // Babel 8.0.x doesn't elide type-only imports (e.g. `import type`-like
+        // usages of `import { X } from 'y'`), leaving them in the bundle and
+        // causing webpack to fail resolving types-only modules.
+        const tsPreset = [
+            '@babel/typescript',
+            { optimizeConstEnums: true, onlyRemoveTypeImports: false },
+        ];
+        const reactPreset = ['@babel/react', { runtime: 'automatic' }];
+        const hasReact = !!this.package.dependencies?.['react'];
         const plugins = [
             ['@babel/plugin-proposal-decorators', { version: 'legacy' }],
         ];
         if (this.package.dependencies?.['lodash'])
             plugins.push('lodash');
-        const rule = {
+        const makeBabelUse = (withReact) => ({
             loader: 'babel-loader',
             options: {
-                presets,
+                presets: withReact && hasReact
+                    ? [envPreset, tsPreset, reactPreset]
+                    : [envPreset, tsPreset],
                 plugins,
             },
-        };
+        });
         return {
             test: /\.tsx?$/,
             exclude: /node_modules/,
-            use: [rule],
+            oneOf: [
+                { test: /\.tsx$/, use: [makeBabelUse(true)] },
+                { use: [makeBabelUse(false)] },
+            ],
         };
     }
     buildModule() {
@@ -248,6 +262,8 @@ class WebpackConfigBuilder {
         const url = findModuleRule(rules, 'url-loader');
         if (!url && this.hasWebTargets())
             built.push(inlineImageLoader);
+        // Fix for strict ESM modules (e.g. @mui/material): allow imports without file extensions
+        built.push({ test: /\.m?js$/, resolve: { fullySpecified: false } });
         return { rules: [...rules, ...built], ...rest };
     }
     buildOptimization() {

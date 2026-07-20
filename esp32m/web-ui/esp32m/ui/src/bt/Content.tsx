@@ -6,7 +6,7 @@ type TBtPlugin = TPlugin & {
   bt: { content: React.ComponentType; props: unknown };
 };
 
-export default function Content(): JSX.Element {
+export default function Content() {
   const plugins = getPlugins<TBtPlugin>();
   const widgets: Array<React.ReactElement> = React.useMemo(() => {
     return plugins

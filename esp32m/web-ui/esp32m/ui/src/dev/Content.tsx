@@ -3,7 +3,7 @@ import { Grid } from "@mui/material";
 import { IDevicePlugin } from "./types";
 import { getPlugins } from "@ts-libs/plugins";
 
-export default function Content(): JSX.Element {
+export default function Content() {
   const widgets: Array<React.ReactElement> = [];
   const plugins = getPlugins<IDevicePlugin>((dp) => !!dp.device);
   plugins.forEach((dp, i) => {

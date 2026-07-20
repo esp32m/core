@@ -49,7 +49,7 @@ namespace esp32m {
     }
 
     JsonDocument *Max6675::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
+      JsonDocument *doc = new JsonDocument(); 
       JsonArray arr = doc->to<JsonArray>();
       arr.add(millis() - _stamp);
       arr.add(_value);

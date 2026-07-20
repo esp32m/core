@@ -3,7 +3,7 @@ import { Grid } from '@mui/material';
 import { IScannerPlugin } from './types';
 import { getPlugins } from '@ts-libs/plugins';
 
-export default function Scanners(): JSX.Element {
+export default function Scanners() {
   const plugins = getPlugins<IScannerPlugin>();
   const widgets: Array<React.ReactElement> = useMemo(
     () =>

@@ -1002,6 +1002,7 @@ namespace esp32m {
         // Enable 802.11k (RRM) and 802.11v (BTM) so the WPA supplicant
         // advertises support to the AP and the RSSI-low handler
         // (WIFI_EVENT_STA_BSS_RSSI_LOW) can drive seamless roaming.
+        conf.sta.ft_enabled = 1;
         conf.sta.rm_enabled = 1;
         conf.sta.btm_enabled = 1;
 

@@ -58,11 +58,14 @@ namespace esp32m {
           return _buses.begin()->second;
       }
 
-      static esp_err_t New(i2c_master_bus_config_t& config, MasterBus** bus) {
+      static esp_err_t New(i2c_master_bus_config_t& config,
+                           MasterBus** bus = nullptr) {
         std::lock_guard lock(_busesMutex);
         i2c_master_bus_handle_t handle;
         ESP_CHECK_RETURN(i2c_new_master_bus(&config, &handle));
-        *bus = new MasterBus(handle, config);
+        auto masterBus = new MasterBus(handle, config);
+        if (bus)
+          *bus = masterBus;
         return ESP_OK;
       }
 

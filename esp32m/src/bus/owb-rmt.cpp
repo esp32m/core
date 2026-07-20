@@ -138,8 +138,12 @@ namespace esp32m {
           rxcfg.clk_src = RMT_CLK_SRC_DEFAULT;
           rxcfg.resolution_hz = RmtResolutonHz;  // in us
 #if SOC_RMT_SUPPORT_RX_PINGPONG
-          rxcfg.mem_block_symbols = 64;  // when the chip is ping-pong capable,
-                                         // we can use less rx memory blocks
+          // when the chip is ping-pong capable, we can use less rx memory
+          // blocks; a single hardware channel's worth of symbols is enough
+          // (this is 64 on plain ESP32, 48 on ESP32-S3, etc.) - requesting
+          // exactly one channel here keeps owb from starving other RMT
+          // drivers (e.g. opentherm) of channels on SoCs with few of them.
+          rxcfg.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
 #else
           rxcfg.mem_block_symbols = (_maxRxBytes + 2) * 8;
 #endif
@@ -148,8 +152,9 @@ namespace esp32m {
           txcfg.gpio_num = pin();
           txcfg.clk_src = RMT_CLK_SRC_DEFAULT;
           txcfg.resolution_hz = RmtResolutonHz;  // in us
-          txcfg.mem_block_symbols = 64;  // ping-pong is always avaliable on tx
-                                         // channel, save hardware memory blocks
+          // ping-pong is always available on tx channel, one hardware
+          // channel's worth of memory is enough - see comment above.
+          txcfg.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
           txcfg.trans_queue_depth = 4;
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
           // make tx channel coexist with rx channel on the same gpio pin

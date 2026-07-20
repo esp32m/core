@@ -1155,10 +1155,20 @@ namespace esp32m {
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
         opentherm::Status s = _hvac.status;
+        uint8_t prevMaster = s.master.value;
         s.slave.value = 0;
-        json::from(hvac["status"], s.value, &changed);
-        if (changed)
+        bool statusChanged = false;
+        json::from(hvac["status"], s.value, &statusChanged);
+        if (statusChanged) {
+          logD(
+              "setConfig: hvac.status.master %#04x -> %#04x (internal=%i, "
+              "raw=%u)",
+              prevMaster, s.master.value, !ctx.request.origin(),
+              hvac["status"].isUnbound() ? 0xffff
+                                         : hvac["status"].as<unsigned>());
           _hvac.status.master.value = s.master.value;
+          changed = true;
+        }
         json::from(hvac["ts"], _hvac.tSet, &changed);
         json::from(hvac["tdhws"], _hvac.tDhwSet, &changed);
         json::from(hvac["maxts"], _hvac.maxTSet, &changed);
@@ -1167,14 +1177,15 @@ namespace esp32m {
     }
 
     JsonDocument* OpenthermMaster::getConfig(RequestContext& ctx) {
-      JsonDocument* doc = new JsonDocument(
-          /*JSON_OBJECT_SIZE(1 hvac + 4) + _ids.jsonSize()*/);
+      JsonDocument* doc = new JsonDocument();
       JsonObject root = doc->to<JsonObject>();
       _ids.toJson(root);
       auto hvac = root["hvac"].to<JsonObject>();
       opentherm::Status s = _hvac.status;
       s.slave.value = 0;
       hvac["status"] = s.value;
+      if (!ctx.request.origin())
+        logD("getConfig (save): hvac.status.master=%#04x", s.master.value);
       json::to(hvac, "ts", _hvac.tSet);
       json::to(hvac, "tdhws", _hvac.tDhwSet);
       json::to(hvac, "maxts", _hvac.maxTSet);

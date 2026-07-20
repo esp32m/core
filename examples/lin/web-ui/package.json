@@ -1,0 +1,26 @@
+{
+  "name": "ui",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "",
+  "sideEffects": false,
+  "scripts": {
+    "build": "NODE_OPTIONS='--preserve-symlinks' webpack --config-node-env=production",
+    "compile": "NODE_OPTIONS='--preserve-symlinks' webpack --config-node-env=development",
+    "analyze": "NODE_OPTIONS='--preserve-symlinks' webpack --config-node-env=production --env destination=analyze",
+    "start": "NODE_OPTIONS='--preserve-symlinks' webpack serve --config-node-env=development"
+  },
+  "devDependencies": {
+    "@ts-libs/dev": "*",
+    "webpack": "^5.107.1",
+    "webpack-cli": "^7.0.2",
+    "webpack-dev-server": "^5.2.4"
+  },
+  "dependencies": {
+    "@esp32m/ui": "*",
+    "@ts-libs/ui-app": "*",
+    "lodash": "^4.17.21",
+    "react": "^19.2.6"
+  },
+  "packageManager": "yarn@4.15.0"
+}
