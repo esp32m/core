@@ -84,7 +84,7 @@ namespace esp32m {
         void handleEvent(Event& ev) override {
           if (EventInited::is(ev)) {
             xTaskCreate([](void* self) { ((Mqtt*)self)->run(); }, "m/ha-mqtt",
-                        4096, this, tskIDLE_PRIORITY, &_task);
+                        8192, this, tskIDLE_PRIORITY, &_task);
           }
         }
 

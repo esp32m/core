@@ -8,7 +8,7 @@
 namespace esp32m {
   namespace dev {
 
-    Fan::Fan(const char *name, io::IPin *power, io::IPin *tach)
+    Fan::Fan(const char* name, io::IPin* power, io::IPin* tach)
         : _name(name), _power(power), _tach(tach) {
       Device::init(Flags::HasSensors);
       if (_tach && _tach->pcnt()) {
@@ -16,6 +16,9 @@ namespace esp32m {
         _sensorRpm->unit = "rpm";
         _sensorRpm->stateClass = StateClass::Measurement;
       }
+      auto pow = _power ? _power->digital() : nullptr;
+      if (pow)
+        pow->setDirection(true, true);
     }
     Fan::~Fan() {
       if (_sensorRpm)
@@ -37,8 +40,8 @@ namespace esp32m {
       return pcnt->isEnabled();
     }
 
-    JsonDocument *Fan::getState(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
+    JsonDocument* Fan::getState(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonObject obj = doc->to<JsonObject>();
       json::to(obj, "stamp", millis() - _stamp);
       if (_tach)
@@ -50,7 +53,7 @@ namespace esp32m {
       return doc;
     }
 
-    void Fan::setState(RequestContext &ctx) {
+    void Fan::setState(RequestContext& ctx) {
       bool changed = false;
       auto speed = _speed;
       if (json::from(ctx.data["speed"], speed, &changed))
@@ -79,7 +82,7 @@ namespace esp32m {
       return true;
     }
 
-    bool Fan::setConfig(RequestContext &ctx) {
+    bool Fan::setConfig(RequestContext& ctx) {
       bool changed = false;
       json::from(ctx.data["on"], _on, &changed);
       json::from(ctx.data["speed"], _speed, &changed);
@@ -88,8 +91,8 @@ namespace esp32m {
       return changed;
     }
 
-    JsonDocument *Fan::getConfig(RequestContext &ctx) {
-      JsonDocument *doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
+    JsonDocument* Fan::getConfig(RequestContext& ctx) {
+      JsonDocument* doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject root = doc->to<JsonObject>();
       json::to(root, "on", _on);
       if (_pwm) {
@@ -97,8 +100,8 @@ namespace esp32m {
       }
       return doc;
     }
-    esp_err_t Fan::configurePwm(io::IPin *pin, uint32_t freq) {
-      io::pin::IPWM *pwm;
+    esp_err_t Fan::configurePwm(io::IPin* pin, uint32_t freq) {
+      io::pin::IPWM* pwm;
       if (_pwm != pin) {
         auto old = _pwm ? _pwm->pwm() : nullptr;
         if (old)
@@ -143,7 +146,7 @@ namespace esp32m {
       return update();
     }
 
-    Fan *useFan(const char *name, io::IPin *power, io::IPin *tach) {
+    Fan* useFan(const char* name, io::IPin* power, io::IPin* tach) {
       return new Fan(name, power, tach);
     }
   }  // namespace dev

@@ -39,6 +39,7 @@ namespace esp32m {
           return ESP_OK;
         }
         esp_err_t read(bool &value) override {
+          std::lock_guard txGuard(pin::Tx::mutex());
           /*if (_mode == GPIO_MODE_INPUT_OUTPUT && _set) {
             value = _value;
             return ESP_OK;
@@ -54,6 +55,7 @@ namespace esp32m {
           return ESP_OK;
         }
         esp_err_t write(bool value) override {
+          std::lock_guard txGuard(pin::Tx::mutex());
           auto sig = _pin->_owner->_sig;
           std::lock_guard guard(sig->mutex());
           auto sd = sig->digital();
@@ -176,20 +178,25 @@ namespace esp32m {
       if (c < 0 || c >= _count)
         return ESP_ERR_INVALID_ARG;
       esp_err_t err = ESP_OK;
-      pin::Tx tx(pin::Tx::Type::Write, &err);
+      pin::Tx tx(pin::Tx::Type::Write);
       if (_s0)
-        ESP_CHECK_RETURN(_s0->write((c & 0x1) != 0));
-      if (_s1)
-        ESP_CHECK_RETURN(_s1->write((c & 0x2) != 0));
-      if (_s2)
-        ESP_CHECK_RETURN(_s2->write((c & 0x4) != 0));
-      if (_s3)
-        ESP_CHECK_RETURN(_s3->write((c & 0x8) != 0));
-      return err;
+        err = _s0->write((c & 0x1) != 0);
+      if (!err && _s1)
+        err = _s1->write((c & 0x2) != 0);
+      if (!err && _s2)
+        err = _s2->write((c & 0x4) != 0);
+      if (!err && _s3)
+        err = _s3->write((c & 0x8) != 0);
+      if (err) {
+        tx.abort();
+        return err;
+      }
+      return tx.commit();
     }
 
     namespace mux74hc {
       esp_err_t ADC::read(int &value, uint32_t *mv) {
+        std::lock_guard txGuard(pin::Tx::mutex());
         auto sig = _pin->_owner->_sig;
         auto adc = sig->adc();
         if (!adc)

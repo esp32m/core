@@ -25,6 +25,7 @@ namespace esp32m {
       esp_err_t setPinMode(int pin, aw9523::PinMode mode);
       esp_err_t analogWrite(int pin, float value);
       esp_err_t commit() override;
+      void abort() override;
       esp_err_t setP0PushPull(bool enable);
 
      protected:
@@ -34,6 +35,8 @@ namespace esp32m {
       std::unique_ptr<i2c::MasterDev> _i2c;
       io::pin::IDigital *_rst = nullptr;
       uint16_t _out, _cfg, _int, _mode, _input, _gcr;
+      uint16_t _beforeWrite = 0;
+      bool _pending = false;
       esp_err_t init();
       esp_err_t readInput();
       esp_err_t writeOutput();

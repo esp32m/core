@@ -4,6 +4,7 @@
 
 #include <map>
 #include <mutex>
+#include <algorithm>
 
 namespace esp32m {
   namespace io {
@@ -128,34 +129,99 @@ namespace esp32m {
     }
 
     namespace pin {
-      int Tx::_nesting = 0;
-      Tx *Tx::_current = nullptr;
-      Tx::Tx(Type type, esp_err_t *errPtr) : _type(type), _errPtr(errPtr) {
-        _mutex.lock();
-        if (!_current)
-          _current = this;
-        _nesting++;
+      thread_local Tx *Tx::_current = nullptr;
+
+      std::recursive_mutex &Tx::mutex() {
+        static std::recursive_mutex mutex;
+        return mutex;
       }
+
+      Tx::Tx(Type type, esp_err_t *errPtr)
+          : _lock(mutex()),
+            _type(type),
+            _errPtr(errPtr),
+            _previous(_current),
+            _root(_previous ? _previous->_root : this) {
+        if (_previous)
+          _type = static_cast<Type>(_type | _previous->_type);
+        _current = this;
+      }
+
       Tx::~Tx() {
-        _nesting--;
-        if (_nesting == 0)
-          _current = nullptr;
-        if (_finalizer) {
-          auto err = _finalizer->commit();
+        // Only the outer scope owns implicit commit. Never leave a pointer to
+        // a destroyed inner scope, even when tasks overlap on different cores.
+        if (_root == this && !_aborted) {
+          auto err = commit();
+          if (err && !_errPtr)
+            ESP_ERROR_CHECK_WITHOUT_ABORT(err);
+        }
+        if (_errPtr && _root->_error)
+          *_errPtr = _root->_error;
+        _current = _previous;
+      }
+
+      const ITxFinalizer *Tx::getFinalizer() const {
+        return _root->_finalizers.empty() ? nullptr : _root->_finalizers.front();
+      }
+
+      bool Tx::hasFinalizer(const ITxFinalizer *finalizer) const {
+        const auto &items = _root->_finalizers;
+        return std::find(items.begin(), items.end(), finalizer) != items.end();
+      }
+
+      esp_err_t Tx::setFinalizer(ITxFinalizer *finalizer) {
+        if (!finalizer)
+          return ESP_ERR_INVALID_ARG;
+        if (_root->_aborted)
+          return _root->_error;
+        if (!hasFinalizer(finalizer))
+          _root->_finalizers.push_back(finalizer);
+        return ESP_OK;
+      }
+
+      void Tx::setReadPerformed(const void *provider) {
+        if (!getReadPerformed(provider))
+          _root->_reads.push_back(provider);
+      }
+
+      bool Tx::getReadPerformed(const void *provider) const {
+        const auto &items = _root->_reads;
+        return std::find(items.begin(), items.end(), provider) != items.end();
+      }
+
+      esp_err_t Tx::commit() {
+        if (_root->_aborted)
+          return _root->_error;
+        auto finalizers = std::move(_root->_finalizers);
+        _root->_finalizers.clear();
+        _root->_reads.clear();
+        for (size_t i = 0; i < finalizers.size(); i++) {
+          auto err = finalizers[i]->commit();
           if (err) {
+            _root->_error = err;
+            _root->_aborted = true;
+            // A failed commit may have changed hardware partially; rollback
+            // only software staging and never replay it in a later command.
+            for (; i < finalizers.size(); i++)
+              finalizers[i]->abort();
+            _root->_reads.clear();
             if (_errPtr)
               *_errPtr = err;
-            else
-              ESP_ERROR_CHECK_WITHOUT_ABORT(err);
+            return err;
           }
         }
-        _mutex.unlock();
-      }
-      esp_err_t Tx::setFinalizer(ITxFinalizer *finalizer) {
-        if (_finalizer)
-          return ESP_FAIL;
-        _finalizer = finalizer;
+        _root->_reads.clear();
         return ESP_OK;
+      }
+
+      void Tx::abort() {
+        for (auto finalizer : _root->_finalizers)
+          finalizer->abort();
+        _root->_finalizers.clear();
+        _root->_reads.clear();
+        _root->_aborted = true;
+        if (!_root->_error)
+          _root->_error = ESP_ERR_INVALID_STATE;
       }
 
       PcntSampler::PcntSampler(IPcnt *pcnt) : _pcnt(pcnt) {

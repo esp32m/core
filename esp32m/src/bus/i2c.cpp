@@ -7,6 +7,7 @@ namespace esp32m {
     std::mutex MasterBus::_busesMutex;
 
     esp_err_t MasterBus::find(uint16_t address, MasterDev** dev) {
+      std::lock_guard lock(_mutex);
       for (auto & [_, d] : _devices)
         if (d->address() == address) {
           if (dev)

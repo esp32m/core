@@ -8,17 +8,22 @@
 namespace esp32m {
   namespace dev {
     esp_err_t HBridge::init() {
-      if (!isPwm()) {
-        // don't call pwm()->enable(false) because it will reconfigure pin for pwm output, and we want to keep it as digital output
-        //ESP_CHECK_RETURN(_fwd->pwm()->enable(false));
-        //ESP_CHECK_RETURN(_rev->pwm()->enable(false));
-        ESP_CHECK_RETURN(_fwd->digital()->setDirection(true, true));
-        ESP_CHECK_RETURN(_rev->digital()->setDirection(true, true));
-      }
-      return refresh();
+      std::lock_guard guard(io::pin::Tx::mutex());
+      _initialized = false;
+      if (!_fwd || !_rev || !_fwd->digital() || !_rev->digital())
+        return ESP_ERR_INVALID_ARG;
+      // Expander output latches survive an ESP32-only reset. Establish Off
+      // before changing either pin direction, and never adopt old motor state.
+      ESP_CHECK_RETURN(setPins(false, false));
+      _mode = Off;
+      ESP_CHECK_RETURN(_fwd->digital()->setDirection(true, true));
+      ESP_CHECK_RETURN(_rev->digital()->setDirection(true, true));
+      _initialized = true;
+      return ESP_OK;
     }
 
     esp_err_t HBridge::run(Mode mode, float speed) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       bool f, r;
       switch (mode) {
         case Mode::Brake:
@@ -40,9 +45,15 @@ namespace esp32m {
         default:
           return ESP_FAIL;
       }
+      if (!_initialized)
+        ESP_CHECK_RETURN(init());
       ESP_CHECK_RETURN(setSpeed(speed));
       // logD("run %d", mode);
-      ESP_CHECK_RETURN(setPins(f, r));
+      auto err = setPins(f, r);
+      if (err) {
+        _initialized = false;
+        return err;
+      }
       ESP_CHECK_RETURN(refresh());
       if (_persistent)
         config::Changed::publish(this);
@@ -50,6 +61,7 @@ namespace esp32m {
     }
 
     esp_err_t HBridge::refresh() {
+      std::lock_guard guard(io::pin::Tx::mutex());
       if (!isPwm()) {
         bool f, r;
         ESP_CHECK_RETURN(getPins(f, r));
@@ -60,6 +72,7 @@ namespace esp32m {
     }
 
     esp_err_t HBridge::setPins(bool fwd, bool rev) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       // logD("setPins %d %d PWM=%d", fwd, rev, isPwm());
       if (isPwm()) {
         if (fwd && rev) {
@@ -71,16 +84,23 @@ namespace esp32m {
         }
       }
       io::pin::Tx tx(io::pin::Tx::Type::Write);
-      ESP_CHECK_RETURN(_fwd->digital()->write(fwd));
-      ESP_CHECK_RETURN(_rev->digital()->write(rev));
-      return ESP_OK;
+      auto err = _fwd->digital()->write(fwd);
+      if (!err)
+        err = _rev->digital()->write(rev);
+      if (err) {
+        tx.abort();
+        return err;
+      }
+      return tx.commit();
     }
 
     esp_err_t HBridge::getPins(bool &fwd, bool &rev) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       if (isPwm()) {
         fwd = _fwd->pwm()->isEnabled();
         rev = _rev->pwm()->isEnabled();
       } else {
+        io::pin::Tx tx(io::pin::Tx::Type::Read);
         ESP_CHECK_RETURN(_fwd->digital()->read(fwd));
         ESP_CHECK_RETURN(_rev->digital()->read(rev));
       }
@@ -88,6 +108,7 @@ namespace esp32m {
     }
 
     JsonDocument *HBridge::getState(RequestContext &ctx) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject info = doc->to<JsonObject>();
       info["mode"] = _mode;
@@ -98,6 +119,7 @@ namespace esp32m {
     }
 
     void HBridge::setState(RequestContext &ctx) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       bool changed = false;
       auto mode = _mode;
       json::from(ctx.data["mode"], mode, &changed);
@@ -106,17 +128,20 @@ namespace esp32m {
     }
 
     bool HBridge::setConfig(RequestContext &ctx) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       bool changed = false;
       auto mode = _mode;
+      auto duty = _duty;
       if (_persistent)
         json::from(ctx.data["mode"], mode, &changed);
-      json::from(ctx.data["speed"], _duty, &changed);
+      json::from(ctx.data["speed"], duty, &changed);
       if (changed)
-        ctx.errors.check(run(mode, _duty));
+        ctx.errors.check(run(mode, duty));
       return changed;
     }
 
     JsonDocument *HBridge::getConfig(RequestContext &ctx) {
+      std::lock_guard guard(io::pin::Tx::mutex());
       auto doc = new JsonDocument(); /* JSON_OBJECT_SIZE(2) */
       JsonObject info = doc->to<JsonObject>();
       if (_persistent)

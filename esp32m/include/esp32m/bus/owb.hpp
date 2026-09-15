@@ -43,6 +43,15 @@ namespace esp32m {
       virtual esp_err_t reset(bool &present) = 0;
       virtual esp_err_t readBits(uint8_t *in, int number_of_bits_to_read) = 0;
       virtual esp_err_t writeBits(uint8_t out, int number_of_bits_to_write) = 0;
+      /* Actively drives the bus high (bypassing normal open-drain
+       * signaling) when enabled, or restores normal open-drain operation
+       * when disabled. Required by parasite-powered devices (e.g.
+       * DS18B20) during temperature conversion, where a passive pull-up
+       * resistor alone often cannot supply enough current. Default
+       * implementation is a no-op for drivers that don't support it. */
+      virtual esp_err_t setStrongPullup(bool enable) {
+        return ESP_ERR_NOT_SUPPORTED;
+      }
       void claim();
       void release();
       gpio_num_t pin() {
@@ -94,6 +103,7 @@ namespace esp32m {
     esp_err_t write(uint8_t value);
     esp_err_t write(const void *buffer, size_t size);
     esp_err_t write(const owb::ROMCode &code);
+    esp_err_t setStrongPullup(bool enable);
 
    private:
     owb::IDriver *_driver;

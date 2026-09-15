@@ -26,6 +26,7 @@ namespace esp32m {
       esp_err_t read(uint16_t &port);
       esp_err_t write(uint16_t port);
       esp_err_t commit() override;
+      void abort() override;
 
      protected:
       IPin *newPin(int id) override;
@@ -34,6 +35,8 @@ namespace esp32m {
       Flavor _flavor;
       std::unique_ptr<i2c::MasterDev> _i2c;
       uint16_t _port = 0xFFFF, _inputMap = 0xFFFF;
+      uint16_t _beforeWrite = 0xFFFF;
+      bool _pending = false;
       esp_err_t init();
     };
 

@@ -12,12 +12,12 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.5.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@ts-libs/log": "*",
     "@ts-libs/tools": "*",
-    "yargs": "^18.0.0"
+    "yargs": "^18.1.0"
   }
 }

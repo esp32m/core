@@ -96,6 +96,7 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::read(uint16_t &port) {
+      std::lock_guard guard(pin::Tx::mutex());
       // std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(
           _i2c->read(nullptr, 0, &port, _flavor == Flavor::PCF8574 ? 1 : 2));
@@ -104,6 +105,7 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::write(uint16_t port) {
+      std::lock_guard guard(pin::Tx::mutex());
       // std::lock_guard guard(_i2c->mutex());
       ESP_CHECK_RETURN(
           _i2c->write(nullptr, 0, &port, _flavor == Flavor::PCF8574 ? 1 : 2));
@@ -112,24 +114,32 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::readPin(int pin, bool &value) {
+      std::lock_guard guard(pin::Tx::mutex());
       auto tx = pin::Tx::current();
-      if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
-                  !tx->getReadPerformed())) {
+      if (!tx || (tx->type() & pin::Tx::Type::Read) == 0 ||
+          !tx->getReadPerformed(this)) {
         uint16_t port;
         ESP_CHECK_RETURN(read(port));
         if (tx)
-          tx->setReadPerformed();
+          tx->setReadPerformed(this);
       }
       value = _port & (1 << pin);
       return ESP_OK;
     }
     esp_err_t Pcf857x::writePin(int pin, bool value) {
+      std::lock_guard guard(pin::Tx::mutex());
       auto tx = pin::Tx::current();
       if (tx && (tx->type() & pin::Tx::Type::Read) != 0 &&
-          !tx->getReadPerformed()) {
+          !tx->getReadPerformed(this)) {
         uint16_t port;
         ESP_CHECK_RETURN(read(port));
-        tx->setReadPerformed();
+        tx->setReadPerformed(this);
+      }
+      if (tx && (tx->type() & pin::Tx::Type::Write) != 0)
+        ESP_CHECK_RETURN(tx->setFinalizer(this));
+      if (!_pending) {
+        _beforeWrite = _port;
+        _pending = true;
       }
       if (value)
         _port |= (1 << pin);
@@ -137,11 +147,10 @@ namespace esp32m {
         _port &= ~(1 << pin);
       if (!tx || ((tx->type() & pin::Tx::Type::Write) == 0))
         return commit();
-      if (!tx->getFinalizer())
-        tx->setFinalizer(this);
       return ESP_OK;
     }
     esp_err_t Pcf857x::setPinMode(int pin, bool input) {
+      std::lock_guard guard(pin::Tx::mutex());
       if (input)
         _inputMap |= (1 << pin);
       else
@@ -150,7 +159,20 @@ namespace esp32m {
     }
 
     esp_err_t Pcf857x::commit() {
-      return write(_port | _inputMap);
+      std::lock_guard guard(pin::Tx::mutex());
+      auto err = write(_port | _inputMap);
+      if (err)
+        abort();
+      else
+        _pending = false;
+      return err;
+    }
+
+    void Pcf857x::abort() {
+      std::lock_guard guard(pin::Tx::mutex());
+      if (_pending)
+        _port = _beforeWrite;
+      _pending = false;
     }
 
     Pcf857x *usePcf8574(uint8_t addr) {

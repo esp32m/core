@@ -15,6 +15,7 @@ namespace esp32m {
 
       class IWiring {
        public:
+        virtual ~IWiring() = default;
         virtual esp_err_t set(Cmd cmd) = 0;
       };
 
@@ -44,6 +45,7 @@ namespace esp32m {
 
       class ISensor {
        public:
+        virtual ~ISensor() = default;
         enum State { Unknown, Opened, Closed, Invalid };
         virtual esp_err_t sense(State &state) = 0;
       };
@@ -60,6 +62,7 @@ namespace esp32m {
        private:
         io::pin::IDigital *_open, *_closed;
         bool _openLevel = false, _closedLevel = false;
+        bool _configured = false;
       };
 
     }  // namespace valve
@@ -73,13 +76,18 @@ namespace esp32m {
       const char *name() const override {
         return _name;
       }
-      State state() const { return _state; }
+      State state() const {
+        std::lock_guard guard(_mutex);
+        return _state;
+      }
       esp_err_t turn(float value);
       esp_err_t set(valve::Cmd cmd, bool wait = true);
       void setPersistent(bool p) {
+        std::lock_guard guard(_mutex);
         _persistent = p;
       }
       bool isPersistent() const {
+        std::lock_guard guard(_mutex);
         return _persistent;
       }
       void setSamplesCount(int samples);
@@ -100,6 +108,8 @@ namespace esp32m {
       bool handleRequest(Request &req) override;
 
      private:
+      // Lock order: valve -> GPIO transaction -> I2C bus.
+      mutable std::recursive_mutex _mutex;
       const char *_name;
       std::unique_ptr<valve::IWiring> _wiring;
       std::unique_ptr<valve::ISensor> _sensor;
@@ -109,11 +119,19 @@ namespace esp32m {
       float _value = -1, _targetValue = NAN;
       int _samplesCount = 0, _siOpen = 0, _siClose = 0;
       uint16_t *_samples = nullptr;
-      unsigned long _startTime = 0;
+      uint64_t _startTime = 0, _lastStopTime = 0;
+      uint32_t _commandId = 0;
+      valve::Cmd _command = valve::Cmd::Off;
+      esp_err_t _error = ESP_OK, _stopError = ESP_OK;
+      const char *_fault = nullptr;
+      // A fresh instance must establish Off before it can accept motion.
+      bool _stopPending = true;
       State _state = State::Unknown;
       void setState(State state);
       esp_err_t refreshState();
-      esp_err_t waitFor(State state);
+      esp_err_t stop();
+      esp_err_t fail(esp_err_t error, const char *fault, bool tryStop = true);
+      esp_err_t waitFor(State state, uint32_t commandId);
       void run();
     };
 

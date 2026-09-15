@@ -23,5 +23,7 @@ sdkconfig
 sdkconfig.old
 version.txt
 
+__pycache__/
+
 *.cmd
 

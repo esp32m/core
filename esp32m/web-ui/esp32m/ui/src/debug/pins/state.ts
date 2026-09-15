@@ -1,5 +1,5 @@
 import { PayloadAction, createSlice } from '@reduxjs/toolkit';
-import { TStateRoot } from '@ts-libs/redux';
+import type { TStateRoot } from '@ts-libs/redux';
 import { FeatureType, TPinState } from './types';
 
 export const Name = 'debug-pins';

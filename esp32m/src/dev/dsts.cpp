@@ -154,27 +154,36 @@ namespace esp32m {
     }
 
     esp_err_t Core::readScratchpad(const Probe &probe, Scratchpad &scratchpad) {
-      memset(&scratchpad, 0, sizeof(Scratchpad));
-      ESP_CHECK_RETURN(select(&probe));
-      ESP_CHECK_RETURN(_owb->write(CmdScratchpadRead));
-      ESP_CHECK_RETURN(_owb->read(&scratchpad, sizeof(Scratchpad)));
-      //             logW("scratchpad %02x%02x%02x%02x%02x%02x%02x%02x%02x",
-      //             scratchpad.bytes[0], scratchpad.bytes[1],
-      //             scratchpad.bytes[2], scratchpad.bytes[3],
-      //             scratchpad.bytes[4], scratchpad.bytes[5],
-      //             scratchpad.bytes[6], scratchpad.bytes[7],
-      //             scratchpad.bytes[8]);
-      bool allZeroes = true;
-      for (uint8_t b : scratchpad.bytes)
-        if (b) {
-          allZeroes = false;
-          break;
+      // shared multi-drop 1-wire buses occasionally corrupt a bit (noise,
+      // capacitive loading from multiple devices, etc.); retry a couple of
+      // times before surfacing a CRC/format error so a single glitch doesn't
+      // count as a failed read
+      const int MaxAttempts = 3;
+      esp_err_t err = ESP_OK;
+      for (int attempt = 0; attempt < MaxAttempts; attempt++) {
+        memset(&scratchpad, 0, sizeof(Scratchpad));
+        err = select(&probe);
+        if (err == ESP_OK)
+          err = _owb->write(CmdScratchpadRead);
+        if (err == ESP_OK)
+          err = _owb->read(&scratchpad, sizeof(Scratchpad));
+        if (err == ESP_OK) {
+          bool allZeroes = true;
+          for (uint8_t b : scratchpad.bytes)
+            if (b) {
+              allZeroes = false;
+              break;
+            }
+          err = allZeroes ? ESP_ERR_INVALID_RESPONSE : ESP_OK;
         }
-      if (allZeroes)
-        return ESP_ERR_INVALID_RESPONSE;
-      if (owb::crc(0, scratchpad.bytes, sizeof(Scratchpad)) != 0)
-        return ESP_ERR_INVALID_CRC;
-      return ESP_OK;
+        if (err == ESP_OK)
+          err = owb::crc(0, scratchpad.bytes, sizeof(Scratchpad)) != 0
+                    ? ESP_ERR_INVALID_CRC
+                    : ESP_OK;
+        if (err == ESP_OK)
+          return ESP_OK;
+      }
+      return err;
     }
 
     esp_err_t Core::writeScratchpad(const Probe &probe,
@@ -199,7 +208,7 @@ namespace esp32m {
       else {
         Scratchpad scratchpad;
         ESP_CHECK_RETURN(readScratchpad(probe, scratchpad));
-        Resolution resolution =
+        resolution =
             (Resolution)(((scratchpad.configuration >> 5) & 0x03) +
                          Resolution::R9b);
         if (!validate(resolution))
@@ -271,7 +280,15 @@ namespace esp32m {
     esp_err_t Core::waitForConversion(const Probe &probe) {
       auto ticks = conversionTicks(probe);
       if (probe._parasite) {
+        // parasite-powered devices need an actively driven strong pull-up
+        // for the whole conversion, a passive pull-up resistor alone is
+        // often not enough current for the ADC to complete reliably (per
+        // Maxim AN148); fall back to a plain delay if the driver can't do
+        // this (setStrongPullup() returns ESP_ERR_NOT_SUPPORTED)
+        esp_err_t pullupErr = _owb->setStrongPullup(true);
         vTaskDelay(ticks);
+        if (pullupErr == ESP_OK)
+          ESP_CHECK_RETURN(_owb->setStrongPullup(false));
       } else {
         TickType_t start_ticks = xTaskGetTickCount();
         TickType_t duration_ticks = 0;
@@ -279,8 +296,35 @@ namespace esp32m {
         do {
           vTaskDelay(1);
           ESP_CHECK_RETURN(_owb->read(status));
+          if (status) {
+            // the busy-bit check is a single, un-CRC-protected bit read, so
+            // the same marginal bus signal integrity (noise, capacitive
+            // loading from multiple devices, long wiring) that used to
+            // cause intermittent ESP_ERR_INVALID_CRC on the 8-bit
+            // scratchpad reads can occasionally flip this single bit to
+            // "done" while the sensor is still converting. A genuinely
+            // finished conversion keeps reporting "done" on every
+            // subsequent poll, but a noise-induced false "done" normally
+            // won't repeat - so require a couple of confirming re-reads
+            // before trusting it; this costs a few extra ms only when a
+            // false "done" (or a real one) is seen.
+            const int Confirmations = 2;
+            for (int i = 0; i < Confirmations && status; i++) {
+              vTaskDelay(1);
+              ESP_CHECK_RETURN(_owb->read(status));
+            }
+          }
           duration_ticks = xTaskGetTickCount() - start_ticks;
         } while (status == 0 && duration_ticks < ticks);
+        // a genuine conversion takes close to the full computed duration;
+        // exiting much earlier than that means the busy-bit read is
+        // misreporting "done" (e.g. bus/timing issue) rather than the
+        // sensor actually finishing early
+        if (status != 0 && duration_ticks < ticks / 2)
+          logW(
+              "%s: conversion reported done after only %u/%u ticks - "
+              "reading is likely stale/incorrect",
+              probe.codestr(), (unsigned)duration_ticks, (unsigned)ticks);
         return ESP_OK;
       }
       return ESP_OK;
@@ -329,8 +373,7 @@ namespace esp32m {
         sensor->precision = 2;
         if (probe.name)
           sensor->setTitle(probe.name);
-        auto props = new JsonDocument(
-            /*JSON_OBJECT_SIZE(1) + JSON_STRING_SIZE(strlen(probe.codestr()))*/);
+        auto props = new JsonDocument();
         auto root = props->to<JsonObject>();
         root["code"] =
             (char *)
@@ -352,15 +395,12 @@ namespace esp32m {
             }
           }
         }
-/*      if (changed)
-        sensor::GroupChanged::publish(_sensorGroup);*/
       return true;
     }
 
     JsonDocument *Dsts::getState(RequestContext &ctx) {
       auto &pv = probes();
-      JsonDocument *doc = new JsonDocument(
-          /*JSON_ARRAY_SIZE(pv.size()) + JSON_ARRAY_SIZE(6) * pv.size()*/);
+      JsonDocument *doc = new JsonDocument();
       JsonArray root = doc->to<JsonArray>();
       for (auto &p : pv) {
         auto entry = root.add<JsonArray>();

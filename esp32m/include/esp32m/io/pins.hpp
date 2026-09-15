@@ -14,6 +14,7 @@
 #include <hal/gpio_types.h>
 #include <map>
 #include <mutex>
+#include <vector>
 
 namespace esp32m {
   namespace io {
@@ -344,7 +345,10 @@ namespace esp32m {
     namespace pin {
       class ITxFinalizer {
        public:
+        virtual ~ITxFinalizer() = default;
         virtual esp_err_t commit() = 0;
+        // Discard staged software changes; this cannot undo hardware writes.
+        virtual void abort() {}
       };
 
       class Tx {
@@ -359,28 +363,34 @@ namespace esp32m {
         Type type() const {
           return _type;
         }
-        const ITxFinalizer *getFinalizer() const {
-          return _finalizer;
-        }
+        const ITxFinalizer *getFinalizer() const;
+        bool hasFinalizer(const ITxFinalizer *finalizer) const;
         esp_err_t setFinalizer(ITxFinalizer *finalizer);
-        void setReadPerformed() {
-          _readPerformed = true;
-        }
-        bool getReadPerformed() const {
-          return _readPerformed;
-        }
+        void setReadPerformed(const void *provider = nullptr);
+        bool getReadPerformed(const void *provider = nullptr) const;
+        // Nested scopes share the outer batch. An explicit commit flushes that
+        // batch now, so callers can return actual I/O errors before destruction.
+        esp_err_t commit();
+        // Aborting any nested scope cancels the whole pending batch.
+        void abort();
+        // Providers must also hold this lock for non-transactional accesses.
+        // Always acquire it before provider or bus locks.
+        static std::recursive_mutex &mutex();
         static Tx *current() {
           return _current;
         }
 
        private:
-        std::mutex _mutex;
+        std::unique_lock<std::recursive_mutex> _lock;
         Type _type;
         esp_err_t *_errPtr;
-        ITxFinalizer *_finalizer = nullptr;
-        bool _readPerformed = false;
-        static int _nesting;
-        static Tx *_current;
+        Tx *_previous;
+        Tx *_root;
+        std::vector<ITxFinalizer *> _finalizers;
+        std::vector<const void *> _reads;
+        esp_err_t _error = ESP_OK;
+        bool _aborted = false;
+        static thread_local Tx *_current;
       };
 
     }  // namespace pin

@@ -2,6 +2,8 @@
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/defs.hpp"
 
+#include <driver/uart.h>
+
 namespace esp32m {
   namespace modbus {
 
@@ -206,6 +208,77 @@ namespace esp32m {
           err = mbc_master_send_request(_handle, &req, data);
       }
       return err;
+    }
+
+    esp_err_t Master::transactRaw(const void* request, size_t requestSize,
+                                  void* response, size_t responseCapacity,
+                                  size_t* responseSize,
+                                  uint32_t responseTimeoutMs) {
+      if (!_mutex)
+        return ESP_ERR_INVALID_STATE;
+      if (!request || !requestSize || !response || !responseCapacity ||
+          !responseSize)
+        return ESP_ERR_INVALID_ARG;
+
+      std::lock_guard guard(*_mutex);
+      *responseSize = 0;
+
+      const bool wasRunning = _running;
+      if (!_running)
+        ESP_CHECK_RETURN(startNoLock());
+      ESP_CHECK_RETURN(stopNoLock());
+
+      const auto port = _config.ser_opts.port;
+      esp_err_t result = uart_flush_input(port);
+      if (result == ESP_OK) {
+        const int written = uart_write_bytes(
+            port, static_cast<const char*>(request), requestSize);
+        if (written != static_cast<int>(requestSize))
+          result = ESP_FAIL;
+      }
+
+      const uint32_t timeoutMs =
+          responseTimeoutMs ? responseTimeoutMs : _responseTimeoutMs;
+      TickType_t timeout = pdMS_TO_TICKS(timeoutMs);
+      if (!timeout)
+        timeout = 1;
+      if (result == ESP_OK)
+        result = uart_wait_tx_done(port, timeout);
+      if (result == ESP_OK) {
+        const int received = uart_read_bytes(
+            port, response, responseCapacity, timeout);
+        if (received > 0)
+          *responseSize = static_cast<size_t>(received);
+        else
+          result = received == 0 ? ESP_ERR_TIMEOUT : ESP_FAIL;
+      }
+
+      if (wasRunning) {
+        const auto restartResult = startNoLock();
+        if (result == ESP_OK)
+          result = restartResult;
+      }
+      return result;
+    }
+
+    esp_err_t Master::setBaudrate(uint32_t baud) {
+      if (!baud)
+        return ESP_ERR_INVALID_ARG;
+      if (!_mutex || !_configured)
+        return ESP_ERR_INVALID_STATE;
+
+      std::lock_guard guard(*_mutex);
+      if (_config.ser_opts.baudrate == baud)
+        return ESP_OK;
+
+      const bool wasRunning = _running;
+      if (_handle) {
+        ESP_CHECK_RETURN(stopNoLock());
+        ESP_CHECK_RETURN(mbc_master_delete(_handle));
+        _handle = nullptr;
+      }
+      _config.ser_opts.baudrate = baud;
+      return wasRunning ? startNoLock() : ESP_OK;
     }
 
     namespace master {

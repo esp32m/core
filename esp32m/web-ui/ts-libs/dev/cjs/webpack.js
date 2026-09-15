@@ -69,6 +69,14 @@ const muiLicenseFixLoader = {
         replace: 'function getLicenseErrorMessage(licenseStatus) { return ""; } function _getLicenseErrorMessage(licenseStatus) {',
     },
 };
+// webpack 5.110.2 incorrectly validates MUI imports that become unused after
+// production PropTypes removal (webpack/webpack#21856). Limit the workaround
+// to MUI; keep export-presence validation enabled for application code.
+const muiUnusedImportWorkaround = {
+    test: /\.mjs$/,
+    include: /node_modules[\\/]@mui[\\/]/,
+    parser: { exportsPresence: false },
+};
 const ssdpOptionsFixLoader = {
     test: /default-ssdp-options\.js$/,
     loader: 'string-replace-loader',
@@ -256,13 +264,14 @@ class WebpackConfigBuilder {
             built.push(inlineJsonLoader);
         }
         built.push(muiLicenseFixLoader);
+        built.push(muiUnusedImportWorkaround);
         built.push(bindingsFixLoader);
         built.push(cssLoader);
         built.push(...serialportFixLoaders);
         const url = findModuleRule(rules, 'url-loader');
         if (!url && this.hasWebTargets())
             built.push(inlineImageLoader);
-        // Fix for strict ESM modules (e.g. @mui/material): allow imports without file extensions
+        // Allow extensionless imports from strict ESM modules.
         built.push({ test: /\.m?js$/, resolve: { fullySpecified: false } });
         return { rules: [...rules, ...built], ...rest };
     }

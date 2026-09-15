@@ -5,7 +5,10 @@
 #include "esp32m/sleep.hpp"
 
 #include <esp_task_wdt.h>
+#include <esp_timer.h>
 #include <math.h>
+
+#include <algorithm>
 
 namespace esp32m {
 
@@ -29,16 +32,16 @@ namespace esp32m {
         *pste = (EventPollSensorsTime*)&ev;
       return result;
     }
-    void record(unsigned long next) {
+    void record(uint64_t next) {
       if (next < _next)
         _next = next;
     }
-    unsigned long getNext() {
+    uint64_t getNext() {
       return _next;
     }
 
    private:
-    unsigned long _next = ULONG_MAX;
+    uint64_t _next = UINT64_MAX;
     constexpr static const char* Type = "poll-sensors-time";
   };
 
@@ -57,15 +60,16 @@ namespace esp32m {
     else if (EventPollSensors::is(ev) && shouldPollSensors()) {
       if (sensorsReady() && !pollSensors())
         resetSensors();
-      _sensorsPolledAt = millis();
-      /*logI("sensors polled at %d, next poll at %d", _sensorsPolledAt,
-           nextSensorsPollTime());*/
+      _sensorsPolledAt = esp_timer_get_time() / 1000ULL;
     }
+  }
+
+  bool Device::shouldPollSensors() {
+    return esp_timer_get_time() / 1000ULL >= nextSensorsPollTime();
   }
 
   void Device::setupSensorPollTask() {
     static TaskHandle_t task = nullptr;
-    // static Sleeper sleeper;
     static EventPollSensors ev;
     if (task)
       xTaskNotifyGive(task);
@@ -78,27 +82,32 @@ namespace esp32m {
             });
             esp_task_wdt_add(NULL);
             for (;;) {
-              int sleepTime = 0;
+              uint64_t sleepTime = 0;
               esp_task_wdt_reset();
               if (App::initialized()) {
                 EventPollSensorsTime pste;
                 pste.publish();
                 auto next = pste.getNext();
-                auto current = millis();
-                if (next < current) {
+                auto current = esp_timer_get_time() / 1000ULL;
+                if (next <= current) {
                   locks::Guard guard(net::ota::Name);
                   ev.publish();
                 } else
-                  sleepTime = next - current;  // sleeper.sleep();
-                /*logi("next poll at %d, current time %d, sleep %d", next,
-                     current, sleepTime);*/
+                  sleepTime = next - current;
               } else
                 sleepTime = 1000;
-              auto wdt = App::instance().wdtTimeout() - 100;
-              if (sleepTime > wdt)
-                sleepTime = wdt;
-              if (sleepTime > 0)
-                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleepTime));
+              // wdtTimeout() is in seconds. Wake at least once per second,
+              // including when there are no deadlines (UINT64_MAX), and cap
+              // the 64-bit duration before converting it to RTOS ticks.
+              const uint64_t wdtMs =
+                  uint64_t(App::instance().wdtTimeout()) * 1000;
+              const uint64_t maxSleep =
+                  wdtMs > 100 ? std::min<uint64_t>(1000, wdtMs - 100) : 1;
+              sleepTime = std::min<uint64_t>(sleepTime, maxSleep);
+              if (sleepTime > 0) {
+                const auto ticks = pdMS_TO_TICKS(uint32_t(sleepTime));
+                ulTaskNotifyTake(pdTRUE, std::max<TickType_t>(1, ticks));
+              }
             }
           },
           "m/sensors", 4096, nullptr, 1, &task);

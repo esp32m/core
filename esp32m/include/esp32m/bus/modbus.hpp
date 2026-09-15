@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <mutex>
 #include "esp32m/logging.hpp"
 
@@ -61,6 +62,21 @@ namespace esp32m {
       esp_err_t stop() override;
       esp_err_t request(uint8_t addr, Command command, uint16_t reg_start,
                         uint16_t reg_size, void* data);
+
+      /** Perform a raw serial transaction while the Modbus controller is
+       * paused. The caller supplies and validates the complete RTU frames,
+       * including CRC. This is intended for vendor commands that cannot be
+       * represented by mb_param_request_t.
+       */
+      esp_err_t transactRaw(const void* request, size_t requestSize,
+                            void* response, size_t responseCapacity,
+                            size_t* responseSize,
+                            uint32_t responseTimeoutMs = 0);
+
+      /** Change the serial baud rate, recreating a running controller so the
+       * new communication settings take effect immediately.
+       */
+      esp_err_t setBaudrate(uint32_t baud);
 
      private:
       Master() {}

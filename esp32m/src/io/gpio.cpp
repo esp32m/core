@@ -409,10 +409,10 @@ namespace esp32m {
       static esp_err_t create(Pin *pin, pin::Feature **feature) {
         dac_channel_t channel;
         switch (pin->num()) {
-          case DAC_CHANNEL_1_GPIO_NUM:
+          case DAC_CHAN0_GPIO_NUM:
             channel = DAC_CHAN_0;
             break;
-          case DAC_CHANNEL_2_GPIO_NUM:
+          case DAC_CHAN1_GPIO_NUM:
             channel = DAC_CHAN_1;
             break;
           default:
@@ -776,7 +776,7 @@ namespace esp32m {
                      pin::Flags::OpenDrain | pin::Flags::PullDown |
                      pin::Flags::LEDC;
 #if SOC_DAC_SUPPORTED
-      if (num == DAC_CHANNEL_1_GPIO_NUM || num == DAC_CHANNEL_2_GPIO_NUM)
+      if (num == DAC_CHAN0_GPIO_NUM || num == DAC_CHAN1_GPIO_NUM)
         _features |= pin::Flags::DAC;
 #endif
       adc_unit_t unit;

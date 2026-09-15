@@ -12,15 +12,15 @@
   },
   "devDependencies": {
     "@ts-libs/dev": "*",
-    "webpack": "^5.107.1",
-    "webpack-cli": "^7.0.2",
-    "webpack-dev-server": "^5.2.4"
+    "webpack": "^5.110.3",
+    "webpack-cli": "^7.2.3",
+    "webpack-dev-server": "^6.0.0"
   },
   "dependencies": {
     "@esp32m/ui": "*",
     "@ts-libs/ui-app": "*",
-    "lodash": "^4.17.21",
-    "react": "^19.2.6"
+    "lodash": "^4.18.1",
+    "react": "^19.3.0"
   },
-  "packageManager": "yarn@4.15.0"
+  "packageManager": "yarn@4.18.0"
 }

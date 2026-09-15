@@ -144,6 +144,15 @@ menu "ESP32 Manager configuration"
         default 0 if ESP32M_UI_BUILD_FULL
         default 1 if ESP32M_UI_BUILD_ONCE
         default 2 if ESP32M_UI_BUILD_NEVER
+
+    config ESP32M_UI_TASK_STACK_SIZE
+        int "UI worker task stack size (bytes)"
+        range 4096 32768
+        default 6144
+        help
+            Stack size for the m/ui task that dispatches WebSocket requests and
+            serializes responses. Applications with larger device state or
+            request handlers may need to increase this value.
         
     menu "UI HTTP server basic authentication"
 

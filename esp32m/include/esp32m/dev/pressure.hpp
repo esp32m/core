@@ -36,6 +36,9 @@ namespace esp32m {
       void setVdiv(float value) {
         _vdiv = value;
       }
+      void setUnit(const char *value) {
+        _pressure.unit = value;
+      }
 
      protected:
       const JsonVariantConst descriptor() const override {

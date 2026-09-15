@@ -1,6 +1,6 @@
 import { PayloadAction, createSelector, createSlice } from '@reduxjs/toolkit';
 import { TSnackItem } from './types';
-import { TStateRoot } from '@ts-libs/redux';
+import type { TStateRoot } from '@ts-libs/redux';
 
 export const Name = 'ui-snack';
 

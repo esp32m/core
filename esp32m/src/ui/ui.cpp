@@ -186,8 +186,9 @@ namespace esp32m {
     if (EventInit::is(ev, 0)) {
       if (!ui::_errors.size())
         ui::_errors.add("busy");
-      xTaskCreate([](void* self) { ((Ui*)self)->run(); }, "m/ui", 1024 * 6,
-                  this, tskIDLE_PRIORITY, &_task);
+      xTaskCreate([](void* self) { ((Ui*)self)->run(); }, "m/ui",
+                  CONFIG_ESP32M_UI_TASK_STACK_SIZE, this, tskIDLE_PRIORITY,
+                  &_task);
       return;
     }
     Broadcast* b;

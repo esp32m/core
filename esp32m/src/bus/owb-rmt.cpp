@@ -19,9 +19,12 @@ namespace esp32m {
         .level1 = 1};
 
     const static rmt_symbol_word_t sbit1 = {
-        .duration0 = 6,  // DurationStart,
+        .duration0 = 2,  // DurationStart, keep short so the bus has more
+                         // time to recover via the pull-up before the
+                         // sensor's sample point - important when several
+                         // devices share the bus and add capacitance
         .level0 = 0,
-        .duration1 = 64,  // DurationBit + DurationRecovery,
+        .duration1 = 68,  // DurationBit + DurationRecovery,
         .level1 = 1};
 
     const unsigned int DurationResetPulse = 480;
@@ -125,6 +128,19 @@ namespace esp32m {
         ESP_CHECK_RETURN(_tx->wait());
         return ESP_OK;
       }
+      esp_err_t setStrongPullup(bool enable) override {
+        ESP_CHECK_RETURN(ensureReady());
+        // the bus is idle-high (RMT tx channel is configured with
+        // eot_level=1), so as long as nothing is transmitting, switching the
+        // pad out of open-drain mode turns that idle-high into an actively
+        // driven high level - i.e. a strong pull-up, without needing to
+        // touch the RMT channel/GPIO-matrix routing at all. Needed for
+        // parasite-powered devices (e.g. DS18B20) during conversion, where
+        // the passive pull-up resistor alone can't supply enough current.
+        if (enable)
+          return gpio_od_disable(pin());
+        return gpio_od_enable(pin());
+      }
 
      private:
       io::RmtRx *_rx;
@@ -173,6 +189,11 @@ namespace esp32m {
           ESP_CHECK_RETURN(_rx->enable());
           ESP_CHECK_RETURN(_tx->enable());
           ESP_CHECK_RETURN(gpio_od_enable(pin()));
+          // make sure the bus has a known pull-up (backstop for/supplement
+          // to any external resistor); without this the pin's pull
+          // configuration is left at whatever reset default the target has,
+          // which is not guaranteed to be a pull-up on every chip/pin
+          gpio_set_pull_mode(pin(), GPIO_PULLUP_ONLY);
           _ready = true;
         }
         return ESP_OK;

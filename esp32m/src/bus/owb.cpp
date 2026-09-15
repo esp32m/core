@@ -307,4 +307,8 @@ namespace esp32m {
     return write(code.bytes, sizeof(code.bytes));
   }
 
+  esp_err_t Owb::setStrongPullup(bool enable) {
+    return _driver->setStrongPullup(enable);
+  }
+
 }  // namespace esp32m

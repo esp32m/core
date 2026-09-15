@@ -4,6 +4,8 @@
 #include <mutex>
 
 #include <driver/i2c_master.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "esp32m/base.hpp"
 #include "esp32m/defs.hpp"
@@ -18,9 +20,11 @@ namespace esp32m {
     class MasterBus {
      public:
       ~MasterBus() {
+        // Registry operations always precede the per-bus lock.
+        std::lock_guard busesLock(_busesMutex);
+        std::lock_guard busLock(_mutex);
         assert(_devices.size() == 0);
         if (_handle) {
-          std::lock_guard lock(_busesMutex);
           _buses.erase(_handle);
           ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_del_master_bus(_handle));
           _handle = nullptr;
@@ -28,11 +32,19 @@ namespace esp32m {
       }
 
       esp_err_t probe(uint16_t address, int xfer_timeout_ms = 100) const {
+        std::lock_guard lock(_mutex);
         return i2c_master_probe(_handle, address, xfer_timeout_ms);
       }
 
       esp_err_t reset() {
+        std::lock_guard lock(_mutex);
         return i2c_master_bus_reset(_handle);
+      }
+
+      // Synchronous operations, including recovery, share this lock. Owners
+      // must keep the bus/devices alive while other tasks use them.
+      std::recursive_mutex& mutex() const {
+        return _mutex;
       }
 
       esp_err_t find(uint16_t address, MasterDev** dev = nullptr);
@@ -77,7 +89,7 @@ namespace esp32m {
       i2c_master_bus_handle_t _handle;
       i2c_master_bus_config_t _config;
       std::map<i2c_master_dev_handle_t, MasterDev*> _devices;
-      std::mutex _devicesMutex;
+      mutable std::recursive_mutex _mutex;
       static std::map<i2c_master_bus_handle_t, MasterBus*> _buses;
       static std::mutex _busesMutex;
       friend class MasterDev;
@@ -86,14 +98,16 @@ namespace esp32m {
     class MasterDev : public log::Loggable {
      public:
       virtual ~MasterDev() {
+        std::lock_guard lock(_bus->_mutex);
         if (_handle) {
-          std::lock_guard lock(_bus->_devicesMutex);
           _bus->_devices.erase(_handle);
           //          logw("removing I2C device %x", _config.device_address);
           int attempts = 5;
           esp_err_t res;
           while (attempts-- > 0) {
-            i2c_master_bus_wait_all_done(_bus->_handle, _timeout);
+            res = i2c_master_bus_wait_all_done(_bus->_handle, _timeout);
+            if (res != ESP_OK)
+              break;
             res = i2c_master_bus_rm_device(_handle);
             if (res == ESP_OK)
               break;
@@ -109,35 +123,62 @@ namespace esp32m {
       i2c_master_dev_handle_t handle() const {
         return _handle;
       }
+      // Hold this lock around any synchronous SDK call using handle(), or
+      // around a sequence which must not interleave with other bus users.
+      // Asynchronous SDK transfers are not supported by this wrapper.
+      std::recursive_mutex& mutex() const {
+        return _bus->mutex();
+      }
       uint16_t address() const {
         return _config.device_address;
       }
       int getTimeout() const {
+        std::lock_guard lock(_bus->_mutex);
         return _timeout;
       }
       void setTimeout(int ms) {
+        std::lock_guard lock(_bus->_mutex);
         _timeout = ms;
       }
       int getRetries() const {
+        std::lock_guard lock(_bus->_mutex);
         return _retries;
       }
       void setRetries(int retries) {
-        _retries = retries;
+        std::lock_guard lock(_bus->_mutex);
+        _retries = retries < 0 ? 0 : retries;
+      }
+      bool getRetryInvalidResponse() const {
+        std::lock_guard lock(_bus->_mutex);
+        return _retryInvalidResponse;
+      }
+      // Some IDF versions report bus timeouts as INVALID_RESPONSE. Retrying
+      // that result can replay an accepted write, so opt in only for devices
+      // whose operations are safe to repeat (for example GPIO registers).
+      void setRetryInvalidResponse(bool retry) {
+        std::lock_guard lock(_bus->_mutex);
+        _retryInvalidResponse = retry;
       }
       Endian getEndianness() const {
+        std::lock_guard lock(_bus->_mutex);
         return _endianness;
       }
       void setEndianness(Endian endianness) {
+        std::lock_guard lock(_bus->_mutex);
         _endianness = endianness;
       }
       bool isResponsive() const {
+        std::lock_guard lock(_bus->_mutex);
         return _commFailCount < 5 ||
-               (millis() - _lastSuccessfulComm < _timeout * 100);
+               (_timeout > 0 &&
+                millis() - _lastSuccessfulComm <
+                    static_cast<uint64_t>(_timeout) * 100);
       }
       esp_err_t read(const void* out_data, size_t out_size, void* in_data,
                      size_t in_size)
 
       {
+        std::lock_guard lock(_bus->_mutex);
         esp_err_t res = withRetries([&]() {
           if (out_data && out_size)
             return i2c_master_transmit_receive(
@@ -150,6 +191,7 @@ namespace esp32m {
       }
       esp_err_t write(const void* out_reg, size_t out_reg_size,
                       const void* out_data, size_t out_size) {
+        std::lock_guard lock(_bus->_mutex);
         esp_err_t res = withRetries([&]() {
           esp_err_t local = ESP_ERR_INVALID_ARG;
           if (out_reg && out_reg_size && out_data && out_size) {
@@ -184,6 +226,7 @@ namespace esp32m {
       }
       template <class T>
       esp_err_t read(uint8_t reg, T& value) {
+        std::lock_guard lock(_bus->_mutex);
         T v;
         ESP_CHECK_RETURN(read(&reg, 1, &v, sizeof(T)));
         value = fromEndian(_endianness, v);
@@ -191,16 +234,21 @@ namespace esp32m {
       }
       template <class T>
       esp_err_t write(uint8_t reg, const T value) {
+        std::lock_guard lock(_bus->_mutex);
         T v = toEndian(_endianness, value);
         return write(&reg, 1, &v, sizeof(T));
       }
 
       static esp_err_t New(i2c_device_config_t config, MasterBus* bus,
                            MasterDev** dev) {
+        if (!dev)
+          return ESP_ERR_INVALID_ARG;
+        *dev = nullptr;
         if (!bus)
           bus = MasterBus::getDefault();
         if (!bus)
           return ESP_FAIL;
+        std::lock_guard lock(bus->_mutex);
         i2c_master_dev_handle_t handle;
         ESP_CHECK_RETURN(
             i2c_master_bus_add_device(bus->_handle, &config, &handle));
@@ -225,6 +273,7 @@ namespace esp32m {
       std::string _name;
       int _timeout = 30;
       int _retries = 3;
+      bool _retryInvalidResponse = false;
       Endian _endianness = Endian::Big;
       const i2c_device_config_t _config;
       i2c_master_dev_handle_t _handle;
@@ -233,7 +282,6 @@ namespace esp32m {
       MasterDev(MasterBus* bus, const i2c_device_config_t& config,
                 i2c_master_dev_handle_t handle)
           : _bus(bus), _config(config), _handle(handle) {
-        std::lock_guard lock(bus->_devicesMutex);
         bus->_devices[handle] = this;
         _name = string_printf("I2C%d[0x%02" PRIx8 "]", _bus->_config.i2c_port,
                               _config.device_address);
@@ -245,27 +293,30 @@ namespace esp32m {
         if (res == ESP_OK) {
           _lastSuccessfulComm = now;
           _commFailCount = 0;
-        } else
+        } else if (_commFailCount < 5)
           _commFailCount++;
         return res;
       }
 
       template <class F>
       esp_err_t withRetries(F&& fn) {
-        int attempts_left = _retries + 1;
-        esp_err_t res = ESP_FAIL;
-        while (attempts_left-- > 0) {
-          res = fn();
-          if (res == ESP_OK)
-            return ESP_OK;
-          if (res == ESP_ERR_TIMEOUT && attempts_left > 0) {
-            ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_master_bus_reset(_bus->_handle));
-            delay(2);
-            continue;
-          }
-          break;
+        // The caller holds the bus lock through the initial attempt, reset,
+        // backoff and retries, so another device cannot transfer during reset.
+        int retries_left = _retries;
+        while (true) {
+          auto res = fn();
+          const bool retryable = res == ESP_ERR_TIMEOUT ||
+                                 (_retryInvalidResponse &&
+                                  res == ESP_ERR_INVALID_RESPONSE);
+          if (!retryable || retries_left == 0)
+            return res;
+          --retries_left;
+          auto resetResult = _bus->reset();
+          if (resetResult != ESP_OK)
+            return resetResult;
+          const TickType_t ticks = pdMS_TO_TICKS(2);
+          vTaskDelay(ticks ? ticks : 1);
         }
-        return res;
       }
     };
 

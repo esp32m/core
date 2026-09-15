@@ -12,6 +12,7 @@
 #include "esp32m/json.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <type_traits>
@@ -36,7 +37,7 @@ namespace esp32m {
     }
 
     void setSensorsPollInterval(int intervalMs) {
-      _sensorsPollInterval = intervalMs;
+      _sensorsPollInterval = intervalMs > 0 ? intervalMs : 1;
     };
     int getSensorsPollInterval() const {
       return _sensorsPollInterval;
@@ -101,17 +102,16 @@ namespace esp32m {
     virtual bool pollSensors() {
       return true;
     };
-    virtual unsigned long nextSensorsPollTime() {
+    // Absolute milliseconds from esp_timer_get_time(), not 32-bit millis().
+    virtual uint64_t nextSensorsPollTime() {
       return _sensorsPolledAt + _sensorsPollInterval;
     };
-    virtual bool shouldPollSensors() {
-      return millis() >= nextSensorsPollTime();
-    };
+    virtual bool shouldPollSensors();
 
    private:
     bool _sensorsReady = false;
     unsigned long _sensorsInitAt = 0;
-    unsigned long _sensorsPolledAt = 0;
+    uint64_t _sensorsPolledAt = 0;
     unsigned int _reinitDelay = 10000;
     int _sensorsPollInterval = 1000;
     mutable std::mutex _componentsStateMutex;

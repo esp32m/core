@@ -23,19 +23,24 @@ namespace esp32m {
       esp_err_t run(Mode mode, float speed = 1);
 
       void setPersistent(bool p) {
+        std::lock_guard guard(io::pin::Tx::mutex());
         _persistent = p;
       }
       bool isPersistent() const {
+        std::lock_guard guard(io::pin::Tx::mutex());
         return _persistent;
       }
 
       float getDuty() const {
+        std::lock_guard guard(io::pin::Tx::mutex());
         return _duty;
       }
       uint32_t getFreq() const {
+        std::lock_guard guard(io::pin::Tx::mutex());
         return _freq;
       }
       esp_err_t setPwm(uint freq, float duty) {
+        std::lock_guard guard(io::pin::Tx::mutex());
         if (duty < 0)
           duty = 0;
         if (duty > 1)
@@ -46,15 +51,17 @@ namespace esp32m {
         _duty = duty;
         _freq = freq;
         if (wasPwm != isPwm())
-          init();
+          return init();
         return ERR_OK;
       }
       esp_err_t setSpeed(float value) {
+        std::lock_guard guard(io::pin::Tx::mutex());
         return (value > 0 && value < 1) ? setPwm(_freq == 0 ? 50 : _freq, value)
                                         : setPwm(0, 0);
       }
 
       void setCurrentSensor(io::CurrentSensor *cs) {
+        std::lock_guard guard(io::pin::Tx::mutex());
         _cs = cs;
       }
 
@@ -78,6 +85,7 @@ namespace esp32m {
       float _duty = 0;
       uint _freq = 0;
       bool _persistent = true;
+      bool _initialized = false;
       Mode _mode = Off;
       io::CurrentSensor *_cs = nullptr;
       esp_err_t init();

@@ -144,6 +144,7 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::init() {
+      std::lock_guard guard(pin::Tx::mutex());
       _i2c->setEndianness(Endian::Little);
       ESP_CHECK_RETURN(reset(true));
       uint8_t id;
@@ -166,6 +167,7 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::setRst(io::IPin *pin) {
+      std::lock_guard guard(pin::Tx::mutex());
       _rst = pin ? pin->digital() : nullptr;
       if (_rst)
         ESP_CHECK_RETURN(_rst->write(true));
@@ -173,6 +175,7 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::reset(bool hard) {
+      std::lock_guard guard(pin::Tx::mutex());
       if (hard && _rst) {
         ESP_CHECK_RETURN(_rst->write(false));
         delayUs(20);
@@ -184,6 +187,7 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::analogWrite(int pin, float value) {
+      std::lock_guard guard(pin::Tx::mutex());
       ESP_CHECK_RETURN(setPinMode(pin, aw9523::PinMode::DAC));
       uint8_t reg;
       // See Table 13. 256 step dimming control register
@@ -200,14 +204,15 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::readPin(int pin, bool &value) {
+      std::lock_guard guard(pin::Tx::mutex());
       uint16_t mask = 1 << pin;
       if (_cfg & mask) {
         auto tx = pin::Tx::current();
-        if (!tx || ((tx->type() & pin::Tx::Type::Read) != 0 &&
-                    !tx->getReadPerformed())) {
+        if (!tx || (tx->type() & pin::Tx::Type::Read) == 0 ||
+            !tx->getReadPerformed(this)) {
           ESP_CHECK_RETURN(readInput());
           if (tx)
-            tx->setReadPerformed();
+            tx->setReadPerformed(this);
         }
         value = _input & mask;
       } else if (_mode & mask) {
@@ -218,19 +223,25 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::writePin(int pin, bool value) {
+      std::lock_guard guard(pin::Tx::mutex());
       auto tx = pin::Tx::current();
+      if (tx && (tx->type() & pin::Tx::Type::Write) != 0)
+        ESP_CHECK_RETURN(tx->setFinalizer(this));
+      if (!_pending) {
+        _beforeWrite = _out;
+        _pending = true;
+      }
       if (value)
         _out |= (1 << pin);
       else
         _out &= ~(1 << pin);
       if (!tx || ((tx->type() & pin::Tx::Type::Write) == 0))
         return commit();
-      if (!tx->getFinalizer())
-        tx->setFinalizer(this);
       return ESP_OK;
     }
 
     esp_err_t Aw9523::setPinMode(int pin, aw9523::PinMode pm) {
+      std::lock_guard guard(pin::Tx::mutex());
       uint16_t mode = _mode;
       uint16_t cfg = _cfg;
       uint16_t mask = 1 << pin;
@@ -258,19 +269,34 @@ namespace esp32m {
     }
 
     esp_err_t Aw9523::readInput() {
+      std::lock_guard guard(pin::Tx::mutex());
       ESP_CHECK_RETURN(_i2c->read(aw9523::Register::InP0, _input));
       return ESP_OK;
     }
 
     esp_err_t Aw9523::writeOutput() {
+      std::lock_guard guard(pin::Tx::mutex());
       ESP_CHECK_RETURN(_i2c->write(aw9523::Register::OutP0, _out));
       return ESP_OK;
     }
 
     esp_err_t Aw9523::commit() {
-      return writeOutput();
+      std::lock_guard guard(pin::Tx::mutex());
+      auto err = writeOutput();
+      if (err)
+        abort();
+      else
+        _pending = false;
+      return err;
+    }
+    void Aw9523::abort() {
+      std::lock_guard guard(pin::Tx::mutex());
+      if (_pending)
+        _out = _beforeWrite;
+      _pending = false;
     }
     esp_err_t Aw9523::setP0PushPull(bool enable) {
+      std::lock_guard guard(pin::Tx::mutex());
       uint16_t gcr = _gcr;
       if (enable)
         gcr |= BIT4;
@@ -279,6 +305,7 @@ namespace esp32m {
       return updateGcr(gcr);
     }
     esp_err_t Aw9523::updateGcr(uint16_t gcr) {
+      std::lock_guard guard(pin::Tx::mutex());
       if (gcr != _gcr)
         ESP_CHECK_RETURN(_i2c->write(aw9523::Register::Gcr, _gcr = gcr));
       return ESP_OK;
