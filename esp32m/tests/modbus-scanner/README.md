@@ -14,6 +14,7 @@ and master are faked. The fake master intentionally has no UART reconfiguration
 methods. Tests never open a serial port, issue network requests or operate devices.
 
 The UI runner transpiles the actual TSX/types/helpers with workspace Babel and
-uses deterministic hooks, time and backend responses. It verifies presets are
-read-only, single-address requests, cancel/reload, stale status, input validation,
-confirmed writes, correct FC16, and lost-response handling without retries.
+uses deterministic hooks, time and backend responses. It verifies generic bus
+and single-address scans, cancel/reload, stale status, input validation, confirmed
+writes, correct FC16, and lost-response handling without retries. It also guards
+against device-specific names and register descriptions appearing in the UI.

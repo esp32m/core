@@ -1,4 +1,5 @@
 import { PayloadAction, createSlice } from '@reduxjs/toolkit';
+import type { Draft } from '@reduxjs/toolkit';
 import {
   ConnectionStatus,
   actions as publicActions,
@@ -46,14 +47,20 @@ const slice = createSlice({
   name: Name,
   initialState,
   reducers: {
-    status: (state, { payload }: PayloadAction<ConnectionStatus>) => {
+    status: (
+      state: Draft<TBackendState>,
+      { payload }: PayloadAction<ConnectionStatus>
+    ) => {
       state.status = payload;
       if (payload == ConnectionStatus.Connected) delete state.error;
     },
-    error: (state, { payload }: PayloadAction<unknown>) => {
+    error: (state: Draft<TBackendState>, { payload }: PayloadAction<unknown>) => {
       state.error = payload;
     },
-    stateUpdate: (state, { payload }: PayloadAction<TStateUpdate>) => {
+    stateUpdate: (
+      state: Draft<TBackendState>,
+      { payload }: PayloadAction<TStateUpdate>
+    ) => {
       const { target, key, state: value, live, stream, rev, error } = payload;
       const module = (state.modules[target] ??= {});
       const views = (module.views ??= {});
@@ -69,21 +76,21 @@ const slice = createSlice({
       }
     },
     moduleState: (
-      state,
+      state: Draft<TBackendState>,
       { payload: [name, moduleState] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = (state.modules[name] ??= {});
       (ds as any).state = moduleState;
     },
     moduleConfig: (
-      state,
+      state: Draft<TBackendState>,
       { payload: [name, config] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = (state.modules[name] ??= {});
       (ds as any).config = config;
     },
     moduleInfo: (
-      state,
+      state: Draft<TBackendState>,
       { payload: [name, info] }: PayloadAction<[string, TJsonValue]>
     ) => {
       const ds = (state.modules[name] ??= {});

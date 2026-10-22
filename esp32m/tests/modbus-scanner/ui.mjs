@@ -98,15 +98,16 @@ function harness(initial={}) {
 }
 {
  const h=harness();
- await h.click('Flomarvel · address 1');
- assert.equal(h.calls.length,0); // Preset cannot send or actuate anything.
+ assert.doesNotMatch(h.render().text,/Flomarvel|actual angle/i);
  assert.equal(h.find('TextField','From address').props.value,'1');
- assert.equal(h.find('TextField','To address').props.value,'1');
+ assert.equal(h.find('TextField','To address').props.value,'247');
+ h.edit('To address','1');
+ h.edit('Start register / coil','3');
  assert.equal(h.find('TextField','Start register / coil').props.value,'3');
  await h.click('Scan');
  assert.deepEqual(h.calls[0],{name:'modbus',command:'scan',data:{from:1,to:1,cmd:3,regs:3,regc:1}});
  assert.match(h.render().text,/Reply received/);assert.match(h.render().text,/8908/);
- await h.click('Flomarvel · address 3');await h.click('Scan');
+ h.edit('From address','3');h.edit('To address','3');await h.click('Scan');
  assert.equal(h.calls[1].data.from,3);assert.equal(h.calls[1].data.to,3);
  h.edit('Start register / coil','99');
  assert.match(h.render().text,/start\s+3\s/); // Results retain actual request parameters.
@@ -120,7 +121,7 @@ function harness(initial={}) {
  assert.match(h.render().text,/cancelled/);
 }
 {
- const h=harness();await h.click('Flomarvel · address 1');
+ const h=harness();h.edit('To address','1');h.edit('Start register / coil','3');
  let release;const waiting=new Promise(resolve=>{release=resolve;});
  h.setHandler(async()=>{await waiting;h.setState({job:1,total:1,scanned:1,progress:100});return {data:{}};});
  const button=h.find('Button','Scan');
@@ -171,4 +172,4 @@ function harness(initial={}) {
  const types=h.load('types.ts');
  assert.equal(types.WriteCommands.find(([,label])=>label==='Write registers (16)')[0],16);
 }
-console.log('Modbus scanner UI: presets, single-address probe, retained results, cancel, reload, stale status, reads, confirmed writes and failure handling passed');
+console.log('Modbus scanner UI: generic scans, retained results, cancel, reload, stale status, reads, confirmed writes and failure handling passed');

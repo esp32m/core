@@ -41,11 +41,6 @@ export default function Scanner() {
     initialized.current = true; setConfirm(false);
     setInput(v => ({ ...v, [key]: value }));
   };
-  const preset = (address: number) => {
-    initialized.current = true;
-    setTab(0); setReadCmd(3); setConfirm(false);
-    setInput(v => ({ ...v, from: String(address), to: String(address), addr: String(address), regs: '3', regc: '1' }));
-  };
   const request = requestFor(tab, input, tab === 2 ? writeCmd : readCmd, confirm);
   const submit = async () => {
     if (blocked || !request || active.current) return;
@@ -88,14 +83,6 @@ export default function Scanner() {
           Scans add traffic and expected timeouts to RS485 health statistics; reset the comparison afterward.
         </Typography>
         {stale && <Alert severity="warning">Scanner status is stale. Reconnect before starting another operation.</Alert>}
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button disabled={blocked} onClick={() => preset(1)}>Flomarvel · address 1</Button>
-          <Button disabled={blocked} onClick={() => preset(3)}>Flomarvel · address 3</Button>
-        </Stack>
-        <Typography variant="caption">
-          Presets select a read-only FC03 probe of register 3 (actual angle ×100). Click Scan to send.
-          A reply confirms this address responds, not which physical device replied.
-        </Typography>
         <Tabs value={tab} onChange={(_, value) => { setTab(value); setConfirm(false); }}>
           <Tab label="Scan" disabled={busy} /><Tab label="Read" disabled={busy} /><Tab label="Write" disabled={busy} />
         </Tabs>
