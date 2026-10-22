@@ -1,4 +1,70 @@
 menu "ESP32 Manager configuration"
+
+    menu "Stack diagnostics"
+
+        config ESP32M_STACK_REPORT
+            bool "Generate project-wide compiler stack reports"
+            depends on IDF_TOOLCHAIN_GCC
+            default n
+            help
+                Optional function-frame diagnostics, disabled by default.
+                Compile all source-built C/C++ components with -fstack-usage
+                and generate stack-usage.txt / stack-usage.json in the build
+                directory. Reports describe individual function frames and
+                coverage gaps; they do not prove whole-task stack bounds.
+                Precompiled libraries and separately built bootloaders are
+                outside this report.
+
+        config ESP32M_STACK_MONITOR
+            bool "Warn about low remaining stack in running tasks"
+            depends on !IDF_TARGET_LINUX
+            select FREERTOS_USE_TRACE_FACILITY
+            default y
+            help
+                Periodically inspect all currently live tasks from the existing
+                application worker and warn through esp32m logging when their
+                historical minimum free stack reaches the configured threshold.
+                No extra task is created. Short-lived tasks can finish between
+                samples; this monitor does not prevent or prove absence of an
+                overflow. Requires bounded heap for snapshots and warning state.
+
+        config ESP32M_STACK_MONITOR_INTERVAL_SECONDS
+            int "Stack monitor sample interval (seconds)"
+            depends on ESP32M_STACK_MONITOR
+            range 1 86400
+            default 30
+
+        config ESP32M_STACK_MONITOR_WARN_FREE_BYTES
+            int "Warn at or below minimum free stack (bytes)"
+            depends on ESP32M_STACK_MONITOR
+            range 64 32768
+            default 512
+            help
+                Absolute minimum-free-stack threshold for all sampled tasks.
+                Task-specific release reserves should usually be larger for
+                complex or actively changing tasks. ESP-IDF reports bytes.
+
+        config ESP32M_STACK_MONITOR_WARN_DELTA_BYTES
+            int "Warn again after additional stack reserve loss (bytes)"
+            depends on ESP32M_STACK_MONITOR
+            range 1 8192
+            default 128
+            help
+                After the first low-stack warning, require this further drop
+                before warning again for the same task. Reaching zero always
+                qualifies. Unchanged readings do not repeat warnings.
+
+        config ESP32M_STACK_MONITOR_MAX_TASKS
+            int "Maximum tasks tracked by stack monitor"
+            depends on ESP32M_STACK_MONITOR
+            range 16 512
+            default 128
+            help
+                Bounds snapshot and warning-state memory. If more tasks exist,
+                the monitor reports unavailable coverage rather than silently
+                claiming that every task was inspected.
+
+    endmenu
     
     menu "Logging"
 
@@ -36,6 +102,13 @@ menu "ESP32 Manager configuration"
         config ESP32M_LOG_CONSOLE
             bool "Send log output to UART0 serial console"
             default y
+
+        config ESP32M_LOG_STORAGE
+            bool "Enable persistent log storage and System log browser"
+            default y
+            help
+                Provides bounded filesystem logging, browsing and export.
+                Capture is initially disabled and can be enabled in System.
 
         config ESP32M_LOG_UDP
             bool "Send log output to remote server over UDP"
@@ -145,10 +218,21 @@ menu "ESP32 Manager configuration"
         default 1 if ESP32M_UI_BUILD_ONCE
         default 2 if ESP32M_UI_BUILD_NEVER
 
+    config ESP32M_UI_WS_HANDSHAKE_CALLBACKS
+        bool
+        default y
+        depends on HTTPD_WS_SUPPORT
+        select HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT
+        select HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT
+        help
+            Authenticate before a WebSocket upgrade and establish transport
+            session identity after it. ESP-IDF 6.1 does not call the normal
+            URI handler during the upgrade itself.
+
     config ESP32M_UI_TASK_STACK_SIZE
         int "UI worker task stack size (bytes)"
         range 4096 32768
-        default 6144
+        default 8192
         help
             Stack size for the m/ui task that dispatches WebSocket requests and
             serializes responses. Applications with larger device state or

@@ -1,6 +1,9 @@
+import { logResources } from './logs/i18n';
+
 export const i18n = {
   resources: {
     de: {
+      ...logResources.de,
       System: 'System',
       Administration: 'Verwaltung',
       'Do you really want to restart the CPU ?':
@@ -49,6 +52,7 @@ export const i18n = {
       'password must not be empty': 'Passwort darf nicht leer sein',
     },
     uk: {
+      ...logResources.uk,
       System: 'Система',
       Administration: 'Управління',
       'Do you really want to restart the CPU ?':
@@ -93,6 +97,7 @@ export const i18n = {
       'Enable remote logging': 'Увімкнути віддалене ведення журналу',
     },
     it: {
+      ...logResources.it,
       System: 'Sistema',
       Administration: 'Amministrazione',
       'Do you really want to restart the CPU ?':

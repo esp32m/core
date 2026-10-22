@@ -147,7 +147,7 @@ namespace esp32m {
       JsonDocument *getState(RequestContext &ctx) override {
         JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
         JsonArray arr = doc->to<JsonArray>();
-        arr.add(millis() - _stamp);
+        arr.add(_stamp);
         arr.add(_temperature.get());
         arr.add(_humidity.get());
         return doc;
@@ -163,13 +163,13 @@ namespace esp32m {
         _humidity.set(h, &changed);
 /*        if (changed)
           sensor::GroupChanged::publish(_temperature.group);*/
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         return true;
       }
 
      private:
       Sensor _temperature, _humidity;
-      uint64_t _stamp = 0;
+      int64_t _stamp = -1;
     };
 
     Ahtxx *useAhtxx(uint8_t addr = ahtxx::DefaultAddress,

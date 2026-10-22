@@ -28,7 +28,7 @@ namespace esp32m {
     JsonDocument* Ptmb::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_value);
       return doc;
@@ -107,7 +107,7 @@ namespace esp32m {
           return true;
       }
       _value = values[1] / divisor;
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       _sensor.set(_value);
       return true;
     }

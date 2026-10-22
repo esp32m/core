@@ -61,6 +61,9 @@ namespace esp32m {
         root["component"] = component->component();
         root["has_state"] = component->hasState(  );
         root["accepts_commands"] = component->acceptsCommands(  );
+        auto valve = component->isComponent(ComponentType::Valve)
+                         ? static_cast<ValveComponent*>(component)
+                         : nullptr;
         if (component->isComponent(ComponentType::Cover)) {
           auto stateTopicNames = root["stateTopicNames"].to<JsonArray>();
           stateTopicNames.add("state_topic");
@@ -88,6 +91,10 @@ namespace esp32m {
           config["position_template"] = string_printf(
             "{{ value_json['%s'].get('position') if value_json['%s'] is mapping else none }}",
             id, id);
+        } else if (valve && valve->reportsPosition()) {
+          config["reports_position"] = true;
+          config["value_template"] = string_printf(
+              "{{ value_json['%s'] | to_json }}", id);
         } else
           config["value_template"] = string_printf("{{value_json['%s']}}", id);
         if (component->isComponent(ComponentType::Select)) {

@@ -1,4 +1,5 @@
 #include "esp32m/fs/spiffs.hpp"
+#include "esp32m/fs/root.hpp"
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/defs.hpp"
 
@@ -37,7 +38,9 @@ namespace esp32m {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("format")) {
-        auto res = ESP_ERROR_CHECK_WITHOUT_ABORT(esp_spiffs_format(_label));
+        auto res = fs::formatRoot([this]() {
+          return esp_spiffs_format(_label);
+        });
         req.respond(res);
       } else if (req.is("init")) {
         req.respond(init());
@@ -59,6 +62,9 @@ namespace esp32m {
         if (ESP_ERROR_CHECK_WITHOUT_ABORT(esp_spiffs_check(_label)) != ESP_OK)
           ESP_CHECK_RETURN(esp_spiffs_format(_label));
         _inited = true;
+        registerRoot("SPIFFS", _label, [this](size_t& total, size_t& used) {
+          return _inited && esp_spiffs_info(_label, &total, &used) == ESP_OK;
+        });
         logD("root mounted");
       }
       return esp_spiffs_check(_label);

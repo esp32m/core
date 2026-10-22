@@ -28,10 +28,11 @@ namespace esp32m {
     }
 
     JsonDocument* MicrowaveMotionSensor::getState(RequestContext& ctx) {
+      std::lock_guard sampleLock(_sampleMutex);
       std::lock_guard lock(_sampler->mutex());
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(abs(0.5 - _sampler->avg() / _divisor) * 2);
       arr.add(_sampler->kvar());
       return doc;
@@ -39,14 +40,15 @@ namespace esp32m {
 
     bool MicrowaveMotionSensor::pollSensors() {
       float value;
+      int64_t sampledAt;
       {
+        std::lock_guard sampleLock(_sampleMutex);
         std::lock_guard lock(_sampler->mutex());
         value = abs(0.5 - _sampler->avg() / _divisor) * 2;
+        sampledAt = _stamp;
       }
-      if (!isnan(value)) {
-        _stamp = millis();
-        _motion.set(value);
-      }
+      if (!isnan(value) && sampledAt >= 0)
+        _motion.setSample(value, static_cast<uint64_t>(sampledAt));
       return true;
     }
 
@@ -55,8 +57,11 @@ namespace esp32m {
       for (;;) {
         esp_task_wdt_reset();
         int raw;
-        if (_adc && (_adc->read(raw) == ESP_OK))
+        if (_adc && (_adc->read(raw) == ESP_OK)) {
+          std::lock_guard sampleLock(_sampleMutex);
           _sampler->add(&raw);
+          _stamp = esp_timer_get_time() / 1000LL;
+        }
         delay(100);
       }
     }

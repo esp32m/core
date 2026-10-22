@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <atomic>
 
 #include "esp32m/app.hpp"
 #include "esp32m/integrations/ha/config.hpp"
@@ -29,10 +30,11 @@ namespace esp32m {
               : stateTopic(stateTopic), componentId(componentId), _name(name) {
             if (!commandTopic.empty()) {
               auto& mqtt = net::Mqtt::instance();
-              _sub = mqtt.subscribe(
+              _sub = mqtt.subscribeDetailed(
                   commandTopic.c_str(),
-                  [this](std::string topic, std::string payload) {
-                    command(payload);
+                  [this](std::string topic, std::string payload,
+                         const net::mqtt::MessageMetadata& metadata) {
+                    if (metadata.complete) command(payload, metadata.retained);
                   });
             }
           }
@@ -54,12 +56,12 @@ namespace esp32m {
           std::string _name;
           net::mqtt::Subscription* _sub = nullptr;
           bool _stateChanged = false;
-          void command(std::string payload) {
+          void command(std::string payload, bool retained) {
             auto doc =
                 new JsonDocument(); /* JSON_STRING_SIZE(payload.size()) */
             auto root = doc->to<JsonVariant>();
             root.set(payload);
-            CommandRequest ev(name(), componentId, root);
+            CommandRequest ev(name(), componentId, root, retained);
             ev.publish();
             delete doc;
           }
@@ -86,12 +88,18 @@ namespace esp32m {
             xTaskCreate([](void* self) { ((Mqtt*)self)->run(); }, "m/ha-mqtt",
                         8192, this, tskIDLE_PRIORITY, &_task);
           }
+          if (net::mqtt::StatusChanged::is(ev, net::mqtt::Status::Ready)) {
+            _refreshRequested.store(true);
+            wakeUp();
+          }
         }
 
        private:
         TaskHandle_t _task = nullptr;
         unsigned long _describeRequested = 0, _stateRequested = 0;
         net::mqtt::Subscription* _configSub = nullptr;
+        net::mqtt::Subscription* _birthSub = nullptr;
+        std::atomic<bool> _refreshRequested{true};
         std::map<std::string, std::unique_ptr<mqtt::Dev> > _devices;
         static constexpr const int FlagConfigPublished = 1;
         static constexpr const int FlagConfigValid = 2;
@@ -108,6 +116,15 @@ namespace esp32m {
               requestState(true);
             if (!mqtt.isReady())
               continue;
+            if (!_birthSub) {
+              _birthSub = mqtt.subscribe("homeassistant/status",
+                  [this](std::string, std::string payload) {
+                    if (payload == "online") {
+                      _refreshRequested.store(true);
+                      wakeUp();
+                    }
+                  }, 1);
+            }
             if (!_configSub) {
               _configSub = mqtt.subscribe(
                   "homeassistant/+/+/config",
@@ -144,9 +161,12 @@ namespace esp32m {
                   1);
             }
             auto curtime = millis();
-            if (_describeRequested == 0 ||
-                (curtime - _describeRequested > 24 * 60 * 60 * 1000))
+            const bool refresh = _refreshRequested.exchange(false);
+            if (refresh || _describeRequested == 0 ||
+                (curtime - _describeRequested > 24 * 60 * 60 * 1000)) {
               describe();
+              requestState(false);
+            }
             checkInvalidConfigs();
             /*if (_stateRequested == 0 || (curtime - _stateRequested > 60 *
               1000)) requestState(false);*/
@@ -188,6 +208,11 @@ namespace esp32m {
 
         void describe() {
           _describeRequested = millis();
+          {
+            std::lock_guard<std::mutex> lock(_publishedConfigsMutex);
+            for (auto& [topic, flags] : _publishedConfigs) flags &= ~FlagConfigValid;
+            _checkInvalidConfigs = true;
+          }
           DescribeRequest req(nullptr);
           req.publish();
           for (auto const& [key, doc] : req.responses) {
@@ -258,9 +283,17 @@ namespace esp32m {
             if (dynReqDoc)
               delete dynReqDoc;
             if (!req.response) {
-              logW("no response to state request from device %s (%s)",
-                   dev->name(), id.c_str());
-              continue;
+              // Most devices publish Component state through StateEmitter and
+              // have no custom ha-state handler. Export that same grouped state
+              // after discovery/birth so HA never waits for a value change.
+              auto fallback = std::make_unique<JsonDocument>();
+              auto state = (*fallback)["state"].to<JsonObject>();
+              AllComponents components;
+              for (auto* component : components)
+                if (!component->isDisabled() && !strcmp(component->device()->name(), dev->name()))
+                  component->exportState(state);
+              if (!state.size()) continue;
+              req.response = std::move(fallback);
             }
             JsonVariantConst data = req.response->as<JsonVariantConst>();
             auto state = data["state"].as<JsonVariantConst>();

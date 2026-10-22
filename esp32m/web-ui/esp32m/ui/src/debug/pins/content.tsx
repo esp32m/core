@@ -1,5 +1,5 @@
 import { CardBox } from '@ts-libs/ui-app';
-import { useCachedRequest, useRequest } from '../../backend';
+import { useCachedRequest, useRequest, useSubscribedState } from '../../backend';
 import { Name, TPinNames, actions, selectors } from './state';
 import {
   Button,
@@ -124,7 +124,7 @@ export const content = () => {
   const pin = useSelector(selectors.pin);
   const feature = useSelector(selectors.feature);
   const f = useFeature();
-  const [pinState, pinStateRefresh] = useRequest<TPinState>(Name, 'state-get', {
+  const [pinState, pinStateRefresh] = useSubscribedState<TPinState>(Name, {
     data: f.stateRequestData,
     condition: !!pin,
   });

@@ -26,13 +26,6 @@ export const pluginUiBackend = (): TReduxPlugin &
       else if (isResponse(msg)) {
         if (!msg.error) {
           switch (msg.name) {
-            case MessageName.GetState:
-              api.dispatch(actions.moduleState([msg.source, msg.data]));
-              break;
-            case MessageName.SetState:
-              if (msg.data)
-                api.dispatch(actions.moduleState([msg.source, msg.data]));
-              break;
             case MessageName.GetConfig:
               api.dispatch(actions.moduleConfig([msg.source, msg.data]));
               break;
@@ -48,11 +41,16 @@ export const pluginUiBackend = (): TReduxPlugin &
         api.dispatch(publicActions.response(msg));
       }
     });
+    c.stateUpdates.subscribe((update) =>
+      api.dispatch(actions.stateUpdate(update))
+    );
     c.resolved.subscribe((msg) => {
       api.dispatch(publicActions.requestResolved(msg));
     });
     c.rejected.subscribe(([request, error]) => {
-      api.dispatch(publicActions.requestRejected([request, serializeError(error)]));
+      api.dispatch(
+        publicActions.requestRejected([request, serializeError(error)])
+      );
     });
     c.outgoing.subscribe((req) => {
       api.dispatch(publicActions.request(req));

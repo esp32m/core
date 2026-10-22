@@ -160,6 +160,9 @@ namespace esp32m {
     friend class config::Changed;
   };
 
+  // Invalidation hint, not an instruction to capture state inline. Producers
+  // may publish while holding their own mutex; consumers must defer reads and
+  // transport work. The optional state view is borrowed for this event only.
   class EventStateChanged : public Event {
    public:
     EventStateChanged(const EventStateChanged &) = delete;

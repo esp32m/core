@@ -359,6 +359,8 @@ namespace esp32m {
     }
 
     bool FormattingAppender::append(const LogMessage* message) {
+      if (!message)
+        return this->append(static_cast<const char*>(nullptr));
       auto str = _formatter(message);
       if (!str)
         return true;

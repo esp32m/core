@@ -38,7 +38,7 @@ namespace esp32m {
     JsonDocument *Soil5::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(11) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_moisture.get());
       arr.add(_temperature.get());
@@ -59,7 +59,7 @@ namespace esp32m {
       uint16_t values[9] = {};
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 0x00, 9, values));
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       bool changed = false;
       _moisture.set(values[0] / 10.0f, &changed);
       _temperature.set(values[1] / 10.0f, &changed);

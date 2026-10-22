@@ -41,7 +41,7 @@ namespace esp32m {
     JsonDocument *Sm538x::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_model);
       arr.add(_value);
@@ -75,7 +75,7 @@ namespace esp32m {
           break;
       }
       if (name && !isnan(_value)) {
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
       }
       return true;
     }

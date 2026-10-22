@@ -21,15 +21,14 @@ namespace esp32m {
     void Rmtled::configure_led() {
       logI( "Initialising addressable LED");
       /* LED strip initialization with the GPIO and pixels number*/
-      led_strip_config_t strip_config = {
-        .strip_gpio_num = _pin,                   
-        .max_leds = 1,                            
-        .led_model = LED_MODEL_WS2812,            
-        .color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB,
-        .flags = { 
-            .invert_out = false,                  
-          }
-      };
+      // Zero-initialize optional fields added by newer led_strip versions.
+      // WS2812 uses the library's model-specific timings.
+      led_strip_config_t strip_config = {};
+      strip_config.strip_gpio_num = _pin;
+      strip_config.max_leds = 1;
+      strip_config.led_model = LED_MODEL_WS2812;
+      strip_config.color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB;
+      strip_config.flags.invert_out = false;
 
      // LED strip backend configuration: RMT
       led_strip_rmt_config_t rmt_config = {

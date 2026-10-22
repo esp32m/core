@@ -15,7 +15,7 @@ import {
 import { CardBox } from '@ts-libs/ui-app';
 
 import * as Backend from '../../backend';
-import { NameValueList, useModuleState } from '../..';
+import { NameValueList, useModuleState, useSampleAge } from '../..';
 import { ControlMode, LfBrosProps, LfBrosState } from './types';
 
 const number = (
@@ -32,6 +32,7 @@ const onOff = (value: boolean | undefined) =>
 
 export default ({ name, title }: LfBrosProps) => {
   const state = useModuleState<LfBrosState>(name);
+  const telemetryAge = useSampleAge(state?.heater.telemetrySampledAtMs, name);
   const api = Backend.useBackendApi();
   const [busy, setBusy] = React.useState(false);
   const [temperature, setTemperature] = React.useState(18);
@@ -179,7 +180,7 @@ export default ({ name, title }: LfBrosProps) => {
         {heater.stale && (
           <Alert severity="warning">
             Last complete heater telemetry is{' '}
-            {number((heater.telemetryAgeMs || 0) / 1000, 1, 's')} old.
+            {number(telemetryAge < 0 ? undefined : telemetryAge / 1000, 1, 's')} old.
             {command.priming
               ? ' Mode-1 pump strokes are disrupting CAN runtime responses; activity is inferred from observed state 23, while the normal Hz field is unavailable.'
               : ' Displayed measurements are the last valid snapshot.'}
@@ -209,7 +210,7 @@ export default ({ name, title }: LfBrosProps) => {
           <Typography variant="subtitle2" gutterBottom>
             Heater control
           </Typography>
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Button
               variant={command.on ? 'contained' : 'outlined'}
               color="success"
@@ -288,7 +289,7 @@ export default ({ name, title }: LfBrosProps) => {
           </ToggleButtonGroup>
 
           {command.controlMode === 'temperature' ? (
-            <Grid container spacing={2} sx={{ mt: 1 }} alignItems="center">
+            <Grid container spacing={2} sx={{ mt: 1, alignItems: 'center' }}>
               <Grid size={{ xs: 12, sm: 3 }}>
                 <Typography>{temperature.toFixed(0)} °C</Typography>
               </Grid>
@@ -309,7 +310,7 @@ export default ({ name, title }: LfBrosProps) => {
               </Grid>
             </Grid>
           ) : (
-            <Grid container spacing={2} sx={{ mt: 1 }} alignItems="center">
+            <Grid container spacing={2} sx={{ mt: 1, alignItems: 'center' }}>
               <Grid size={{ xs: 12, sm: 3 }}>
                 <Typography>{power.toFixed(0)} W</Typography>
               </Grid>

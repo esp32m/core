@@ -30,7 +30,7 @@ namespace esp32m {
       uint8_t _addr;
       uint16_t _decimals = 0, _density = 0, _flowunit = 0, _id = 0;
       float _range = 0, _mc = 0;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _flow, _consumption;
     };
 

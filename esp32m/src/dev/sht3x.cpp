@@ -171,14 +171,14 @@ namespace esp32m {
       _humidity.set(h, &changed);
 /*      if (changed)
         sensor::GroupChanged::publish(_temperature.group);*/
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       return true;
     }
 
     JsonDocument* Sht3x::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       float t, h;
       if (getReadings(&t, &h) == ESP_OK) {
         arr.add(t);

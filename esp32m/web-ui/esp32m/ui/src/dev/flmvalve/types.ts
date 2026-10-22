@@ -8,14 +8,16 @@ export type TProps = {
 export type TState = {
   address: number;
   actualValid: boolean;
-  actualAge: number;
+  actualSampledAtMs: number;
   actual: number;
   actualRaw: number;
   targetValid: boolean;
-  targetAge: number;
+  targetSampledAtMs: number;
   target: number;
   targetRaw: number;
-  probeAge: number;
+  state: 'unknown' | 'opening' | 'open' | 'closing' | 'closed';
+  position: number;
+  probeSampledAtMs: number;
   probeValidMask: number;
   probeRegisters: number[];
 };

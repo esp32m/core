@@ -1,5 +1,5 @@
 import { IProps, TState, TConfig } from './types';
-import { useModuleConfig, useModuleState } from '../..';
+import { useModuleConfig, useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 import { Grid, IconButton } from '@mui/material';
@@ -20,6 +20,7 @@ const validationSchema = Yup.object().shape({
 
 export default ({ name, title }: IProps) => {
   const state = useModuleState<TState>(name);
+  const age = useSampleAge(state?.[0], name);
   const { config, setConfig } = useModuleConfig<TConfig>(name);
   const [hook, openSettings] = useDialogForm({
     initialValues: config || {},
@@ -27,7 +28,7 @@ export default ({ name, title }: IProps) => {
     validationSchema,
   });
   if (!state || !state.length) return null;
-  const [age = -1, l] = state;
+  const [, l] = state;
   if (age < 0 || age > 60 * 1000) return null;
   const list = [];
   if (!isNaN(l)) list.push(["Level", `${l?.toFixed(2)}`]);

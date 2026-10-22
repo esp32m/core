@@ -30,7 +30,7 @@ namespace esp32m {
       spi_host_device_t _host;
       spi_device_handle_t _spi = nullptr;
       float _value = NAN;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _temperature;
     };
 #if SOC_SPI_PERIPH_NUM > 2

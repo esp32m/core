@@ -25,7 +25,7 @@ namespace esp32m {
      private:
       const char *_name;
       float _value = NAN;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
     };
 
 #if SOC_UART_HP_NUM > 2

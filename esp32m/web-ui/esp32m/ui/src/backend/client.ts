@@ -1,6 +1,5 @@
 import {
   DiscreteStatus,
-  Periodic,
   debounce,
   isString,
   serializeError,
@@ -16,13 +15,17 @@ import {
   TRequestOptions,
   MessageName,
   MessageType,
-  IStatePoller,
+  TStateView,
+  TStateUpdate,
+  TStateEvent,
 } from './types';
 import { Subject } from 'rxjs';
 import WebSocket from 'reconnecting-websocket';
 import { selectors } from './state';
 import { createSelector } from '@reduxjs/toolkit';
 import { deserializeEsp32mError } from './errors';
+import { StateSubscriptions, stateViewKey } from './subscriptions';
+import { ServerClock } from './clock';
 
 type PendingRequestResolver = (response: TResponse) => void;
 type PendingRequestRejector = (error: any) => void;
@@ -36,6 +39,7 @@ type TPendingRequest = {
   promise: Promise<TResponse>;
   queued: number;
   sent?: number;
+  receive?: (response: TResponse) => void;
 };
 
 export function isResponse(msg: TMessage): msg is TResponse {
@@ -44,6 +48,13 @@ export function isResponse(msg: TMessage): msg is TResponse {
 export function isBroadcast(msg: TMessage): msg is TBroadcast {
   return msg.type === 'broadcast' && isString((msg as TBroadcast).source);
 }
+export function isStateEvent(msg: TMessage): msg is TStateEvent {
+  return (
+    msg.type === MessageType.Event &&
+    (msg as TStateEvent).name === 'state-changed' &&
+    isString((msg as TStateEvent).source)
+  );
+}
 
 class Module implements IModuleApi {
   readonly selectors;
@@ -51,11 +62,10 @@ class Module implements IModuleApi {
     readonly api: Client,
     readonly name: string
   ) {
-    const
-      activeRequests = createSelector(
-        selectors.modules,
-        (devices) => devices[name]?.activeRequests || {}
-      );
+    const activeRequests = createSelector(
+      selectors.modules,
+      (devices) => devices[name]?.activeRequests || {}
+    );
 
     this.selectors = {
       state: createSelector(
@@ -66,10 +76,7 @@ class Module implements IModuleApi {
         selectors.modules,
         (devices) => devices[name]?.config
       ),
-      info: createSelector(
-        selectors.modules,
-        (devices) => devices[name]?.info
-      ),
+      info: createSelector(selectors.modules, (devices) => devices[name]?.info),
       activeRequests,
       isSettingState: createSelector(
         activeRequests,
@@ -81,100 +88,97 @@ class Module implements IModuleApi {
       ),
     };
   }
-  useState(data?: any): VoidFunction {
-    if (data && this._statePollRefs)
-      throw new Error(
-        'state polling with arguments by multiple consumers is not supported'
-      );
-    this._statePollRefs++;
-    this.stateGetData = data;
-    return () => {
-      if (this._statePollRefs <= 0)
-        console.error(
-          `esp32m UI bug: ${this.name}.statePollRefs=${this._statePollRefs}`
-        );
-      else this._statePollRefs--;
-      if (this._statePollRefs == 0) delete this.stateGetData;
-    };
+  useState(data?: any, view: TStateView = 'state'): VoidFunction {
+    return this.api.subscriptions.watch(this.name, data, view);
   }
-  isPolling() {
-    return this._statePollRefs > 0;
+  stateSelector(data?: any, view: TStateView = 'state') {
+    const key = stateViewKey(data, view);
+    return (state: Parameters<typeof selectors.modules>[0]) =>
+      key === 'state'
+        ? this.selectors.state(state)
+        : selectors.modules(state)[this.name]?.views?.[key]?.state;
   }
-  stateGetData?: any;
-  private _statePollRefs = 0;
-}
-
-class StatePoller implements IStatePoller {
-  constructor(private readonly poller: Periodic) {
-
+  liveSelector(data?: any, view: TStateView = 'state') {
+    const key = stateViewKey(data, view);
+    return (state: Parameters<typeof selectors.modules>[0]) =>
+      selectors.modules(state)[this.name]?.views?.[key]?.live === true;
   }
-  suspend() {
-    this._suspendCount++;
-    this.update();
-    return () => {
-      this._suspendCount--;
-      this.update();
-    }
+  errorSelector(data?: any, view: TStateView = 'state') {
+    const key = stateViewKey(data, view);
+    return (state: Parameters<typeof selectors.modules>[0]) =>
+      selectors.modules(state)[this.name]?.views?.[key]?.error;
   }
-  disable() {
-    this._disabled = true;
-    this.update();
-  }
-  enable() {
-    this._disabled = false;
-    this.update();
-  }
-  private _suspendCount = 0;
-  private _disabled = false;
-  private update() {
-    const disable = this._disabled || this._suspendCount > 0;
-    if (disable != !this.poller.enabled) {
-      if (disable) this.poller.disable();
-      else this.poller.enable();
-    }
+  epochSelector(data?: any, view: TStateView = 'state') {
+    const key = stateViewKey(data, view);
+    return (state: Parameters<typeof selectors.modules>[0]) => selectors.modules(state)[this.name]?.views?.[key]?.epoch;
   }
 }
 
-class Client implements IBackendApi {
+export class Client implements IBackendApi {
   readonly status = new DiscreteStatus(ConnectionStatus.Disconnected);
   readonly incoming = new Subject<TMessage>();
   readonly outgoing = new Subject<TRequest>();
   readonly resolved = new Subject<[TRequest, TResponse]>();
   readonly rejected = new Subject<[TRequest, Error]>();
+  readonly stateUpdates = new Subject<TStateUpdate>();
+  readonly clock = new ServerClock();
+  readonly subscriptions: StateSubscriptions;
   readonly statePoller;
   constructor(readonly ws: WebSocket) {
+    this.subscriptions = new StateSubscriptions(
+      (name, data, receive) =>
+        this.requestInternal('ui', name, data, undefined, receive, true),
+      (update) => this.stateUpdates.next({ ...update, epoch: update.received ? this.clock.generation : undefined })
+    );
+    // Keep the upload suspension API; its lifetime now controls subscriptions.
+    this.statePoller = { suspend: () => this.subscriptions.suspend() };
     ws.onopen = () => {
+      this.clock.reset();
       this.status.set(ConnectionStatus.Connected);
-      this.statePoller.enable();
+      this.subscriptions.setConnected(true);
+      this.flushNow();
+      this.startHeartbeat();
     };
     ws.onclose = () => {
       this.status.set(ConnectionStatus.Connecting);
-      this.statePoller.disable();
+      this.subscriptions.setConnected(false);
+      this.clock.reset();
+      ++this.connection;
+      clearTimeout(this.heartbeatTimer);
+      for (const pending of Object.values(this._pending))
+        pending.reject(new Error('disconnected'));
     };
     ws.onerror = (e: any) => {
       this.status.set(ConnectionStatus.Connecting, serializeError(e));
     };
     ws.onmessage = (msg: MessageEvent) => {
-      const parsed = JSON.parse(msg.data);
+      let parsed: TMessage;
+      try {
+        parsed = JSON.parse(msg.data);
+      } catch {
+        return;
+      }
       if (parsed) {
-        const { type, ...payload } = parsed;
-        if (isString(type)) this.incoming.next(parsed);
+        this.clock.observe(parsed.serverTimeMs ?? parsed.data?.serverTimeMs);
+        if (isStateEvent(parsed))
+          this.subscriptions.receive(parsed.source, parsed.data);
         if (isResponse(parsed)) {
-          const pending = this._pending[payload.seq];
+          const pending =
+            parsed.seq === undefined ? undefined : this._pending[parsed.seq];
+          // Register streams synchronously before the next WS event can arrive.
+          if (pending && !parsed.partial && !parsed.error) {
+            pending.receive?.(parsed);
+            this.cacheRead(pending.request, parsed);
+          }
+          if (isString(parsed.type)) this.incoming.next(parsed);
           if (pending)
             if (parsed.partial) pending.partial(parsed);
             else if (parsed.error)
               pending.reject(deserializeEsp32mError(parsed.error));
             else pending.resolve(parsed);
-        }
+        } else if (isString(parsed.type)) this.incoming.next(parsed);
       }
     };
-    this.statePoller = new StatePoller(new Periodic(async () => {
-      const tasks = Object.values(this._devices)
-        .filter((d) => d.isPolling())
-        .map((d) => this.getState(d.name, d.stateGetData));
-      await Promise.allSettled(tasks);
-    }, 1000));
   }
   module(name: string): IModuleApi {
     return (
@@ -194,6 +198,16 @@ class Client implements IBackendApi {
     name: string,
     data?: any,
     options?: TRequestOptions
+  ): Promise<TResponse> {
+    return this.requestInternal(target, name, data, options);
+  }
+  private requestInternal(
+    target: string,
+    name: string,
+    data?: any,
+    options?: TRequestOptions,
+    receive?: (response: TResponse) => void,
+    immediate = false
   ): Promise<TResponse> {
     const existing = Object.values(this._pending).find(
       (pr) =>
@@ -218,7 +232,7 @@ class Client implements IBackendApi {
       const startTimer = () =>
         setTimeout(() => {
           delete this._pending[capturedSeq];
-          const error = new Error('timeout')
+          const error = new Error('timeout');
           this.rejected.next([request, error]);
           rejectFn(error);
         }, options?.timeout || 10000);
@@ -247,12 +261,29 @@ class Client implements IBackendApi {
       partial,
       promise,
       queued: Date.now(),
+      receive,
     };
-    this.flush();
+    if (immediate) this.flushNow();
+    else this.flush();
     return promise;
   }
   getState(target: string, data?: any): Promise<TResponse> {
+    if (this.subscriptions.owns(target, data))
+      return this.refreshState(target, data);
     return this.request(target, MessageName.GetState, data);
+  }
+  refreshState(
+    target: string,
+    data?: any,
+    view: TStateView = 'state'
+  ): Promise<TResponse> {
+    if (this.subscriptions.owns(target, data, view))
+      return this.subscriptions.refresh(target, data, view);
+    return this.request(
+      target,
+      view === 'device' ? 'device-state' : MessageName.GetState,
+      data
+    );
   }
   setState(target: string, data?: any): Promise<TResponse> {
     return this.request(target, MessageName.SetState, data);
@@ -267,7 +298,33 @@ class Client implements IBackendApi {
     return this.request(target, MessageName.GetInfo, data);
   }
 
-  private readonly flush = debounce(() => {
+  private cacheRead(request: TRequest, response: TResponse) {
+    const { target, name, data } = request;
+    if (!target) return;
+    const view = name === 'device-state' ? 'device' : 'state';
+    if (
+      name !== MessageName.GetState &&
+      name !== MessageName.SetState &&
+      name !== 'device-state'
+    )
+      return;
+    const query = name === MessageName.SetState ? undefined : data;
+    if (
+      this.subscriptions.owns(target, query, view) ||
+      response.data === undefined
+    )
+      return;
+    this.stateUpdates.next({
+      target,
+      key: stateViewKey(query, view),
+      live: false,
+      state: response.data,
+      epoch: this.clock.generation,
+    });
+  }
+
+  private flushNow() {
+    if (this.status.value !== ConnectionStatus.Connected) return;
     const toSend = Object.values(this._pending).reduce((arr, pr) => {
       if (!pr.sent) {
         pr.sent = Date.now();
@@ -278,7 +335,43 @@ class Client implements IBackendApi {
     }, [] as Array<TRequest>);
     if (!toSend.length) return;
     this.ws.send(JSON.stringify(toSend));
-  }, 100);
+  }
+  private readonly flush = debounce(() => this.flushNow(), 100);
+
+  private connection = 0;
+  private heartbeatTimer?: ReturnType<typeof setTimeout>;
+  private startHeartbeat() {
+    clearTimeout(this.heartbeatTimer);
+    const connection = ++this.connection;
+    const check = async () => {
+      if (
+        connection !== this.connection ||
+        this.status.value !== ConnectionStatus.Connected
+      )
+        return;
+      try {
+        if (this.subscriptions.active)
+          await this.requestInternal(
+            'ui',
+            'ping',
+            undefined,
+            { timeout: 10_000 },
+            undefined,
+            true
+          );
+      } catch {
+        if (connection === this.connection && this.subscriptions.active) {
+          this.status.set(ConnectionStatus.Connecting);
+          this.subscriptions.setConnected(false);
+          this.ws.reconnect();
+          return;
+        }
+      }
+      if (connection === this.connection)
+        this.heartbeatTimer = setTimeout(check, 15_000);
+    };
+    this.heartbeatTimer = setTimeout(check, 15_000);
+  }
 
   private _seq: number = Math.floor(Math.random() * (Math.pow(2, 31) / 2));
   private readonly _pending: { [key: number]: TPendingRequest } = {};

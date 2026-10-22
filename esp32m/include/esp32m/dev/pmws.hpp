@@ -39,7 +39,7 @@ namespace esp32m {
       const char *_name;
       uint8_t _addr;
       Mode _mode;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _pm25, _pm10, _pm1;
       Sensor *_temperature = nullptr;
       Sensor *_humidity = nullptr;

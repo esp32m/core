@@ -1,269 +1,179 @@
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
-import * as Yup from 'yup';
-import { useFormikContext, FormikConsumer } from 'formik';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Button,
-  Grid,
-  MenuItem,
-  Typography,
-  Divider,
-  Tabs,
-  Tab,
-  Box,
-  Paper,
+  Alert, Button, Checkbox, FormControlLabel, LinearProgress, MenuItem,
+  Stack, Tab, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, Tabs, TextField, Typography,
 } from '@mui/material';
-
-
-import { Name } from './types';
-import { styled } from '@mui/material/styles';
-import { useBackendApi, useModuleConfig } from '../../backend';
-import { validators } from '../../validation';
-import { Alert, useAlert } from '@ts-libs/ui-base';
-import { FieldAutocomplete, FieldSelect, FieldText, MuiForm } from '@ts-libs/ui-forms';
 import { CardBox } from '@ts-libs/ui-app';
+import { errorToString } from '@ts-libs/tools';
+import { useBackendApi, useRequest, useSubscribedState } from '../../backend';
+import { Config, Input, Name, ReadCommands, State, WriteCommands } from './types';
+import { hex, outcome, requestFor } from './values';
 
-interface IOptions {
-  from?: number;
-  to?: number;
-}
-
-interface IScanResponse {
-  progress?: number;
-  addrs?: Array<number>;
-}
-
-const Results = styled('div')({
-  marginTop: 16,
-  padding: 16,
-  paddingTop: 8,
-  borderStyle: 'solid',
-  borderWidth: 1,
-  borderColor: 'rgba(0, 0, 0, 0.12)',
-});
-
-const ResultMsg = styled(Typography)({
-  textAlign: 'center',
-  width: '100%',
-});
-const IdsBox = styled(Grid)({
-  marginTop: 10,
-});
-const ScanDiv = styled('div')({
-  position: 'relative',
-  width: '100%',
-  height: '100%',
-});
-const StyledScanButton = styled(Button)({
-  position: 'absolute',
-  bottom: 0,
-  right: 0,
-});
-const IdButton = styled(Button)({
-  textTransform: 'none',
-});
-interface IModbusResponse {
-  scan?: IScanResponse;
-  request?: any;
-}
-interface IProps {
-  state: IOptions;
-  resp: IModbusResponse;
-}
-
-const SubmitButton = ({ label }: { label: string }) => {
-  const { isSubmitting, submitForm } = useFormikContext();
-  return (
-    <ScanDiv>
-      <StyledScanButton
-        variant="contained"
-        disabled={isSubmitting}
-        onClick={submitForm}
-      >
-        {label}
-      </StyledScanButton>
-    </ScanDiv>
-  );
-};
-
-const ScanResults = ({ state, resp }: IProps) => {
-  const { from = 1, to = 247 } = state;
-  const { addrs = [] } = resp?.scan || {};
-  const buttons = [];
-  for (let i = from; i <= to; i++)
-    if (addrs[i >> 3] & (1 << (i & 7)))
-      buttons.push(
-        <Grid size={{ xs: 2 }} key={i}>
-          <IdButton variant="contained" color="secondary">
-            0x{i.toString(16)}
-          </IdButton>
-        </Grid>
-      );
-  const content = buttons.length ? (
-    <IdsBox container spacing={3} wrap="wrap">
-      {buttons}
-    </IdsBox>
-  ) : (
-    <ResultMsg variant={'subtitle1'}>{'No devices were detected!'}</ResultMsg>
-  );
-  return (
-    <Results>
-      <Typography variant="subtitle1">Scan results</Typography>
-      <Divider />
-      {content}
-    </Results>
-  );
-};
-
-function TabPanel(props: any) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`full-width-tabpanel-${index}`}
-      aria-labelledby={`full-width-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
-const ValidationSchema = Yup.object().shape({
-  from: validators.modbusAddr,
-  to: validators.modbusAddr,
-  addr: validators.modbusAddr,
-});
-
-export default () => {
-  const [tab, setTab] = useState(0);
-  const { check, alertProps } = useAlert();
-  const { config = {}, refreshConfig } = useModuleConfig<IOptions>(Name);
+export default function Scanner() {
   const api = useBackendApi();
-  const reqScan = (req?: IOptions) => api.request(Name, 'scan', req);
-  const reqRequest = (req?: IOptions) => api.request(Name, 'request', req);
-
-  const handleSubmit = async (values: any) => {
-    switch (tab) {
-      case 0:
-        check(await reqScan(values));
-        break;
-      case 1:
-        await check(reqRequest(values));
-        break;
+  const [remote, refresh, live] = useSubscribedState<State>(Name);
+  const [config] = useRequest<Config>(Name, 'config-get');
+  const state = remote;
+  const [tab, setTab] = useState(0);
+  const [readCmd, setReadCmd] = useState(3);
+  const [writeCmd, setWriteCmd] = useState(6);
+  const [input, setInput] = useState<Input>({ from: '1', to: '3', addr: '1', regs: '0', regc: '1', data: '' });
+  const [confirm, setConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState<string>();
+  const [showFailures, setShowFailures] = useState(false);
+  const active = useRef(false);
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (!config || initialized.current) return;
+    initialized.current = true;
+    setInput(v => ({ ...v, from: String(config.from), to: String(config.to),
+      addr: String(config.addr), regs: String(config.regs), regc: String(config.regc) }));
+    if (config.cmd >= 1 && config.cmd <= 4) setReadCmd(config.cmd);
+    else if ([5, 6, 15, 16].includes(config.cmd)) setWriteCmd(config.cmd);
+  }, [config]);
+  const stale = !!remote && !live;
+  const busy = submitting || !!state?.busy;
+  const blocked = busy || !state?.configured || stale;
+  const edit = (key: keyof Input, value: string) => {
+    initialized.current = true; setConfirm(false);
+    setInput(v => ({ ...v, [key]: value }));
+  };
+  const preset = (address: number) => {
+    initialized.current = true;
+    setTab(0); setReadCmd(3); setConfirm(false);
+    setInput(v => ({ ...v, from: String(address), to: String(address), addr: String(address), regs: '3', regc: '1' }));
+  };
+  const request = requestFor(tab, input, tab === 2 ? writeCmd : readCmd, confirm);
+  const submit = async () => {
+    if (blocked || !request || active.current) return;
+    active.current = true; setSubmitting(true); setError(undefined); setConfirm(false);
+    try {
+      await api.request(Name, tab === 0 ? 'scan' : tab === 1 ? 'request' : 'write',
+        request, { timeout: 60_000 });
+      await refresh();
+    } catch (e) {
+      setError(errorToString(e) + '. Check the latest operation below before retrying.');
+      try { await refresh(); } catch { /* preserve the original error */ }
+    } finally {
+      active.current = false; setSubmitting(false);
     }
-    refreshConfig();
   };
-
-  const ncp = {
-    type: 'number',
-    placeholder: 'auto',
-    InputLabelProps: { shrink: true },
-    fullWidth: true,
+  const cancel = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try { await api.request(Name, 'cancel'); await refresh(); }
+    catch (e) { setError(errorToString(e)); }
+    finally { setCancelling(false); }
   };
-  const resp = useSelector<any, IModbusResponse>((config) => config.modbus) || {};
-  const { scan } = resp;
+  const field = (key: keyof Input, label: string, helperText?: string) =>
+    <TextField key={key} label={label} value={input[key]} disabled={blocked}
+      onChange={event => edit(key, event.target.value)} helperText={helperText}
+      slotProps={{ htmlInput: { inputMode: key === 'data' ? 'text' : 'numeric' } }} />;
+  const rows = state?.results ?? [];
+  const responders = rows.filter(row => row[1] === 0);
+  const visible = showFailures ? rows : responders;
+  const bus = state ?? config;
   return (
-    <MuiForm
-      initial={config}
-      onSubmit={handleSubmit}
-      validationSchema={ValidationSchema}
-    >
-      <FormikConsumer>
-        {(controller) => {
-          return (
-            <CardBox
-              title="MODBUS tools"
-              progress={scan?.progress || controller.isSubmitting || false}
-            >
-              <Grid container spacing={3}>
-                <FieldSelect name="mode" label="RS485 mode" {...ncp} grid>
-                  <MenuItem value="rtu">RTU</MenuItem>
-                  <MenuItem value="ascii">ASCII</MenuItem>
-                </FieldSelect>
-                <FieldSelect name="uart" label="UART number" {...ncp} grid>
-                  <MenuItem value={0}>UART 0</MenuItem>
-                  <MenuItem value={1}>UART 1</MenuItem>
-                  <MenuItem value={2}>UART 2</MenuItem>
-                </FieldSelect>
-                <FieldAutocomplete
-                  name="baud"
-                  label="Baud rate"
-                  {...ncp}
-                  autocompleteProps={{
-                    freeSolo: true,
-                    options: [
-                      2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200,
-                    ],
-                    getOptionLabel: (o: any) => o.toString(),
-                  }}
-                  grid
-                />
-                <FieldSelect name="parity" label="Parity" {...ncp} grid>
-                  <MenuItem value={0}>Disable</MenuItem>
-                  <MenuItem value={2}>Even</MenuItem>
-                  <MenuItem value={3}>Odd</MenuItem>
-                </FieldSelect>
-              </Grid>
-              <div style={{ marginTop: 20 }} />
-              <Paper square>
-                <Tabs
-                  variant="fullWidth"
-                  value={tab}
-                  onChange={(e, v) => setTab(v)}
-                >
-                  <Tab label="Scan" />
-                  <Tab label="Request" />
-                  <Tab label="Monitor" />
-                </Tabs>
-                <TabPanel value={tab} index={0}>
-                  <Grid container spacing={3}>
-                    <FieldText name="from" label="From ID" {...ncp} grid />
-                    <FieldText name="to" label="To ID" {...ncp} grid />
-                    <Grid size="grow">
-                    <SubmitButton label="Scan MODBUS" />
-                    </Grid>
-                  </Grid>
-                  <Alert {...alertProps} />
-                  {!!scan?.addrs && <ScanResults state={config} resp={resp} />}
-                </TabPanel>
-                <TabPanel value={tab} index={1}>
-                  <Grid container spacing={3}>
-                    <FieldText name="addr" label="Address" {...ncp} grid />
-                    <FieldSelect name="cmd" label="Command" {...ncp} grid>
-                      <MenuItem value={1}>Read Coils</MenuItem>
-                      <MenuItem value={2}>Read DiscreteInputs</MenuItem>
-                      <MenuItem value={3}>Read Holding Registers</MenuItem>
-                      <MenuItem value={4}>Read Input Registers</MenuItem>
-                      <MenuItem value={5}>Write Coil</MenuItem>
-                      <MenuItem value={6}>Write Holding Register</MenuItem>
-                      <MenuItem value={7}>Read Exception Status</MenuItem>
-                      <MenuItem value={8}>Diagnostic</MenuItem>
-                      <MenuItem value={11}>Get Com Event Counter</MenuItem>
-                      <MenuItem value={12}>Get Com Event Log</MenuItem>
-                      <MenuItem value={15}>Write Multiple Coils</MenuItem>
-                      <MenuItem value={15}>
-                        Write Multiple Holding Registers
-                      </MenuItem>
-                    </FieldSelect>
-                  </Grid>
-                  <Grid container spacing={3}>
-                    <FieldText name="regs" label="Start reg" {...ncp} grid />
-                    <FieldText name="regc" label="Reg count" {...ncp} grid />
-                    <FieldText name="v" label="Value" {...ncp} grid />
-                    <Grid size="grow" >
-                      <SubmitButton label="Run request" />
-                    </Grid>
-                  </Grid>
-                  <Alert {...alertProps} />
-                </TabPanel>
-              </Paper>
-            </CardBox>
-          );
-        }}
-      </FormikConsumer>
-    </MuiForm >
+    <CardBox title="Modbus scanner">
+      <Stack spacing={2}>
+        <Typography>Shared bus: {bus?.configured
+          ? ['UART ' + bus.uart, bus.mode?.toUpperCase(), bus.baud + ' baud',
+              bus.parity === 0 ? 'no parity' : bus.parity === 2 ? 'even parity' : 'odd parity'].join(' · ')
+          : 'Not configured'}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Uses the existing bus settings and sends each request once. Other drivers continue polling.
+          Scans add traffic and expected timeouts to RS485 health statistics; reset the comparison afterward.
+        </Typography>
+        {stale && <Alert severity="warning">Scanner status is stale. Reconnect before starting another operation.</Alert>}
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button disabled={blocked} onClick={() => preset(1)}>Flomarvel · address 1</Button>
+          <Button disabled={blocked} onClick={() => preset(3)}>Flomarvel · address 3</Button>
+        </Stack>
+        <Typography variant="caption">
+          Presets select a read-only FC03 probe of register 3 (actual angle ×100). Click Scan to send.
+          A reply confirms this address responds, not which physical device replied.
+        </Typography>
+        <Tabs value={tab} onChange={(_, value) => { setTab(value); setConfirm(false); }}>
+          <Tab label="Scan" disabled={busy} /><Tab label="Read" disabled={busy} /><Tab label="Write" disabled={busy} />
+        </Tabs>
+        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {tab === 0 ? <>{field('from', 'From address')}{field('to', 'To address', '1–247; equal addresses test a single device')}</>
+            : field('addr', 'Slave address', '1–247; broadcasts are excluded')}
+          <TextField select label="Function" value={tab === 2 ? writeCmd : readCmd} disabled={blocked}
+            onChange={event => { initialized.current = true; setConfirm(false);
+              (tab === 2 ? setWriteCmd : setReadCmd)(Number(event.target.value)); }}>
+            {(tab === 2 ? WriteCommands : ReadCommands).map(([code, label]) =>
+              <MenuItem key={code} value={code}>{label}</MenuItem>)}
+          </TextField>
+          {field('regs', 'Start register / coil', 'Zero-based address; decimal or 0x hex')}
+          {tab !== 0 && field('regc', 'Quantity', '1–125; FC16 max 123; FC05/06 exactly 1')}
+        </Stack>
+        {tab === 2 && <>
+          {field('data', 'Values', 'Comma or space separated; decimal or 0x hex. Coils: 0 or 1.')}
+          <Alert severity="warning">
+            Writes change the physical device. One write is sent, followed by an independent read-back.
+            A missing acknowledgment is not proof that the write failed.
+          </Alert>
+          <FormControlLabel label="I confirm writing these values to this slave address."
+            control={<Checkbox checked={confirm} disabled={blocked} onChange={(_, checked) => setConfirm(checked)} />} />
+        </>}
+        {!request && !busy && <Typography variant="body2" color="text.secondary">
+          Enter a valid address range, function, register and quantity{tab === 2 ? ', matching values, and confirm the write' : ''}.
+        </Typography>}
+        <Stack direction="row" spacing={2}>
+          <Button variant="contained" disabled={blocked || !request} onClick={submit}>
+            {tab === 0 ? 'Scan' : tab === 1 ? 'Read values' : 'Write once and verify'}
+          </Button>
+          {state?.busy && state.operation === 'scan' && <Button disabled={cancelling || state.cancelRequested}
+            onClick={cancel}>Stop scan</Button>}
+        </Stack>
+        {error && <Alert severity="error">{error}</Alert>}
+        {state && state.job > 0 && <>
+          <Typography>
+            Operation {state.job}: {state.operation} · {state.scanned}/{state.total} · {state.progress}% · {(state.elapsedMs / 1000).toFixed(1)} s
+            {state.busy ? state.cancelRequested ? ' · stopping after current request' : ' · running'
+              : state.cancelled ? ' · cancelled' : state.error ? ' · failed' : ' · complete'}
+          </Typography>
+          {state.busy && <LinearProgress variant="determinate" value={state.progress} />}
+          <Typography variant="caption">
+            FC{String(state.cmd).padStart(2, '0')} · start {state.regs} ({hex(state.regs)}) ·
+            {state.operation === 'scan' ? ' addresses ' + state.from + '–' + state.to
+              : ' slave ' + state.addr + ', quantity ' + state.regc}
+          </Typography>
+          {!!state.error && <Alert severity="warning">{outcome(state.error)}</Alert>}
+          {state.operation === 'scan' ? <>
+            <Typography>{responders.length} successful replies; {rows.filter(row => row[1] === 263).length} timeouts;
+              {' '}{rows.filter(row => row[1] !== 0 && row[1] !== 263).length} other errors.</Typography>
+            {!state.busy && !responders.length && <Alert severity="info">
+              No successful replies for this function/register. This does not prove that these addresses have no device.
+            </Alert>}
+            <FormControlLabel label="Show unsuccessful probes" control={<Checkbox checked={showFailures}
+              onChange={(_, checked) => setShowFailures(checked)} />} />
+            <TableContainer sx={{ maxHeight: 400 }}><Table size="small" aria-label="Modbus scan results">
+              <TableHead><TableRow><TableCell>Address</TableCell><TableCell>Result</TableCell><TableCell>Value</TableCell></TableRow></TableHead>
+              <TableBody>{visible.map(([address, code, value]) => <TableRow key={address}>
+                <TableCell>{address} ({hex(address)})</TableCell><TableCell>{outcome(code)}</TableCell>
+                <TableCell>{value === undefined ? '—' : value + ' (' + hex(value) + ')'}</TableCell>
+              </TableRow>)}</TableBody>
+            </Table></TableContainer>
+          </> : <>
+            {state.operation === 'write' && !state.busy && <Alert severity={state.verified ? 'success' : 'warning'}>
+              {state.verified ? 'Requested values observed in read-back.' : 'Write outcome is unverified. Check the device before another write.'}
+              {!!state.writeError && ' Write acknowledgment: ' + outcome(state.writeError) + '.'}
+              {!!state.verifyError && ' Read-back: ' + outcome(state.verifyError) + '.'}
+            </Alert>}
+            <TableContainer sx={{ maxHeight: 400 }}><Table size="small" aria-label="Modbus values">
+              <TableHead><TableRow><TableCell>Register / coil</TableCell><TableCell>Decimal</TableCell><TableCell>Hex</TableCell></TableRow></TableHead>
+              <TableBody>{state.values?.map((value, i) => <TableRow key={i}>
+                <TableCell>{state.regs + i}</TableCell><TableCell>{value}</TableCell><TableCell>{hex(value)}</TableCell>
+              </TableRow>)}</TableBody>
+            </Table></TableContainer>
+          </>}
+        </>}
+      </Stack>
+    </CardBox>
   );
-};
+}

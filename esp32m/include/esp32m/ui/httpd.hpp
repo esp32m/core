@@ -73,6 +73,10 @@ namespace esp32m {
 
       /** Register a plain HTTP endpoint (e.g. for binary file upload). */
       esp_err_t addHttpHandler(IHttpHandler &handler);
+      esp_err_t sendSession(uint32_t cid, uint64_t generation,
+                           std::shared_ptr<const std::string> text) override;
+      void closeSession(uint32_t cid, uint64_t generation) override;
+      void sendStats(JsonObject result) override;
 
      protected:
       void init(Ui *ui) override;
@@ -86,11 +90,18 @@ namespace esp32m {
       std::list<IHttpHandler *> _httpHandlers;
       std::mutex _wsSessionMutex;
       std::map<int, IWSHandler *> _wsSessions;
+      std::map<int, uint64_t> _controlSessions;
+      std::mutex _sendMutex;
+      size_t _queuedBytes = 0, _queuedWorks = 0;
+      uint64_t _sendRejected = 0, _sendFailed = 0, _slowClosed = 0;
       esp_err_t incomingReq(httpd_req_t *req);
       esp_err_t incomingWs(httpd_req_t *req);
       esp_err_t authenticate(httpd_req_t *req, bool &result);
       void wsSessionClosed(int sockfd);
       static esp_err_t wsHandlerCustom(httpd_req_t *req);
+      static esp_err_t wsPreHandshake(httpd_req_t *req);
+      static esp_err_t wsPostHandshake(httpd_req_t *req);
+      static void prepareWsHandler(httpd_uri_t &handler);
       static esp_err_t httpHandlerCustom(httpd_req_t *req);
       friend esp_err_t wsHandler(httpd_req_t *req);
       friend esp_err_t httpHandler(httpd_req_t *req);

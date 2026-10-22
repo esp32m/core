@@ -3,6 +3,7 @@
 #include "ArduinoJson.h"
 #include "esp32m/logging.hpp"
 #include "esp32m/net/net.hpp"
+#include "esp32m/net/mqtt.hpp"
 
 #include <esp_mac.h>
 #include <hal/efuse_hal.h>
@@ -143,7 +144,8 @@ namespace esp32m {
             stateTopic = _descriptor["stateTopic"] | makeTopic(false);
         }
         void inferAvailability() {
-          if (_descriptorConfig["availability_topic"])
+          if (_descriptorConfig["availability_topic"] ||
+              _descriptorConfig["availability"].is<JsonArrayConst>())
             return;
           auto& mqtt = net::Mqtt::instance();
           auto& lwt = mqtt.getLwt();

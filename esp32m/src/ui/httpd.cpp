@@ -1,4 +1,5 @@
 #include "esp32m/ui/httpd.hpp"
+#include "esp32m/ui/httpd-access.hpp"
 #include "esp32m/defs.hpp"
 #include "esp32m/net/net.hpp"
 #include "esp32m/logging.hpp"
@@ -10,6 +11,7 @@
 
 #include <esp_tls_crypto.h>
 #include <mdns.h>
+#include <stdint.h>
 #include <algorithm>
 #include <vector>
 #include <cstring>
@@ -83,24 +85,13 @@ namespace esp32m {
     }
 
     static inline bool isWsPath(const char* uri) {
-      return uri && !strncmp(uri, "/ws", 3);
+      return http::isWebSocketPath(uri);
     }
 
     bool uriMatcher(const char* reference_uri, const char* uri_to_match,
                     size_t match_upto) {
       (void)match_upto;
-      const bool isWsRequest = isWsPath(uri_to_match);
-
-      // Specific websocket endpoints (e.g. /ws and /ws/uart)
-      if (isWsPath(reference_uri))
-        return uri_to_match && !strcmp(reference_uri, uri_to_match);
-
-      // Root HTTP handler: match anything that's not under /ws
-      if (!strcmp(reference_uri, UriRoot))
-        return !isWsRequest;
-
-      // All other registered HTTP handlers: exact URI match
-      return uri_to_match && !strcmp(reference_uri, uri_to_match);
+      return http::uriMatches(reference_uri, uri_to_match);
     }
 
     esp_err_t wsHandler(httpd_req_t* req) {
@@ -133,7 +124,8 @@ namespace esp32m {
       if (!accessGranted)
         return ESP_OK;
       for (auto* h : httpd->_httpHandlers)
-        if (h && h->uri() && !strcmp(h->uri(), req->uri))
+        if (h && http::handlerMatches(h->uri(), h->method(), req->uri,
+                                     req->method))
           return h->handle(req);
       logw("httpHandlerCustom: no handler for %s", req->uri);
       return ESP_ERR_NOT_FOUND;
@@ -165,7 +157,7 @@ namespace esp32m {
       // On handshake we can reliably route by URI and remember the handler.
       if (req->method == HTTP_GET) {
         for (auto* h : httpd->_wsHandlers) {
-          if (h && h->uri() && req->uri[0] && !strcmp(h->uri(), req->uri)) {
+          if (h && req->uri[0] && http::pathMatches(h->uri(), req->uri)) {
             const esp_err_t err = h->handle(req);
             if (err == ESP_OK) {
               std::lock_guard<std::mutex> guard(httpd->_wsSessionMutex);
@@ -189,7 +181,7 @@ namespace esp32m {
 
       // Fallback: try URI match if available.
       for (auto* h : httpd->_wsHandlers) {
-        if (h && h->uri() && req->uri[0] && !strcmp(h->uri(), req->uri)) {
+        if (h && req->uri[0] && http::pathMatches(h->uri(), req->uri)) {
           return h->handle(req);
         }
       }
@@ -201,6 +193,7 @@ namespace esp32m {
       IWSHandler* handler = nullptr;
       {
         std::lock_guard<std::mutex> guard(_wsSessionMutex);
+        _controlSessions.erase(sockfd);
         auto it = _wsSessions.find(sockfd);
         if (it != _wsSessions.end()) {
           handler = it->second;
@@ -225,14 +218,25 @@ namespace esp32m {
       char* user_info = NULL;
       char* digest = NULL;
       size_t n = 0;
-      int rc = asprintf(&user_info, "%s:%s", username, password);
-      if (rc < 0)
+      const auto usernameLength = strlen(username);
+      const auto passwordLength = strlen(password);
+      if (passwordLength > SIZE_MAX - 2 ||
+          usernameLength > SIZE_MAX - passwordLength - 2)
         return NULL;
-
+      const auto credentialsLength = usernameLength + passwordLength + 1;
+      user_info = (char*)malloc(credentialsLength + 1);
       if (!user_info)
         return NULL;
+      memcpy(user_info, username, usernameLength);
+      user_info[usernameLength] = ':';
+      memcpy(user_info + usernameLength + 1, password, passwordLength);
+      user_info[credentialsLength] = 0;
       esp_crypto_base64_encode(NULL, 0, &n, (const unsigned char*)user_info,
-                               strlen(user_info));
+                               credentialsLength);
+      if (!n || n > SIZE_MAX - 7) {
+        free(user_info);
+        return NULL;
+      }
 
       /* 6: The length of the "Basic " string
        * n: Number of bytes for a base64 encode format
@@ -241,9 +245,12 @@ namespace esp32m {
       digest = (char*)calloc(1, 6 + n + 1);
       if (digest) {
         strcpy(digest, "Basic ");
-        esp_crypto_base64_encode((unsigned char*)digest + 6, n, &out,
-                                 (const unsigned char*)user_info,
-                                 strlen(user_info));
+        if (esp_crypto_base64_encode((unsigned char*)digest + 6, n, &out,
+                                     (const unsigned char*)user_info,
+                                     credentialsLength) != 0 || out > n) {
+          free(digest);
+          digest = NULL;
+        }
       }
       free(user_info);
       return digest;
@@ -255,6 +262,8 @@ namespace esp32m {
       if (len) {
         size_t bufsize = len + 1;
         auto buf = (char*)malloc(bufsize);
+        if (!buf)
+          return ESP_ERR_NO_MEM;
         auto res = httpd_req_get_hdr_value_str(req, name, buf, bufsize);
         if (res == ESP_OK)
           value = buf;
@@ -296,13 +305,13 @@ namespace esp32m {
       if (ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_start(&_server, &_config)) ==
           ESP_OK) {
         // Register WebSocket handler
-        httpd_uri_t uh = {.uri = UriWs,
-                          .method = HTTP_GET,
-                          .handler = wsHandler,
-                          .user_ctx = this,
-                          .is_websocket = true,
-                          .handle_ws_control_frames = false,
-                          .supported_subprotocol = 0};
+        httpd_uri_t uh = {};
+        uh.uri = UriWs;
+        uh.method = HTTP_GET;
+        uh.handler = wsHandler;
+        uh.user_ctx = this;
+        uh.is_websocket = true;
+        prepareWsHandler(uh);
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
 
 #ifdef CONFIG_HTTPD_WS_SUPPORT
@@ -310,13 +319,13 @@ namespace esp32m {
         for (auto* e : _wsHandlers) {
           if (!e)
             continue;
-          httpd_uri_t wh = {.uri = e->uri(),
-                            .method = HTTP_GET,
-                            .handler = Httpd::wsHandlerCustom,
-                            .user_ctx = this,
-                            .is_websocket = true,
-                            .handle_ws_control_frames = false,
-                            .supported_subprotocol = 0};
+          httpd_uri_t wh = {};
+          wh.uri = e->uri();
+          wh.method = HTTP_GET;
+          wh.handler = Httpd::wsHandlerCustom;
+          wh.user_ctx = this;
+          wh.is_websocket = true;
+          prepareWsHandler(wh);
           ESP_ERROR_CHECK_WITHOUT_ABORT(
               httpd_register_uri_handler(_server, &wh));
         }
@@ -326,13 +335,11 @@ namespace esp32m {
         for (auto* e : _httpHandlers) {
           if (!e)
             continue;
-          httpd_uri_t hh = {.uri = e->uri(),
-                            .method = e->method(),
-                            .handler = Httpd::httpHandlerCustom,
-                            .user_ctx = this,
-                            .is_websocket = false,
-                            .handle_ws_control_frames = false,
-                            .supported_subprotocol = 0};
+          httpd_uri_t hh = {};
+          hh.uri = e->uri();
+          hh.method = e->method();
+          hh.handler = Httpd::httpHandlerCustom;
+          hh.user_ctx = this;
           ESP_ERROR_CHECK_WITHOUT_ABORT(
               httpd_register_uri_handler(_server, &hh));
         }
@@ -341,6 +348,12 @@ namespace esp32m {
         uh.uri = UriRoot;
         uh.is_websocket = false;
         uh.handler = httpHandler;
+#if CONFIG_HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT
+        uh.ws_pre_handshake_cb = nullptr;
+#endif
+#if CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT
+        uh.ws_post_handshake_cb = nullptr;
+#endif
         ESP_ERROR_CHECK_WITHOUT_ABORT(httpd_register_uri_handler(_server, &uh));
       }
     }
@@ -369,13 +382,13 @@ namespace esp32m {
         auto* e = _wsHandlers.back();
         if (!e)
           return ESP_ERR_INVALID_STATE;
-        httpd_uri_t wh = {.uri = e->uri(),
-                          .method = HTTP_GET,
-                          .handler = Httpd::wsHandlerCustom,
-                          .user_ctx = this,
-                          .is_websocket = true,
-                          .handle_ws_control_frames = false,
-                          .supported_subprotocol = 0};
+        httpd_uri_t wh = {};
+        wh.uri = e->uri();
+        wh.method = HTTP_GET;
+        wh.handler = Httpd::wsHandlerCustom;
+        wh.user_ctx = this;
+        wh.is_websocket = true;
+        prepareWsHandler(wh);
         return httpd_register_uri_handler(_server, &wh);
       }
       return ESP_OK;
@@ -387,22 +400,18 @@ namespace esp32m {
       if (_server) {
         // Unregister root catch-all so the new exact handler takes priority
         httpd_unregister_uri_handler(_server, UriRoot, HTTP_GET);
-        httpd_uri_t hh = {.uri = handler.uri(),
-                          .method = handler.method(),
-                          .handler = Httpd::httpHandlerCustom,
-                          .user_ctx = this,
-                          .is_websocket = false,
-                          .handle_ws_control_frames = false,
-                          .supported_subprotocol = 0};
+        httpd_uri_t hh = {};
+        hh.uri = handler.uri();
+        hh.method = handler.method();
+        hh.handler = Httpd::httpHandlerCustom;
+        hh.user_ctx = this;
         ESP_CHECK_RETURN(httpd_register_uri_handler(_server, &hh));
         // Re-register root handler last
-        httpd_uri_t rootUh = {.uri = UriRoot,
-                              .method = HTTP_GET,
-                              .handler = httpHandler,
-                              .user_ctx = this,
-                              .is_websocket = false,
-                              .handle_ws_control_frames = false,
-                              .supported_subprotocol = 0};
+        httpd_uri_t rootUh = {};
+        rootUh.uri = UriRoot;
+        rootUh.method = HTTP_GET;
+        rootUh.handler = httpHandler;
+        rootUh.user_ctx = this;
         ESP_CHECK_RETURN(httpd_register_uri_handler(_server, &rootUh));
       }
       return ESP_OK;
@@ -525,17 +534,70 @@ namespace esp32m {
       return ESP_OK;
     }
 
+    esp_err_t Httpd::wsPreHandshake(httpd_req_t* req) {
+      auto* httpd = static_cast<Httpd*>(req->user_ctx);
+      if (!httpd)
+        return ESP_ERR_INVALID_STATE;
+      bool accessGranted = false;
+      ESP_CHECK_RETURN(httpd->authenticate(req, accessGranted));
+      // authenticate() has already sent the 401 response. Returning an error
+      // stops IDF from upgrading this unauthorized HTTP request to WebSocket.
+      if (!accessGranted)
+        return ESP_FAIL;
+      // Custom endpoints may reject (e.g. UART not armed/busy) with an HTTP
+      // response, so their acceptance and FD routing must precede the upgrade.
+      return http::pathMatches("/ws", req->uri) ? ESP_OK : wsHandlerCustom(req);
+    }
+
+    esp_err_t Httpd::wsPostHandshake(httpd_req_t* req) {
+      auto* httpd = static_cast<Httpd*>(req->user_ctx);
+      if (!httpd)
+        return ESP_ERR_INVALID_STATE;
+      // PRE has already accepted/authenticated this HTTP request. Do not
+      // reauthenticate or send another HTTP response after IDF has sent101.
+      auto cid = httpd_req_to_sockfd(req);
+      auto generation = httpd->sessionOpened(cid);
+      std::lock_guard<std::mutex> lock(httpd->_wsSessionMutex);
+      httpd->_controlSessions[cid] = generation;
+      return ESP_OK;
+    }
+
+    void Httpd::prepareWsHandler(httpd_uri_t& handler) {
+#if CONFIG_HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT
+      handler.ws_pre_handshake_cb = Httpd::wsPreHandshake;
+#endif
+#if CONFIG_HTTPD_WS_POST_HANDSHAKE_CB_SUPPORT
+      // ESP-IDF 6.1 skips uri->handler for an HTTP upgrade. Invoke that same
+      // control-channel handshake path after upgrade to establish accepted
+      // session generation before the first data frame. Custom endpoint
+      // acceptance has already run in PRE so it can still return HTTP errors.
+      handler.ws_post_handshake_cb = handler.handler == Httpd::wsHandlerCustom
+                                        ? nullptr : Httpd::wsPostHandshake;
+#endif
+    }
+
     esp_err_t Httpd::incomingWs(httpd_req_t* req) {
       if (req->method == HTTP_GET) {
         bool accessGranted = false;
         ESP_CHECK_RETURN(authenticate(req, accessGranted));
         if (!accessGranted)
           return ESP_OK;
+        auto cid = httpd_req_to_sockfd(req);
+        auto generation = sessionOpened(cid);
+        {
+          std::lock_guard<std::mutex> lock(_wsSessionMutex);
+          _controlSessions[cid] = generation;
+        }
         return ESP_OK;
       }
       httpd_ws_frame_t ws_pkt;
       memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
       ESP_CHECK_RETURN(httpd_ws_recv_frame(req, &ws_pkt, 0));
+      auto generation = sessionGeneration(httpd_req_to_sockfd(req));
+      // Bound allocation before reading the frame or parsing its JSON.
+      if (ws_pkt.len > 16 * 1024 ||
+          !generation)
+        return ESP_ERR_INVALID_SIZE;
 
       ws_pkt.payload = (uint8_t*)calloc(1, ws_pkt.len + 1);
       if (!ws_pkt.payload)
@@ -545,7 +607,8 @@ namespace esp32m {
       if (ret == ESP_OK)
         switch (ws_pkt.type) {
           case HTTPD_WS_TYPE_TEXT:
-            incoming(httpd_req_to_sockfd(req), ws_pkt.payload, ws_pkt.len);
+            incoming(httpd_req_to_sockfd(req), ws_pkt.payload, ws_pkt.len,
+                     generation);
             break;
           default:
             logI("WS packet type %d was not handled", ws_pkt.type);
@@ -556,6 +619,7 @@ namespace esp32m {
     }
 
     esp_err_t Httpd::authenticate(httpd_req_t* req, bool& result) {
+      result = false;
       std::string username, password;
 #ifdef CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_USERNAME
       username = CONFIG_ESP32M_UI_HTTPD_BASIC_AUTH_USERNAME;
@@ -571,49 +635,33 @@ namespace esp32m {
       }
 
       if (username.size() && password.size()) {
-        result = false;
-        char* buf = NULL;
-        size_t buf_len = 0;
-        buf_len = httpd_req_get_hdr_value_len(req, "Authorization") + 1;
-        if (buf_len > 1) {
-          buf = (char*)calloc(1, buf_len);
+        const auto headerLength =
+            httpd_req_get_hdr_value_len(req, "Authorization");
+        if (headerLength) {
+          char* buf = (char*)calloc(1, headerLength + 1);
           if (!buf)
             return ESP_ERR_NO_MEM;
-
-          if (httpd_req_get_hdr_value_str(req, "Authorization", buf, buf_len) ==
+          if (httpd_req_get_hdr_value_str(req, "Authorization", buf,
+                                          headerLength + 1) ==
               ESP_OK) {
-          } else {
-            logE("No auth value received");
+            char* expected =
+                http_auth_basic(username.c_str(), password.c_str());
+            if (!expected) {
+              free(buf);
+              return ESP_ERR_NO_MEM;
+            }
+            result = http::basicAuthorizationMatches(expected, buf,
+                                                      headerLength);
+            free(expected);
           }
-
-          char* auth_credentials =
-              http_auth_basic(username.c_str(), password.c_str());
-          if (!auth_credentials) {
-            logE("No enough memory for basic authorization credentials");
-            free(buf);
-            return ESP_ERR_NO_MEM;
-          }
-
-          if (strncmp(auth_credentials, buf, buf_len)) {
-            logE("Not authenticated");
-            httpd_resp_set_status(req, HTTPD_401);
-            httpd_resp_set_hdr(req, "Connection", "keep-alive");
-            httpd_resp_set_hdr(req, "WWW-Authenticate",
-                               "Basic realm=\"ESP32M\"");
-            httpd_resp_send(req, NULL, 0);
-          } else {
-            httpd_resp_set_status(req, HTTPD_200);
-            httpd_resp_set_hdr(req, "Connection", "keep-alive");
-          }
-          free(auth_credentials);
           free(buf);
-          result = true;
-        } else {
-          logI("No auth header received");
-          httpd_resp_set_status(req, HTTPD_401);
-          httpd_resp_set_hdr(req, "Connection", "keep-alive");
-          httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"ESP32M\"");
-          httpd_resp_send(req, NULL, 0);
+        }
+        if (!result) {
+          ESP_CHECK_RETURN(httpd_resp_set_status(req, HTTPD_401));
+          ESP_CHECK_RETURN(httpd_resp_set_hdr(req, "Connection", "keep-alive"));
+          ESP_CHECK_RETURN(httpd_resp_set_hdr(req, "WWW-Authenticate",
+                                             "Basic realm=\"ESP32M\""));
+          ESP_CHECK_RETURN(httpd_resp_send(req, NULL, 0));
         }
       } else
         result = true;
@@ -621,57 +669,136 @@ namespace esp32m {
     }
 
     esp_err_t Httpd::sendTo(uint32_t cid, const char* text) {
-      if (!_server)
+      return sendSession(cid, sessionGeneration(cid),
+                         std::make_shared<const std::string>(text ? text : ""));
+    }
+
+    void Httpd::closeSession(uint32_t cid, uint64_t generation) {
+      if (!sessionAlive(cid, generation))
+        return;
+      Transport::closeSession(cid, generation);
+      {
+        std::lock_guard<std::mutex> lock(_sendMutex);
+        ++_slowClosed;
+      }
+      struct CloseWork { Httpd* owner; uint32_t cid; uint64_t generation; };
+      auto work = new (std::nothrow) CloseWork{this, cid, generation};
+      auto shutdownCurrent = [&] {
+        // closeFn erases this map before closing/releasing the physical FD.
+        // Holding this lock therefore also makes the failure fallback safe.
+        std::lock_guard<std::mutex> lock(_wsSessionMutex);
+        auto i = _controlSessions.find(cid);
+        if (i != _controlSessions.end() && i->second == generation)
+          shutdown(cid, SHUT_RDWR);
+      };
+      if (!work) {
+        shutdownCurrent();
+        return;
+      }
+      // Do not queue IDF's sock_db pointer: it may be reused before the work
+      // executes. Verify the handshake generation on the HTTPD task itself.
+      auto err = _server ? httpd_queue_work(_server, [](void* argument) {
+        std::unique_ptr<CloseWork> item((CloseWork*)argument);
+        auto* owner = item->owner;
+        std::lock_guard<std::mutex> lock(owner->_wsSessionMutex);
+        auto i = owner->_controlSessions.find(item->cid);
+        if (i != owner->_controlSessions.end() && i->second == item->generation)
+          shutdown(item->cid, SHUT_RDWR);
+      }, work) : ESP_ERR_INVALID_STATE;
+      if (err != ESP_OK) {
+        delete work;
+        shutdownCurrent();
+      }
+    }
+
+    void Httpd::sendStats(JsonObject result) {
+      std::lock_guard<std::mutex> lock(_sendMutex);
+      result["queuedBytes"] = _queuedBytes;
+      result["queuedWorks"] = _queuedWorks;
+      result["byteLimit"] = 32 * 1024;
+      result["workLimit"] = 32;
+      result["rejected"] = _sendRejected;
+      result["failed"] = _sendFailed;
+      result["closed"] = _slowClosed;
+    }
+
+    esp_err_t Httpd::sendSession(uint32_t cid, uint64_t generation,
+                                std::shared_ptr<const std::string> text) {
+      if (!_server || !text || !sessionAlive(cid, generation))
         return ESP_ERR_INVALID_STATE;
 
       struct WorkItem {
+        Httpd* owner;
         httpd_handle_t server;
-        int fd;
-        uint8_t* payload;
-        size_t len;
+        uint32_t fd;
+        uint64_t generation;
+        std::shared_ptr<const std::string> payload;
+        size_t charge;
       };
-
-      auto work = (WorkItem*)calloc(1, sizeof(WorkItem));
-      if (!work)
-        return ESP_ERR_NO_MEM;
-
-      size_t len = text ? strlen(text) : 0;
-      uint8_t* payload = nullptr;
-      if (len) {
-        payload = (uint8_t*)malloc(len);
-        if (!payload) {
-          free(work);
-          return ESP_ERR_NO_MEM;
+      // Conservative charging includes string capacity and work metadata for
+      // every destination, even when the immutable body is physically shared.
+      size_t charge = sizeof(WorkItem) + text->capacity() + 1 + 64;
+      bool admitted;
+      {
+        std::lock_guard<std::mutex> lock(_sendMutex);
+        admitted = charge <= 32 * 1024 - std::min<size_t>(_queuedBytes, 32 * 1024) &&
+                   _queuedWorks < 32;
+        if (admitted) {
+          _queuedBytes += charge;
+          ++_queuedWorks;
+        } else {
+          ++_sendRejected;
         }
-        memcpy(payload, text, len);
       }
-
-      work->server = _server;
-      work->fd = (int)cid;
-      work->payload = payload;
-      work->len = len;
-
+      if (!admitted) {
+        closeSession(cid, generation);
+        return ESP_ERR_NO_MEM;
+      }
+      auto work = new (std::nothrow) WorkItem{this, _server, cid, generation,
+                                            std::move(text), charge};
+      if (!work) {
+        {
+          std::lock_guard<std::mutex> lock(_sendMutex);
+          _queuedBytes -= charge;
+          --_queuedWorks;
+          ++_sendRejected;
+        }
+        closeSession(cid, generation);
+        return ESP_ERR_NO_MEM;
+      }
       auto fn = [](void* arg) {
-        auto* w = (WorkItem*)arg;
-
-        httpd_ws_frame_t ws_pkt;
-        memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-        ws_pkt.payload = w->payload;
-        ws_pkt.len = w->len;
-        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-        (void)httpd_ws_send_frame_async(w->server, w->fd, &ws_pkt);
-
-        if (w->payload)
-          free(w->payload);
-        free(w);
+        std::unique_ptr<WorkItem> w((WorkItem*)arg);
+        auto* owner = w->owner;
+        bool failed = false;
+        // HTTPD processes this check and actual socket send on its own task:
+        // a reused FD cannot receive a predecessor's queued output.
+        if (owner->sessionAlive(w->fd, w->generation)) {
+          httpd_ws_frame_t packet = {};
+          packet.payload = (uint8_t*)w->payload->data();
+          packet.len = w->payload->size();
+          packet.type = HTTPD_WS_TYPE_TEXT;
+          failed = httpd_ws_send_frame_async(w->server, w->fd, &packet) != ESP_OK;
+        }
+        {
+          std::lock_guard<std::mutex> lock(owner->_sendMutex);
+          owner->_queuedBytes -= w->charge;
+          --owner->_queuedWorks;
+          if (failed)
+            ++owner->_sendFailed;
+        }
+        if (failed)
+          owner->closeSession(w->fd, w->generation);
       };
-
       auto err = httpd_queue_work(_server, fn, work);
       if (err != ESP_OK) {
-        if (work->payload)
-          free(work->payload);
-        free(work);
+        {
+          std::lock_guard<std::mutex> lock(_sendMutex);
+          _queuedBytes -= work->charge;
+          --_queuedWorks;
+          ++_sendRejected;
+        }
+        delete work;
+        closeSession(cid, generation);
         return err;
       }
       return ESP_OK;

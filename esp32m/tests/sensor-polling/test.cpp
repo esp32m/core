@@ -1,3 +1,8 @@
+#include <ArduinoJson.h>
+#include <atomic>
+#include <future>
+#include <condition_variable>
+#include <chrono>
 #include <algorithm>
 #include <climits>
 #include <cstdint>
@@ -20,6 +25,7 @@ namespace fake {
   bool initialized = true;
   unsigned loops = 0;
   uint32_t waitedTicks = 0;
+  std::atomic<unsigned> invalidations{0};
   void (*task)(void*) = nullptr;
   struct WaitReached {};
 }
@@ -48,27 +54,7 @@ uint32_t ulTaskNotifyTake(int, TickType_t ticks) {
 }
 int64_t esp_timer_get_time() { return static_cast<int64_t>(fake::nowMs * 1000); }
 
-// Inert JSON dependencies: the complete real Device declaration is compiled,
-// but these tests exercise only sensor scheduling and retry state.
-struct JsonVariantConst {
-  bool isUnbound() const { return true; }
-};
-struct JsonSlot {
-  template <typename T> JsonSlot& operator=(T) { return *this; }
-};
-struct JsonObjectConst {
-  JsonVariantConst operator[](const char*) const { return {}; }
-};
-struct JsonObject {
-  JsonSlot operator[](const char*) const { return {}; }
-  void remove(const char*) {}
-  template <typename T> void set(T) {}
-};
-struct JsonDocument {
-  template <typename T> T as() const { return {}; }
-  template <typename T> T to() { return {}; }
-};
-
+constexpr int ESP_ERR_INVALID_STATE = 259, ESP_ERR_INVALID_ARG = 258;
 namespace esp32m {
   class Event {
    public:
@@ -87,10 +73,37 @@ namespace esp32m {
     static EventManager& instance() { static EventManager value; return value; }
     void subscribe(std::function<void(Event&)>) {}
   };
+  struct Request {
+    std::string command;
+    bool internal = false;
+    JsonDocument payload, response;
+    int error = 0;
+    explicit Request(const char* command = "config-set", bool internal = false)
+        : command(command), internal(internal) {}
+    bool is(const char* value) const { return command == value; }
+    bool isInternal() const { return internal; }
+    void respond(JsonVariantConst value, bool) { response.set(value); }
+    void respondError(int value, const char*) { error = value; }
+  };
+  struct RequestContext {
+    Request& request;
+    JsonVariantConst data;
+    struct { int error = 0; void check(int value, const char*) { error = value; } } errors;
+    std::unique_ptr<JsonDocument> result;
+    RequestContext(Request& request) : request(request), data(request.payload.as<JsonVariantConst>()) {}
+  };
   class AppObject {
    protected:
+    static constexpr const char* KeyStateGet = "state-get";
+    static constexpr const char* KeyInfoGet = "info-get";
+    virtual bool handleRequest(Request&) { return false; }
+    virtual JsonDocument* getConfig(RequestContext&) { return nullptr; }
+    virtual bool setConfig(RequestContext&) { return false; }
     virtual void handleEvent(Event&) {}
     template <typename... T> void logI(const char*, T...) {}
+  };
+  struct EventStateChanged {
+    static void publish(AppObject*) { fake::invalidations.fetch_add(1); }
   };
   namespace json { struct PropsContainer {}; }
   struct App {
@@ -117,15 +130,29 @@ namespace {
     bool initOk = true;
     bool pollOk = true;
     uint64_t pollDurationMs = 0;
-    Sensor() { init(HasSensors); }
+    int configReads = 0, configWrites = 0;
+    std::function<void()> duringPoll;
+    Sensor(bool canDisable = false) { init(static_cast<Flags>(HasSensors | (canDisable ? CanDisable : 0))); }
+    using Device::setConfig;
+    using Device::getConfig;
+    using Device::handleRequest;
+    void hold(const std::function<void()>& fn) { std::lock_guard guard(_deviceMutex); fn(); }
     void accept(esp32m::Event& event) { handleEvent(event); }
     bool due() { return shouldPollSensors(); }
     uint64_t next() { return nextSensorsPollTime(); }
     void reset(bool immediate) { resetSensors(immediate); }
    protected:
+    JsonDocument* getDeviceConfig(esp32m::RequestContext&) override {
+      ++configReads;
+      auto doc = new JsonDocument();
+      (*doc)["address"] = 5;
+      return doc;
+    }
+    bool setDeviceConfig(esp32m::RequestContext&) override { ++configWrites; return false; }
     bool initSensors() override { ++initializations; return initOk; }
     bool pollSensors() override {
       ++polls;
+      if (duringPoll) duringPoll();
       fake::nowMs += pollDurationMs;
       return pollOk;
     }
@@ -212,6 +239,12 @@ namespace {
     runToWait();
     require(sensor.initializations == 3 && sensor.polls == 2,
             "initialization retries resume after configured delay");
+    const auto generation = sensor.sampleGeneration();
+    sensor.pollOk = false;
+    fake::nowMs = sensor.next();
+    runToWait();
+    require(sensor.sampleGeneration() != generation,
+            "known failed sensor poll invalidates previously acquired samples immediately");
   }
   void retryAcrossRollover() {
     Sensor sensor;
@@ -227,6 +260,154 @@ namespace {
     runToWait();
     require(sensor.initializations == 2 && sensor.polls == 1,
             "retry eventually succeeds across rollover");
+  }
+  void disabledDevice() {
+    using namespace esp32m;
+    Sensor sensor(true);
+    use({&sensor});
+    fake::nowMs = Wrap + 1000;
+    sensor.setComponentState("test", 42);
+    Request disable;
+    disable.payload["_disabled"] = true;
+    RequestContext context(disable);
+    require(sensor.setConfig(context) && sensor.isDisabled(), "disable is stored");
+    require(context.result && (*context.result)["_disabled"] == true && sensor.configWrites == 0,
+            "toggle acknowledged without driver config or bus work");
+    require(sensor.getComponentState("test").isUnbound(), "disable discards cached sensor value");
+    runToWait();
+    require(sensor.polls == 0 && sensor.initializations == 0 && !sensor.due() && fake::waitedTicks == 100,
+            "disabled device neither initializes nor polls nor causes busy looping");
+    Request query("device-state");
+    require(sensor.handleRequest(query) && query.response["_disabled"] == true, "local metadata query");
+    for (const auto* command : {"state-set", "run", "probe", "parameters"}) {
+      Request request(command);
+      require(sensor.handleRequest(request) && request.error == ESP_ERR_INVALID_STATE, "disabled commands blocked");
+    }
+    Request bad;
+    bad.payload["_disabled"] = "true";
+    RequestContext badContext(bad);
+    require(!sensor.setConfig(badContext) && badContext.errors.error, "strict boolean");
+    bad.payload["_disabled"] = false;
+    bad.payload["address"] = 10;
+    RequestContext mixed(bad);
+    require(!sensor.setConfig(mixed) && mixed.errors.error && sensor.isDisabled(), "mixed toggle and hardware write rejected atomically");
+    bad.payload.remove("_disabled");
+    RequestContext hardware(bad);
+    require(!sensor.setConfig(hardware) && hardware.errors.error && sensor.configWrites == 0, "disabled hardware settings blocked");
+    Request save("config-get", true);
+    RequestContext savedContext(save);
+    std::unique_ptr<JsonDocument> saved(sensor.getConfig(savedContext));
+    require((*saved)["_disabled"] == true && (*saved)["address"] == 5, "persistence includes both shared and device settings");
+    Sensor restored(true);
+    Request restore("config-set", true);
+    restore.payload.set(*saved);
+    RequestContext restoredContext(restore);
+    require(restored.setConfig(restoredContext) && restored.isDisabled() && restored.configWrites == 1,
+            "reboot restores disabled before driver settings");
+    pollDirectly(restored);
+    require(restored.initializations == 0, "restored disabled device remains silent");
+    disable.payload["_disabled"] = false;
+    RequestContext enable(disable);
+    require(sensor.setConfig(enable), "re-enable changes config");
+    runToWait();
+    require(sensor.polls == 1 && sensor.initializations == 1, "re-enable immediately initializes and polls");
+    Sensor legacy;
+    RequestContext ignored(disable);
+    legacy.setConfig(ignored);
+    std::unique_ptr<JsonDocument> legacyConfig(legacy.getConfig(savedContext));
+    require((*legacyConfig)["_disabled"].isUnbound(), "unmigrated drivers keep old config shape");
+  }
+  void disableWaitsForPoll() {
+    using namespace esp32m;
+    Sensor sensor(true);
+    fake::nowMs = 2000;
+    std::promise<void> entered, release;
+    auto released = release.get_future();
+    sensor.duringPoll = [&] { entered.set_value(); released.wait(); };
+    auto poll = std::async(std::launch::async, [&] { pollDirectly(sensor); });
+    entered.get_future().wait();
+    auto disabling = std::async(std::launch::async, [&] {
+      Request request;
+      request.payload["_disabled"] = true;
+      RequestContext context(request);
+      return sensor.setConfig(context);
+    });
+    const bool waited = disabling.wait_for(std::chrono::milliseconds(30)) == std::future_status::timeout;
+    release.set_value();
+    poll.get();
+    require(waited && disabling.get(), "disable waits until an in-flight poll completes");
+    sensor.duringPoll = {};
+    fake::nowMs += 10000;
+    pollDirectly(sensor);
+    require(sensor.polls == 1, "no polls after disable acknowledgment");
+  }
+  void busyDeviceDoesNotBlockOthers() {
+    // Applies equally to drivers that do not expose the disable setting.
+    Sensor busy, other;
+    fake::nowMs = 2000;
+    use({&busy, &other});
+    std::promise<void> entered, release;
+    auto released = release.get_future();
+    auto operation = std::async(std::launch::async, [&] {
+      busy.hold([&] { entered.set_value(); released.wait(); });
+    });
+    entered.get_future().wait();
+    auto polling = std::async(std::launch::async, [&] { runToWait(); });
+    const bool completed = polling.wait_for(std::chrono::milliseconds(200)) == std::future_status::ready;
+    release.set_value(); operation.get(); polling.get();
+    require(completed && busy.polls == 0 && other.polls == 1,
+            "busy device does not block another device or watchdog servicing");
+  }
+  void observationInvalidations() {
+    using namespace esp32m;
+    Sensor sensor(true);
+    fake::nowMs = 2000;
+    fake::invalidations = 0;
+    pollDirectly(sensor);
+    require(fake::invalidations == 1, "complete sample invalidates once");
+    pollDirectly(sensor);
+    require(fake::invalidations == 1, "non-due poll does not invalidate");
+    fake::nowMs = sensor.next();
+    pollDirectly(sensor);
+    require(fake::invalidations == 2, "equal successful sample renews observation");
+    sensor.pollOk = false;
+    fake::nowMs = sensor.next();
+    pollDirectly(sensor);
+    require(fake::invalidations == 3, "failed poll publishes diagnostic/freshness hint");
+    sensor.initOk = false;
+    fake::nowMs = sensor.next() + 10000;
+    pollDirectly(sensor);
+    require(fake::invalidations == 4, "failed initialization also invalidates");
+    Request disable;
+    disable.payload["_disabled"] = true;
+    RequestContext disabling(disable);
+    sensor.setConfig(disabling);
+    require(fake::invalidations == 5, "disable clears and invalidates cached values");
+    sensor.setConfig(disabling);
+    require(fake::invalidations == 5, "unchanged disabled setting emits no extra hint");
+    disable.payload["_disabled"] = false;
+    RequestContext enabling(disable);
+    sensor.setConfig(enabling);
+    require(fake::invalidations == 6, "re-enable invalidates metadata immediately");
+  }
+  void stateCaptureWaitsForPoll() {
+    using namespace esp32m;
+    Sensor sensor;
+    fake::nowMs = 2000;
+    std::promise<void> entered, release, readStarted;
+    auto released = release.get_future();
+    sensor.duringPoll = [&] { entered.set_value(); released.wait(); };
+    auto polling = std::async(std::launch::async, [&] { pollDirectly(sensor); });
+    entered.get_future().wait();
+    auto reading = std::async(std::launch::async, [&] {
+      Request request("state-get");
+      readStarted.set_value();
+      sensor.handleRequest(request);
+    });
+    readStarted.get_future().wait();
+    const bool waited = reading.wait_for(std::chrono::milliseconds(30)) == std::future_status::timeout;
+    release.set_value(); polling.get(); reading.get();
+    require(waited, "state capture waits for a complete multi-component sample without CanDisable");
   }
   void boundsAndIntervals() {
     use({});
@@ -266,7 +447,12 @@ int main() {
     completionAndRetry();
     retryAcrossRollover();
     boundsAndIntervals();
-    std::cout << "PASS: production sensor scheduler (5 scenario groups)\n";
+    disabledDevice();
+    disableWaitsForPoll();
+    busyDeviceDoesNotBlockOthers();
+    observationInvalidations();
+    stateCaptureWaitsForPoll();
+    std::cout << "PASS: production sensor scheduler, observation and Device disable (10 scenario groups)\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "FAIL: " << error.what() << '\n';

@@ -153,6 +153,11 @@ namespace esp32m {
       static LogMessage* alloc(Level level, int64_t stamp, const char* name,
                                const char* message);
 
+      // Copy into caller-owned bounded storage without allocation, preserving
+      // original task/name/stamp. Used by appenders with a private fixed queue.
+      LogMessage* copyTo(void* destination, size_t capacity,
+                         bool* truncated = nullptr) const;
+
      private:
       int64_t _stamp;
       uint16_t _size;

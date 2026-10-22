@@ -7,7 +7,7 @@ export type TProps = {
 };
 
 export type TState = [
-  age: number,
+  sampledAtMs: number,
   address: number,
   flow: number,
   consumption: number,

@@ -427,7 +427,7 @@ namespace esp32m {
     JsonDocument *Ina::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(7) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_i2c->address());
       arr.add(ina::type2name(type()));
       arr.add(_voltage.get());
@@ -448,7 +448,7 @@ namespace esp32m {
       _current.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getWatts(value));
       _power.set(value, &changed);
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
 /*      if (changed)
         sensor::GroupChanged::publish(_voltage.group);*/
 

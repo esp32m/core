@@ -1,12 +1,13 @@
 import { CardBox } from '@ts-libs/ui-app';
 import { NameValueList } from '../../app';
-import { useModuleState } from '../../backend';
+import { useModuleState, useSampleAge } from '../../backend';
 import { Name, IState, IProps } from './types';
 
 export default ({ title, addr }: IProps) => {
   const state = useModuleState<IState>(Name);
+  const age = useSampleAge(state?.[0], Name);
   if (!state) return null;
-  const [age = -1, a, te = 0, ee = 0, ie = 0, v, i, ap = 0, rap = 0, pf, f] =
+  const [, a, te = 0, ee = 0, ie = 0, v, i, ap = 0, rap = 0, pf, f] =
     state;
   if (age < 0 || age > 60 * 1000) return null;
   if (addr && addr != a) return null;

@@ -1,5 +1,5 @@
 import { Name, TState, TProps, TConfig } from './types';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useBackendApi, useModuleConfig, useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 import { Grid, IconButton, MenuItem } from '@mui/material';
@@ -71,9 +71,10 @@ export const Content = ({
     validationSchema,
   });
   const state = useModuleState<TState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
   const [
-    age = -1,
+    ,
     a,
     flow,
     consumption,

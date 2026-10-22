@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp32m/device.hpp"
+#include "esp32m/dev/thermostat/types.hpp"
 #include "esp32m/events/response.hpp"
 
 #include <ArduinoJson.h>
@@ -8,6 +9,7 @@
 #include <freertos/task.h>
 #include <math.h>
 #include <map>
+#include <mutex>
 
 namespace esp32m {
   namespace opentherm {
@@ -481,18 +483,24 @@ namespace esp32m {
       }
 
      protected:
-      std::mutex _mutex;
+      mutable std::mutex _mutex;
+      // The protocol worker and device requests share the HVAC cache. Keep
+      // transient controls and the final transmission gate in the same lock.
+      mutable std::recursive_mutex _stateMutex;
       Message _outgoing = {};
       TaskHandle_t _task = nullptr;
       Recv _recv;
       bool _logTraffic = false;
       Hvac _hvac;
-      esp_err_t send(MessageType type, DataId id, uint16_t value);
-      esp_err_t send(Message &msg) {
-        return send(msg.type, msg.id, msg.value);
+      bool _outgoingFromModel = false;
+      esp_err_t send(MessageType type, DataId id, uint16_t value,
+                     bool fromModel = false);
+      esp_err_t send(Message &msg, bool fromModel = false) {
+        return send(msg.type, msg.id, msg.value, fromModel);
       }
       esp_err_t init(IDriver *driver, const char *name);
       esp_err_t transmit(bool retransmit = false);
+      virtual void prepareTransmit(Message &msg) {}
       esp_err_t receive();
       void dumpFrame(int attempt);
 
@@ -557,6 +565,19 @@ namespace esp32m {
 
     class Master : public virtual Core {
      public:
+      struct HeatingState {
+        bool enabled = false;
+        bool active = false;
+        bool dhwActive = false;
+        bool fault = false;
+        bool overrideActive = false;
+        bool manualOverride = false;
+        uint64_t statusReceivedAtMs = 0;
+        uint64_t revision = 0;
+        float configuredFlowC = NAN;
+        float requestedFlowC = NAN;
+        float maximumFlowC = NAN;
+      };
       Master() {}
       Master(const Master &) = delete;
 
@@ -564,6 +585,12 @@ namespace esp32m {
       IdInfoArray &ids() {
         return _ids;
       }
+      HeatingState heatingState() const;
+      // These requests never change CH/DHW enable flags or persisted targets.
+      // Reject an output computed before a manual target change.
+      esp_err_t applyThermostatFlow(float celsius, uint64_t expectedRevision,
+                                    uint64_t validUntilMs);
+      void clearThermostatFlow();
 
      protected:
       IdInfoArray _ids;
@@ -572,6 +599,9 @@ namespace esp32m {
       virtual bool isSupported(Message &msg);
       virtual void processResponse(Message &msg);
       virtual void incomingFrameInvalid() {}
+      void prepareTransmit(Message &msg) override;
+      void reconcileManualFlow(float previousFlow, float previousMaximum);
+      void manualFlowTakeover();
       void run();
       virtual void jobDone(IMasterModel *job) {}
       int commDelay() {
@@ -587,6 +617,10 @@ namespace esp32m {
      private:
       IMasterModel *_model;
       IMasterModel *_job = nullptr;
+      float _thermostatFlowC = NAN;
+      uint64_t _thermostatFlowValidUntilMs = 0;
+      uint64_t _statusReceivedAtMs = 0;
+      uint64_t _controlRevision = 0;
       void commSlot();
     };
 
@@ -777,12 +811,16 @@ namespace esp32m {
   namespace dev {
 
     class OpenthermMaster : public virtual opentherm::Master,
-                            public virtual Device {
+                            public virtual Device,
+                            public thermostat::Actuator {
      public:
       OpenthermMaster(opentherm::IDriver *driver,
                       opentherm::IMasterModel *model, const char *name);
       OpenthermMaster(const OpenthermMaster &) = delete;
       bool handleRequest(Request &req) override;
+      thermostat::Capabilities capabilities() const override;
+      thermostat::Feedback snapshot() const override;
+      thermostat::Result apply(const thermostat::Request &request) override;
 
      protected:
       void processResponse(opentherm::Message &msg) override;

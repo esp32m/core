@@ -40,7 +40,7 @@ namespace esp32m {
       int _rnom = 10000, _tnom = 25, _beta = 3950, _rref = 10000, _samples = 5;
       float _adj = 0;
       Sensor _temperature;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
     };
 
     Ntc *useNtc(const char *name, io::IPin *pin);

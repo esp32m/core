@@ -65,7 +65,7 @@ namespace esp32m {
       JsonDocument* getState(RequestContext& ctx) override {
         JsonDocument* doc = new JsonDocument();
         JsonArray arr = doc->to<JsonArray>();
-        arr.add(millis() - _stamp);
+        arr.add(_stamp);
         arr.add(_level.get());
         return doc;
       }
@@ -111,13 +111,13 @@ namespace esp32m {
         ESP_CHECK_RETURN_BOOL(readLevel(level));
         bool changed = false;
         _level.set(level, &changed);
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         return true;
       }
 
      private:
       Sensor _level;
-      uint64_t _stamp = 0;
+      int64_t _stamp = -1;
     };
 
     Tm601awlcor* useTm601awlcor(uint8_t addr = tm601awlcor::DefaultAddress,

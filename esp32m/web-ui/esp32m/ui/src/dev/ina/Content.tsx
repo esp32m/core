@@ -1,13 +1,14 @@
 import { IState, IProps } from './types';
-import { useModuleState } from '../..';
+import { useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
 export default ({ name, title }:IProps) => {
   const state=useModuleState<IState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
   if (!state || !state.length) return null;
-  const [age = -1, , t, voltage, shuntVoltage, current, power] = state;
+  const [, , t, voltage, shuntVoltage, current, power] = state;
   if (age < 0 || age > 60 * 1000) return null;
   const list = [];
   if (t) list.push(['Chip type', t]);

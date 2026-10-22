@@ -382,6 +382,13 @@ namespace esp32m {
     }
     Subscription* Mqtt::subscribe(const char* topic, HandlerFunction handler,
                                   int qos) {
+      return subscribeDetailed(topic, handler ? DetailedHandlerFunction(
+          [handler](std::string topic, std::string payload, const MessageMetadata&) {
+            handler(std::move(topic), std::move(payload));
+          }) : DetailedHandlerFunction{}, qos);
+    }
+    Subscription* Mqtt::subscribeDetailed(const char* topic, DetailedHandlerFunction handler,
+                                          int qos) {
       if (!topic)
         return nullptr;
       std::string t(topic);
@@ -445,7 +452,7 @@ namespace esp32m {
           _recvcnt++;
           Incoming ev(topic, payload);
           ev.publish();
-          std::vector<HandlerFunction> handlers = findMatchingHandlers(topic);
+          std::vector<DetailedHandlerFunction> handlers = findMatchingHandlers(topic);
           /*{
             std::lock_guard guard(_mutex);
             auto it = _subscriptions.find(topic);
@@ -456,7 +463,10 @@ namespace esp32m {
                   handlers.push_back(fn);
               }
           }*/
-          for (auto fn : handlers) fn(topic, payload);
+          const MessageMetadata metadata{
+              event->retain != 0,
+              event->current_data_offset == 0 && event->data_len == event->total_data_len};
+          for (auto fn : handlers) fn(topic, payload, metadata);
         } break;
         default:
           break;
@@ -488,9 +498,9 @@ namespace esp32m {
       return fi == filter.size() && ti == topic.size();
     }
 
-    std::vector<HandlerFunction> Mqtt::findMatchingHandlers(std::string topic) {
+    std::vector<DetailedHandlerFunction> Mqtt::findMatchingHandlers(std::string topic) {
       std::lock_guard guard(_mutex);
-      std::vector<HandlerFunction> handlers;
+      std::vector<DetailedHandlerFunction> handlers;
       for (const auto& [topicFilter, subsById] : _subscriptions) {
         if (mqttTopicMatchesFilter(topicFilter, topic)) {
           for (const auto& [id, sub] : subsById) {

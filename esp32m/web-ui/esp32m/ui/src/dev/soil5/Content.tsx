@@ -1,5 +1,5 @@
 import { Name, TState, TProps } from './types';
-import { useModuleState } from '../..';
+import { useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
@@ -9,9 +9,10 @@ export const Content = ({
   addr,
 }: TProps) => {
   const state = useModuleState<TState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
   const [
-    age = -1,
+    ,
     a,
     moisture,
     temperature,

@@ -25,7 +25,7 @@ namespace esp32m {
     JsonDocument *PressureSensor::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       arr.add(_mv * _vdiv / 1000.0);
       arr.add(_raw);
@@ -42,7 +42,7 @@ namespace esp32m {
         _value = compute(mv, (float)raw / _divisor);
         _raw = raw;
         _mv = mv;
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         _pressure.set(_value);
       }
       return true;

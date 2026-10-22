@@ -1,5 +1,5 @@
 export type TState = {
-  stamp: number;
+  sampledAtMs: number;
   on: boolean;
   rpm?: number;
   speed?: number;

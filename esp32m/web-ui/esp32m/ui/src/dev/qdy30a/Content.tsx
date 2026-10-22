@@ -1,5 +1,5 @@
 import { Name, IState, IProps } from './types';
-import {  useModuleState } from '../..';
+import {  useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
@@ -7,8 +7,9 @@ const un = ['?', 'cm', 'mm', 'MPa', 'Pa', 'kPa', 'MA'];
 
 export default ({ title, addr }: IProps) => {
   const state = useModuleState<IState>(Name);
+  const age = useSampleAge(state?.[0], Name);
   if (!state) return null;
-  const [age = -1, a, units = 0, decimals = 0, , , value = 0, regs] = state;
+  const [, a, units = 0, decimals = 0, , , value = 0, regs] = state;
   if (age < 0 || age > 60 * 1000) return null;
   if (addr && addr != a) return null;
   const list = [];

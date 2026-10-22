@@ -71,8 +71,10 @@ namespace esp32m {
       class CommandRequest : public Request {
        public:
         std::string componentId;
-        CommandRequest(const char* target, std::string componentId, JsonVariantConst data)
-            : Request(Name, 0, target, data, nullptr), componentId(componentId) {}
+        bool retained = false;
+        CommandRequest(const char* target, std::string componentId, JsonVariantConst data,
+                       bool retained = false)
+            : Request(Name, 0, target, data, nullptr), componentId(componentId), retained(retained) {}
 
         void respondImpl(const char* source, const JsonVariantConst data,
                          bool isError) override {}

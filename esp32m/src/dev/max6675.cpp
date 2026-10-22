@@ -51,7 +51,7 @@ namespace esp32m {
     JsonDocument *Max6675::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); 
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       return doc;
     }
@@ -77,7 +77,7 @@ namespace esp32m {
         if ((res & (1 << 14)) == 0) {
           res >>= 3;
           _value = res * 0.25;
-          _stamp = millis();
+          _stamp = esp_timer_get_time() / 1000LL;
         }  // else logW("sensor is not connected");
         _temperature.set(_value);
       }

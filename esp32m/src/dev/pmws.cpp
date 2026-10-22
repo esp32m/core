@@ -41,7 +41,7 @@ namespace esp32m {
     JsonDocument *Pmws::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_pm25.get());
       arr.add(_pm10.get());
@@ -161,7 +161,7 @@ namespace esp32m {
         uint16_t values[5] = {};
         ESP_CHECK_RETURN_BOOL(
             mb.request(_addr, modbus::Command::ReadHolding, 0x00, 5, values));
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         _humidity->set(values[0] / 10.0f, &changed);
         _temperature->set((int16_t)values[1] / 10.0f, &changed);
         _pm25.set((float)values[2], &changed);
@@ -172,7 +172,7 @@ namespace esp32m {
         uint16_t values[3] = {};
         ESP_CHECK_RETURN_BOOL(
             mb.request(_addr, modbus::Command::ReadHolding, 0x00, 3, values));
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         _pm25.set((float)values[0], &changed);
         _pm10.set((float)values[1], &changed);
         _pm1.set((float)values[2], &changed);

@@ -27,7 +27,7 @@ namespace esp32m {
      private:
       const char *_name;
       uint8_t _addr;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _moisture, _temperature, _conductivity, _salinity, _tds;
     };
 

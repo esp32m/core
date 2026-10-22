@@ -60,7 +60,7 @@ namespace esp32m {
     JsonDocument *Lwgy::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(10) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_flow.get());
       arr.add(_consumption.get());
@@ -184,7 +184,7 @@ namespace esp32m {
       _mc = fromCDAB(&values[5]);
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 0x100, 4, values));
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       _consumption.set(fromCDAB(&values[0]));
       _flow.set(fromCDAB(&values[2]));
       return true;

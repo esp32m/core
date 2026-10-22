@@ -3,6 +3,9 @@
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_timer.h>
+#include <algorithm>
+#include <atomic>
 #include <map>
 #include <mutex>
 
@@ -27,6 +30,8 @@ namespace esp32m {
     enum Flags {
       None = 0,
       HasSensors = 1,
+      // Opt in while existing drivers migrate to get/setDeviceConfig.
+      CanDisable = 2,
     };
     Device(const Device&) = delete;
     void setReinitDelay(unsigned int delay) {
@@ -35,6 +40,10 @@ namespace esp32m {
     bool hasSensors() const {
       return (_flags & Flags::HasSensors) != 0;
     }
+    bool isDisabled() const {
+      return _disabled.load();
+    }
+    uint64_t sampleGeneration() const { return _sampleGeneration.load(); }
 
     void setSensorsPollInterval(int intervalMs) {
       _sensorsPollInterval = intervalMs > 0 ? intervalMs : 1;
@@ -91,11 +100,25 @@ namespace esp32m {
     Device() {};
     void init(const Flags flags);
     void handleEvent(Event& ev) override;
+    bool handleRequest(Request& request) override;
+    JsonDocument* getConfig(RequestContext& ctx) override;
+    bool setConfig(RequestContext& ctx) override;
+    virtual JsonDocument* getDeviceConfig(RequestContext& ctx) {
+      return nullptr;
+    }
+    virtual bool setDeviceConfig(RequestContext& ctx) {
+      return false;
+    }
+    // Take before a driver-specific mutex for asynchronous/manual bus work.
+    // Shared sensor polls and request snapshots also use this lock, keeping a
+    // multi-component acquisition atomic relative to state serialization.
+    std::recursive_mutex _deviceMutex;
     virtual bool initSensors() {
       return true;
     }
     virtual void resetSensors(bool immediate = false) {
       _sensorsReady = false;
+      _sampleGeneration.fetch_add(1);
       if (immediate)
         _sensorsInitAt = 0;
     }
@@ -109,6 +132,8 @@ namespace esp32m {
     virtual bool shouldPollSensors();
 
    private:
+    std::atomic<bool> _disabled{false};
+    std::atomic<uint64_t> _sampleGeneration{0};
     bool _sensorsReady = false;
     unsigned long _sensorsInitAt = 0;
     uint64_t _sensorsPolledAt = 0;
@@ -165,7 +190,8 @@ namespace esp32m {
       }
 
       bool isDisabled() const {
-        return (_flags & Flags::Disabled) != 0;
+        return (_flags & Flags::Disabled) != 0 ||
+               (_device && _device->isDisabled());
       }
 
       void setDisabled(bool disabled) {
@@ -420,18 +446,20 @@ namespace esp32m {
       StateEmitter(EmitFlags flags = EmitFlags::Periodically |
                                      EmitFlags::OnChange);
       void setInterval(int intervalMs) {
-        _interval = intervalMs;
+        _interval = intervalMs > 0 ? intervalMs : 1;
       };
       int getInterval() const {
         return _interval;
       };
       virtual unsigned long nextTime() {
         auto current = millis();
-        auto next = _emittedAt + _interval;
-        return next > current ? next : current;
+        auto elapsed = current - _emittedAt;
+        return elapsed >= static_cast<unsigned long>(_interval)
+                   ? current : _emittedAt + _interval;
       };
       virtual bool shouldEmit() {
-        return millis() >= nextTime();
+        const auto next = nextTime();
+        return static_cast<int32_t>(millis() - next) >= 0;
       };
 
      protected:
@@ -453,6 +481,11 @@ namespace esp32m {
 
     class Sensor : public Component {
      public:
+      struct Sample {
+        double value = NAN;
+        uint64_t sampledAtMs = 0;
+        bool valid = false;
+      };
       StateClass stateClass = StateClass::Undefined;
       const char* unit = nullptr;
       Sensor(Device* device, const char* type, const char* id = nullptr)
@@ -483,11 +516,56 @@ namespace esp32m {
       }
       template <typename T>
       void set(T value, bool* changed = nullptr) {
-        setState(value, changed);
+        setSample(value, uint64_t(esp_timer_get_time()) / 1000, changed);
+      }
+      // Cached/asynchronous producers must pass their actual acquisition time.
+      template <typename T>
+      void setSample(T value, uint64_t sampledAtMs, bool* changed = nullptr) {
+        Sample sample;
+        sample.sampledAtMs = sampledAtMs;
+        if constexpr (std::is_arithmetic_v<T>) {
+          sample.value = static_cast<double>(value);
+          sample.valid = std::isfinite(sample.value);
+        } else if constexpr (std::is_same_v<T, JsonVariantConst> ||
+                             std::is_same_v<T, JsonVariant>) {
+          if (value.template is<double>()) {
+            sample.value = value.template as<double>();
+            sample.valid = std::isfinite(sample.value);
+          }
+        }
+        {
+          std::lock_guard guard(_sampleMutex);
+          _sample = sample;
+          _sampleGeneration = device() ? device()->sampleGeneration() : 0;
+        }
+        Component::setState(value, changed);
+      }
+      template <typename T>
+      void setState(T value, bool* changed = nullptr) {
+        set(value, changed);
+      }
+      void invalidateSample() {
+        std::lock_guard guard(_sampleMutex);
+        _sample.valid = false;
+      }
+      void resetState(bool* changed = nullptr) {
+        invalidateSample();
+        Component::resetState(changed);
+      }
+      Sample sample() const {
+        std::lock_guard guard(_sampleMutex);
+        auto result = _sample;
+        if (isDisabled() || !device() ||
+            _sampleGeneration != device()->sampleGeneration())
+          result.valid = false;
+        return result;
       }
 
      private:
       const char* _type;
+      mutable std::mutex _sampleMutex;
+      Sample _sample;
+      uint64_t _sampleGeneration = 0;
     };
 
     class BinarySensor : public Sensor {
@@ -660,6 +738,12 @@ namespace esp32m {
       const char* component() const override {
         return ComponentType::Valve;
       }
+      void setReportsPosition(bool value) {
+        _reportsPosition = value;
+      }
+      bool reportsPosition() const {
+        return _reportsPosition;
+      }
       void set(ValveState value, bool* changed = nullptr) {
         const char* strValue = stateName(value);
         if (!strValue) {
@@ -668,24 +752,52 @@ namespace esp32m {
         }
         setState(strValue, changed);
       }
+      void set(ValveState value, int position, bool* changed = nullptr) {
+        const char* strValue = stateName(value);
+        if (!strValue || position < 0) {
+          resetState(changed);
+          return;
+        }
+        JsonDocument doc;
+        auto root = doc.to<JsonObject>();
+        root["state"] = strValue;
+        root["position"] = std::min(100, position);
+        setState(doc.as<JsonVariantConst>(), changed);
+      }
       ValveState get() const {
         auto state = getState();
-        if (!state.is<const char*>())
+        const char* strValue = state.is<JsonObjectConst>()
+                                   ? state["state"].as<const char*>()
+                                   : state.as<const char*>();
+        if (!strValue)
           return ValveState::Unknown;
-        auto strValue = state.as<std::string>();
-        if (strValue == "opening")
+        if (!strcmp(strValue, "opening"))
           return ValveState::Opening;
-        if (strValue == "open")
+        if (!strcmp(strValue, "open"))
           return ValveState::Open;
-        if (strValue == "closing")
+        if (!strcmp(strValue, "closing"))
           return ValveState::Closing;
-        if (strValue == "closed")
+        if (!strcmp(strValue, "closed"))
           return ValveState::Closed;
         return ValveState::Unknown;
+      }
+      int position() const {
+        auto state = getState();
+        if (state.is<JsonObjectConst>() && state["position"].is<int>())
+          return std::min(100, std::max(0, state["position"].as<int>()));
+        switch (get()) {
+          case ValveState::Open:
+            return 100;
+          case ValveState::Closed:
+            return 0;
+          default:
+            return -1;
+        }
       }
 
      private:
       const char* _type;
+      bool _reportsPosition = false;
       static const char* stateName(ValveState value) {
         switch (value) {
           case ValveState::Opening:

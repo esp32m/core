@@ -6,7 +6,6 @@
 
 #include <ArduinoJson.h>
 #include <esp32m/logging.hpp>
-#include <esp32m/ui.hpp>
 
 namespace esp32m {
   class Ui;
@@ -19,19 +18,21 @@ namespace esp32m {
         return true;
       if (!a || !b)
         return false;
+      if (a->is<JsonArrayConst>() || b->is<JsonArrayConst>())
+        return a->is<JsonArrayConst>() && b->is<JsonArrayConst>() &&
+               a->as<JsonArrayConst>() == b->as<JsonArrayConst>();
       auto oa = a->as<JsonObjectConst>();
-      auto ob = a->as<JsonObjectConst>();
+      auto ob = b->as<JsonObjectConst>();
       if (oa.isNull() && ob.isNull())
         return true;
       if (oa.isNull() || ob.isNull())
         return false;
-      return oa["type"] == ob["type"] && oa["name"] == ob["name"] &&
-             oa["target"] == ob["target"];
+      return oa == ob;
     }
 
     class Client : public log::Loggable {
      public:
-      Client(Transport *transport, uint32_t id);
+      Client(Transport *transport, uint32_t id, uint64_t generation);
       Client(const Client &) = delete;
       const char *name() const override {
         return _name.c_str();
@@ -44,11 +45,8 @@ namespace esp32m {
       }
       bool enqueue(JsonDocument *req) {
         std::lock_guard<std::mutex> guard(_mutex);
-        // http client may open new session with the id of the previous session that was closed just before.
-        // So the new Client will not be created, but the old one will be re-used.
-        // But, this client already received disconnected() call and will be removed by the Ui thread
-        // This is a hack to prevent removal, assuming that if we got a message for this client, it is not disconnected
-        _disconnected.store(false, std::memory_order_release);
+        if (isDisconnected())
+          return false;
         auto size = _requests.size();
         if (size > 3) {
           if (sameRequestInQueue(req)) {
@@ -67,6 +65,7 @@ namespace esp32m {
         _requests.push_back(std::unique_ptr<JsonDocument>(req));
         return true;
       }
+      uint64_t generation() const { return _generation; }
       JsonDocument *dequeue() {
         std::lock_guard<std::mutex> guard(_mutex);
         if (_requests.size()) {
@@ -79,6 +78,7 @@ namespace esp32m {
 
      private:
       std::string _name;
+      uint64_t _generation;
       std::atomic_bool _disconnected{false};
       std::deque<std::unique_ptr<JsonDocument> > _requests;
       std::mutex _mutex;

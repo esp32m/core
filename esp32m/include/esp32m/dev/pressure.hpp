@@ -64,7 +64,7 @@ namespace esp32m {
       int _divisor = 0;
       int _raw = 0;
       uint32_t _mv = 0;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _pressure;
     };
 

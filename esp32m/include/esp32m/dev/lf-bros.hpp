@@ -7,6 +7,7 @@
 #include <string>
 
 #include "esp32m/device.hpp"
+#include "esp32m/dev/thermostat/types.hpp"
 
 namespace esp32m {
   namespace dev {
@@ -19,7 +20,7 @@ namespace esp32m {
      * tool is present while esp32m is still doing its normal application
      * initialization, so TWAI must already be able to acknowledge traffic.
      */
-    class Lfbros : public Device {
+    class Lfbros : public Device, public thermostat::Actuator {
      public:
       enum class ControlMode : uint8_t { Temperature = 0, Power = 1 };
 
@@ -38,6 +39,10 @@ namespace esp32m {
         float minimumPowerW = 1400.0f;
         float maximumPowerW = 5000.0f;
         uint32_t pollIntervalMs = 1000;
+        // Explicit installation qualification: runtime ambient/inlet is not
+        // automatically the native thermostat's selected room-temperature input.
+        bool thermostatNativeTemperatureQualified = false;
+        float thermostatLowPumpHz = NAN;
 
         Options(gpio_num_t tx, gpio_num_t rx) : hardware(tx, rx) {}
         Options(Hardware hardware) : hardware(hardware) {}
@@ -77,8 +82,12 @@ namespace esp32m {
 
       float minimumPower() const;
       float maximumPower() const;
+      thermostat::Capabilities capabilities() const override;
+      thermostat::Feedback snapshot() const override;
+      thermostat::Result apply(const thermostat::Request& request) override;
 
      protected:
+      void thermostatAttached(bool attached) override;
       const JsonVariantConst descriptor() const override;
       JsonDocument* getState(RequestContext& ctx) override;
       void setState(RequestContext& ctx) override;

@@ -17,7 +17,7 @@ namespace esp32m {
     JsonDocument *MhZ19b::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       return doc;
     }

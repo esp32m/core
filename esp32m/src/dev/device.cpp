@@ -55,17 +55,103 @@ namespace esp32m {
     if ((_flags & Flags::HasSensors) == 0)
       return;
     EventPollSensorsTime* pste;
-    if (EventPollSensorsTime::is(ev, &pste))
+    const bool time = EventPollSensorsTime::is(ev, &pste);
+    if (!time && !EventPollSensors::is(ev)) return;
+    // Configuration/manual I/O and subscription captures must not stall the
+    // shared sensor task. Serialize each complete poll with state reads so a
+    // snapshot cannot observe only part of a multi-component sample.
+    std::unique_lock guard(_deviceMutex, std::defer_lock);
+    if (!guard.try_lock()) return;
+    if (isDisabled()) return;
+    if (time)
       pste->record(nextSensorsPollTime());
     else if (EventPollSensors::is(ev) && shouldPollSensors()) {
       if (sensorsReady() && !pollSensors())
         resetSensors();
       _sensorsPolledAt = esp_timer_get_time() / 1000ULL;
+      guard.unlock();
+      // One hint per coherent observation, including unchanged successful
+      // samples, initialization failure and diagnostic-only changes. A UI
+      // listener only marks dirty; it never serializes from this callback.
+      EventStateChanged::publish(this);
     }
   }
 
   bool Device::shouldPollSensors() {
-    return esp_timer_get_time() / 1000ULL >= nextSensorsPollTime();
+    return !isDisabled() &&
+           esp_timer_get_time() / 1000ULL >= nextSensorsPollTime();
+  }
+
+  bool Device::handleRequest(Request& request) {
+    std::lock_guard guard(_deviceMutex);
+    if ((_flags & Flags::CanDisable) != 0) {
+      if (request.is("device-state")) {
+        JsonDocument doc;
+        doc["_disabled"] = isDisabled();
+        request.respond(doc.as<JsonVariantConst>(), false);
+        return true;
+      }
+      if (isDisabled() && !request.is("config-get") &&
+          !request.is("config-set") && !request.is(KeyStateGet) &&
+          !request.is(KeyInfoGet)) {
+        request.respondError(ESP_ERR_INVALID_STATE,
+                             "Device is disabled in settings");
+        return true;
+      }
+    }
+    return AppObject::handleRequest(request);
+  }
+
+  JsonDocument* Device::getConfig(RequestContext& ctx) {
+    std::lock_guard guard(_deviceMutex);
+    // A disable toggle is entirely local, including its config-set response.
+    // Do not call a driver's on-demand register reads for this response.
+    auto doc = ctx.data["_disabled"].isUnbound() || ctx.request.isInternal()
+                   ? getDeviceConfig(ctx) : nullptr;
+    if ((_flags & Flags::CanDisable) != 0) {
+      if (!doc) doc = new JsonDocument();
+      (*doc)["_disabled"] = isDisabled();
+    }
+    return doc;
+  }
+
+  bool Device::setConfig(RequestContext& ctx) {
+    std::lock_guard guard(_deviceMutex);
+    if ((_flags & Flags::CanDisable) == 0) return setDeviceConfig(ctx);
+    const auto value = ctx.data["_disabled"];
+    const bool internal = ctx.request.isInternal();
+    if (!value.isUnbound() && (!value.is<bool>() ||
+        (!internal && ctx.data.size() != 1))) {
+      ctx.errors.check(ESP_ERR_INVALID_ARG,
+                       "Set _disabled as a boolean in a separate request");
+      return false;
+    }
+    if (!internal && value.isUnbound() && isDisabled()) {
+      ctx.errors.check(ESP_ERR_INVALID_STATE,
+                       "Enable the device before changing hardware settings");
+      return false;
+    }
+    bool changed = false;
+    if (!value.isUnbound()) {
+      const bool disabled = value.as<bool>();
+      changed = disabled != isDisabled();
+      if (changed) {
+        _disabled.store(disabled);
+        _sampleGeneration.fetch_add(1);
+        resetSensors(true);
+        _sensorsPolledAt = 0;
+        // Discard cached component values; re-enable must publish fresh data.
+        setComponentState(nullptr, JsonVariantConst{});
+        if (!disabled && hasSensors()) setupSensorPollTask();
+        EventStateChanged::publish(this);
+      }
+      if (!internal) {
+        ctx.result = std::make_unique<JsonDocument>();
+        (*ctx.result)["_disabled"] = disabled;
+        return changed;
+      }
+    }
+    return setDeviceConfig(ctx) || changed;
   }
 
   void Device::setupSensorPollTask() {
@@ -207,7 +293,8 @@ namespace esp32m {
       esp_task_wdt_add(NULL);
       for (;;) {
         esp_task_wdt_reset();
-        if ((_flags & EmitFlags::Periodically) && shouldEmit()) {
+        const bool periodic = (_flags & EmitFlags::Periodically) && shouldEmit();
+        if (periodic) {
           AllComponents all;
           for (auto component : all)
             if (!component->isDisabled() && filter(component)) {
@@ -221,7 +308,8 @@ namespace esp32m {
           std::lock_guard guard(_queueMutex);
           if (_queue.size()) {
             for (auto const& kv : _queue)
-              components.push_back(kv.second.component);
+              if (!kv.second.component->isDisabled())
+                components.push_back(kv.second.component);
             _queue.clear();
           }
         }
@@ -229,16 +317,18 @@ namespace esp32m {
           emit(components);
           components.clear();
         }
-        auto current = _emittedAt = millis();
+        auto current = millis();
+        // Change-only sends and early wakes must not postpone the full snapshot.
+        if (periodic || !(_flags & EmitFlags::Periodically))
+          _emittedAt = current;
         auto sleepTime = nextTime() - current;
-        /*logD("current %d, next %d, sleepTime=%d ", current, nextTime(),
-             sleepTime);*/
-
-        auto wdt = App::instance().wdtTimeout() - 100;
-        if (sleepTime > wdt)
-          sleepTime = wdt;
-        if (sleepTime > 0)
-          ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(sleepTime));
+        // Match the sensor poller: watchdog timeout is seconds, not milliseconds.
+        const uint64_t wdtMs = uint64_t(App::instance().wdtTimeout()) * 1000;
+        const uint64_t maxSleep =
+            wdtMs > 100 ? std::min<uint64_t>(1000, wdtMs - 100) : 1;
+        sleepTime = std::min<uint64_t>(sleepTime, maxSleep);
+        const auto ticks = std::max<TickType_t>(1, pdMS_TO_TICKS(sleepTime));
+        ulTaskNotifyTake(pdTRUE, ticks);
       }
     }
 

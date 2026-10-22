@@ -52,7 +52,7 @@ namespace esp32m {
       uint32_t _freq = 0, _ppr = 1;
       float _rpm = NAN, _speed = 0;
       bool _on = false;
-      unsigned long _stamp = 0;
+      uint64_t _stamp = 0;
       Sensor *_sensorRpm = nullptr;
       esp_err_t update();
       esp_err_t applyConfig();

@@ -13,6 +13,7 @@
 #include "esp32m/ui/asset.hpp"
 #include "esp32m/ui/client.hpp"
 #include "esp32m/ui/transport.hpp"
+#include "esp32m/ui/subscriptions.hpp"
 
 namespace esp32m {
   namespace ui {
@@ -98,9 +99,7 @@ namespace esp32m {
     }
 
    private:
-    Ui() {
-      _transportsView = std::make_shared<const std::vector<ui::Transport*> >();
-    }
+    Ui();
 
     std::shared_ptr<const std::vector<ui::Transport*> > transportsView() const {
       std::lock_guard<std::mutex> guard(_transportsMutex);
@@ -113,6 +112,8 @@ namespace esp32m {
     std::vector<std::unique_ptr<ui::Transport> > _transports;
     std::shared_ptr<const std::vector<ui::Transport*> > _transportsView;
     std::vector<std::unique_ptr<ui::Asset> > _assets;
+    ui::StateSubscriptions _subscriptions;
+    uint64_t _wsStateReads = 0, _wsDeviceReads = 0;
     void run();
     void notifyIncoming() {
       if (_task)

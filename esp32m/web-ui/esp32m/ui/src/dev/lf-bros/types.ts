@@ -30,7 +30,7 @@ export type LfBrosState = {
     stale: boolean;
     partial?: boolean;
     chunkMask?: number;
-    telemetryAgeMs?: number;
+    telemetrySampledAtMs?: number;
     firmwareTag?: string;
     receivedUs?: number;
     state?: {

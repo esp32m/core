@@ -71,6 +71,12 @@ namespace esp32m {
 
       typedef std::function<void(std::string topic, std::string payload)>
           HandlerFunction;
+      struct MessageMetadata {
+        bool retained = false;
+        bool complete = true;
+      };
+      using DetailedHandlerFunction = std::function<void(
+          std::string topic, std::string payload, const MessageMetadata& metadata)>;
 
       class Subscription {
        public:
@@ -87,7 +93,7 @@ namespace esp32m {
 
        private:
         Subscription(Mqtt *mqtt, int id, std::string topic, int qos,
-                     HandlerFunction function)
+                     DetailedHandlerFunction function)
             : _mqtt(mqtt),
               _id(id),
               _qos(qos),
@@ -97,7 +103,7 @@ namespace esp32m {
         Mqtt *_mqtt;
         int _id, _qos;
         std::string _topic;
-        HandlerFunction _function;
+        DetailedHandlerFunction _function;
         friend class net::Mqtt;
       };
 
@@ -197,6 +203,10 @@ namespace esp32m {
       Subscription *subscribe(const char *topic, int qos = 0);
       Subscription *subscribe(const char *topic, HandlerFunction handler,
                               int qos = 0);
+      // Detailed consumers can reject retained or fragmented control messages.
+      // Existing two-argument handlers preserve their API and behavior.
+      Subscription *subscribeDetailed(const char *topic,
+                                      DetailedHandlerFunction handler, int qos = 0);
       void setLwt(const char *topic, const char *message, int qos = 1,
                   bool retain = true);
       const Message &getLwt() const {
@@ -252,7 +262,7 @@ namespace esp32m {
       void prepareCfg(bool init);
       void publishBirth();
       const char *effectiveClient();
-      std::vector<HandlerFunction> findMatchingHandlers(std::string topicFilter);
+      std::vector<DetailedHandlerFunction> findMatchingHandlers(std::string topicFilter);
       friend class mqtt::Subscription;
     };
 

@@ -6,7 +6,7 @@ export type TProps = {
   addr?: number;
 };
 
-export type TState = [age: number, address: number, value: number];
+export type TState = [sampledAtMs: number, address: number, value: number];
 
 export type TConfig = {
   unit: number;

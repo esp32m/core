@@ -18,12 +18,12 @@ namespace esp32m {
     JsonDocument* Ntc::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_temperature.get());
 
       float value;
       uint32_t mv;
-      if (_adc->read(value, &mv) == ESP_OK) {
+      if (_adc && _adc->read(value, &mv) == ESP_OK) {
         arr.add(value);
         arr.add(mv);
       }
@@ -31,8 +31,10 @@ namespace esp32m {
     }
 
     bool Ntc::pollSensors() {
-      if (!_adc)
+      if (!_adc) {
+        _temperature.resetState();
         return false;
+      }
       int samples = 0;
       float average = 0;
       float averageMv = 0;
@@ -50,6 +52,11 @@ namespace esp32m {
         float t;
         if (1) {
           averageMv /= samples;
+          // A rail/saturated divider is not a plausible thermistor reading.
+          if (averageMv <= 1 || averageMv >= 3299) {
+            _temperature.resetState();
+            return false;
+          }
           float rntc = ((float)_rref * (averageMv / (3300.0f - averageMv)));
           float Tk = 1.0f / ((1.0f / (_tnom + 273.15f)) +
                              (1.0f / _beta) * ::log(rntc / _rnom));
@@ -65,8 +72,16 @@ namespace esp32m {
           t = 1.0 / t;                  // Invert
           t -= 273.15;                  // convert absolute temp to C
         }
-        _temperature.set(t + _adj);
-        _stamp = millis();
+        t += _adj;
+        if (!std::isfinite(t) || t < -100 || t > 200) {
+          _temperature.resetState();
+          return false;
+        }
+        _temperature.set(t);
+        _stamp = esp_timer_get_time() / 1000LL;
+      } else {
+        _temperature.resetState();
+        return false;
       }
       return true;
     }

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const core = path.resolve(here, '../..');
+const json = process.env.ARDUINOJSON_INCLUDE ?? path.resolve(core, '../../projects/greenhouse/managed_components/bblanchon__arduinojson/src');
 const header = readFileSync(path.join(core, 'include/esp32m/device.hpp'), 'utf8');
 const source = readFileSync(path.join(core, 'src/dev/device.cpp'), 'utf8');
 
@@ -34,7 +35,7 @@ try {
   writeFileSync(path.join(build, 'production.inc'), generated);
   const exe = path.join(build, process.platform === 'win32' ? 'test.exe' : 'test');
   execFileSync(compiler, [
-    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-static', '-I', build,
+    '-std=c++17', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-static', '-pthread', '-I', build, '-I', json,
     path.join(here, 'test.cpp'), '-o', exe,
   ], { stdio: 'inherit' });
   execFileSync(exe, [], { stdio: 'inherit' });

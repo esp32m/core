@@ -20,6 +20,15 @@ namespace esp32m {
      public:
       virtual ~Transport() = default;
       virtual esp_err_t sendTo(uint32_t cid, const char* text) = 0;
+      virtual esp_err_t sendSession(uint32_t cid, uint64_t generation,
+                                   std::shared_ptr<const std::string> text) {
+        return sessionAlive(cid, generation) ? sendTo(cid, text->c_str())
+                                             : ESP_ERR_INVALID_STATE;
+      }
+      virtual void closeSession(uint32_t cid, uint64_t generation);
+      bool sessionAlive(uint32_t cid, uint64_t generation);
+      uint64_t sessionGeneration(uint32_t cid);
+      virtual void sendStats(JsonObject result) {}
 
       void broadcast(const char* text) {
         auto ids = _clientIdsView.load(std::memory_order_acquire);
@@ -33,9 +42,10 @@ namespace esp32m {
       Ui* _ui = nullptr;
       std::mutex _clientsMutex;
       std::map<uint32_t, std::unique_ptr<Client> > _clients;
-      void incoming(uint32_t cid, void* data, size_t len);
-      void incoming(uint32_t cid, JsonDocument* json);
+      void incoming(uint32_t cid, void* data, size_t len, uint64_t generation = 0);
+      void incoming(uint32_t cid, JsonDocument* json, uint64_t generation = 0);
       void sessionClosed(uint32_t cid);
+      uint64_t sessionOpened(uint32_t cid);
       virtual void init(Ui* ui) {
         _ui = ui;
         _clientIdsView.store(std::make_shared<const std::vector<uint32_t>>(),
@@ -47,8 +57,10 @@ namespace esp32m {
      private:
       void process();
       void refreshClientIdsViewLocked();
+      uint64_t _nextGeneration = 0;
 
       friend class esp32m::Ui;
+      friend class Req;
     };
 
   }  // namespace ui

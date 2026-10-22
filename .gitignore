@@ -27,3 +27,5 @@ __pycache__/
 
 *.cmd
 
+ai/
+AI_CONTEXT.md

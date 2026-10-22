@@ -2,7 +2,7 @@
 include("${CMAKE_CURRENT_LIST_DIR}/scripts/versioning.cmake")
 
 idf_component_register(
-    SRC_DIRS "src" "src/events" "src/log" "src/config" "src/bus" "src/net" "src/fs" "src/io" "src/net/term" "src/bt" "src/ui" "src/dev" "src/dev/opentherm" "src/debug" "src/debug/lwip" "src/integrations/ha" "src/integrations/influx"
+    SRC_DIRS "src" "src/events" "src/log" "src/config" "src/bus" "src/net" "src/fs" "src/io" "src/net/term" "src/bt" "src/ui" "src/dev" "src/dev/opentherm" "src/dev/thermostat" "src/debug" "src/debug/lwip" "src/integrations/ha" "src/integrations/influx"
     INCLUDE_DIRS "include"
     REQUIRES esp_common nvs_flash bootloader_support app_update spiffs esp_http_client esp_https_ota esp_http_server console esp_wifi esp_adc spi_flash driver bt wpa_supplicant esp_eth esp_netif espcoredump
              esp_driver_gpio esp_driver_i2c esp_driver_uart esp_driver_ledc esp_driver_rmt esp_driver_spi esp_driver_pcnt esp_ringbuf esp_driver_dac esp_driver_twai

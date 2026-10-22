@@ -74,7 +74,7 @@ namespace esp32m {
       bool pollSensors() override;
 
      private:
-      uint64_t _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _temperature, _humidity;
     };
 

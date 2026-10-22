@@ -1,5 +1,5 @@
 import { Name, TState, TProps, TConfig } from './types';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useBackendApi, useModuleConfig, useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 import { Grid, IconButton } from '@mui/material';
@@ -23,8 +23,9 @@ export const Content = ({ name = Name, title, addr }: TProps) => {
     validationSchema,
   });
   const state = useModuleState<TState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
-  const [age = -1, a, value] = state;
+  const [, a, value] = state;
   if (age < 0 || age > 60 * 1000) return null;
   if (addr && addr != a) return null;
   const list = [];

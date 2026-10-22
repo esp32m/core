@@ -25,7 +25,7 @@ namespace esp32m {
     JsonDocument *Yw801r::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_pv);
       arr.add(_ad);
@@ -36,12 +36,12 @@ namespace esp32m {
       modbus::Master &mb = modbus::Master::instance();
       if (!mb.isRunning())
         return false;
-      if (millis() - _stamp < 2000)
+      if (esp_timer_get_time() / 1000LL - (_stamp >= 0 ? _stamp : 0) < 2000)
         return true;
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 1, 1, &_pv));
       _sensor.set(_pv);
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       delay(500);
       return true;
     }

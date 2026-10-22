@@ -72,7 +72,7 @@ namespace esp32m {
     JsonDocument* Sdm230::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_te);
       arr.add(_ee);
@@ -146,7 +146,7 @@ namespace esp32m {
           _rap = rap;
           _pf = pf;
           _f = f;
-          _stamp = millis();
+          _stamp = esp_timer_get_time() / 1000LL;
         }
       }
       bool changed = false;

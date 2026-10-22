@@ -25,7 +25,7 @@ namespace esp32m {
     JsonDocument *Mq135::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       return doc;
     }
@@ -37,7 +37,7 @@ namespace esp32m {
       auto err = ESP_ERROR_CHECK_WITHOUT_ABORT(_adc->read(raw));
       if (err == ESP_OK) {
         _value = (float)raw / _divisor;
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         _sensor.set(_value);
       }
       return true;

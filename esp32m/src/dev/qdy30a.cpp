@@ -30,7 +30,7 @@ namespace esp32m {
       JsonDocument *doc =
           new JsonDocument(); /* JSON_ARRAY_SIZE(8 + regc) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_units);
       arr.add(_decimals);
@@ -55,7 +55,7 @@ namespace esp32m {
       _value = ((int16_t)_regs[4]) / div;
       _min = ((int16_t)_regs[5]) / div;
       _max = ((int16_t)_regs[6]) / div;
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       _sensor.set(_value);
 //      delay(500);
       return true;

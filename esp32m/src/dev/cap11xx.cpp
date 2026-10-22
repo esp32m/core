@@ -111,9 +111,12 @@ namespace esp32m {
     JsonDocument *Cap11xx::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(2) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
-      uint8_t bits;
-      if (getTouchBitmap(bits) == ESP_OK) {
+      uint8_t bits = 0;
+      const auto result = getTouchBitmap(bits);
+      if (result == ESP_OK)
+        _stamp = esp_timer_get_time() / 1000LL;
+      arr.add(_stamp);
+      if (result == ESP_OK) {
         arr.add(bits);
       }
       return doc;

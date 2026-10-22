@@ -1,12 +1,13 @@
 import { IState, IProps } from './types';
-import {  useModuleState } from '../..';
+import {  useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
 export default ({ name, title }: IProps) => {
   const state = useModuleState<IState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
-  const [age = -1, data = {}] = state;
+  const [, data = {}] = state;
   if (age < 0 || age > 60 * 1000) return null;
   const { voltage, current, frequency } = data;
   const ap = data['power-apparent'];

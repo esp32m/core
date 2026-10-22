@@ -101,7 +101,7 @@ namespace esp32m {
       JsonDocument *getState(RequestContext &ctx) override;
 
      private:
-      uint64_t _stamp = 0;
+      int64_t _stamp = -1;
     };
 
     Cap11xx *useCap11xx(uint8_t addr = cap11xx::DefaultAddress,

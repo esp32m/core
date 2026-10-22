@@ -1,3 +1,4 @@
+import { DeviceDisabledAlert, DeviceDisableSetting, useDeviceControl } from '../DeviceControl';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -19,7 +20,7 @@ import {
 import { useSnackApi } from '@ts-libs/ui-snack';
 import * as Yup from 'yup';
 import { NameValueList } from '../../app';
-import { useBackendApi, useModuleConfig, useModuleState } from '../..';
+import { useBackendApi, useModuleConfig, useModuleState, useSampleAge } from '../..';
 import { Name, TConfig, TProps, TState } from './types';
 
 const BaudRates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200];
@@ -42,14 +43,19 @@ const formatRaw = (value: number) => {
 
 export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
   const state = useModuleState<TState>(Name);
+  const actualAge = useSampleAge(state?.actualSampledAtMs, Name);
   const api = useBackendApi();
+  const deviceControl = useDeviceControl(Name);
   const { config, setConfig } = useModuleConfig<TConfig>(Name);
   const snackApi = useSnackApi();
   const [disabled, setDisabled] = useState(false);
   const [angle, setAngle] = useState(0);
   const [configHook, openSettings] = useDialogForm({
     initialValues: config || {},
-    onSubmit: async (values) => setConfig(values),
+    onSubmit: async (values) => {
+      if (deviceControl.disabled) return;
+      return setConfig({ address: values.address, baud: values.baud });
+    },
     validationSchema,
   });
 
@@ -70,6 +76,16 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
       setDisabled(false);
     }
   };
+  const command = async (state: 'open' | 'close') => {
+    try {
+      setDisabled(true);
+      await api.setState(Name, { state });
+    } catch (e) {
+      snackApi.error(e);
+    } finally {
+      setDisabled(false);
+    }
+  };
   const probe = async () => {
     try {
       setDisabled(true);
@@ -81,7 +97,7 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
     }
   };
 
-  const stale = !state.actualValid || state.actualAge > 10_000;
+  const stale = !state.actualValid || actualAge < 0 || actualAge > 10_000;
   const list: Array<[string, string | number]> = [
     [
       'Actual position',
@@ -98,10 +114,12 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
     ['MODBUS address', state.address],
     ['Baud rate', config?.baud || 'Unknown'],
     ['Communication', stale ? 'No recent response' : 'Responding'],
+    ['Valve state', state.state],
+    ['Valve position', state.position >= 0 ? `${state.position}%` : 'Unknown'],
   ];
 
   const probeList: Array<[string, string]> = [];
-  if (state.probeAge >= 0) {
+  if (state.probeSampledAtMs >= 0) {
     const registerNames = [
       'candidate slave address',
       'commanded angle ×100',
@@ -126,8 +144,34 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
         </IconButton>
       }
     >
+      <DeviceDisabledAlert control={deviceControl} />
       <NameValueList list={list} />
       <Grid container spacing={2} sx={{ marginTop: 1 }}>
+        <Grid size={{ xs: 12 }}>
+          <Button
+            variant={
+              state.state === 'closed' || state.state === 'closing'
+                ? 'contained'
+                : 'outlined'
+            }
+            disabled={disabled || deviceControl.disabled || deviceControl.busy}
+            onClick={() => command('close')}
+            sx={{ marginRight: 1 }}
+          >
+            Close
+          </Button>
+          <Button
+            variant={
+              state.state === 'open' || state.state === 'opening'
+                ? 'contained'
+                : 'outlined'
+            }
+            disabled={disabled || deviceControl.disabled || deviceControl.busy}
+            onClick={() => command('open')}
+          >
+            Open
+          </Button>
+        </Grid>
         <Grid size={{ xs: 12 }}>
           <Typography>Set position</Typography>
           <Slider
@@ -142,13 +186,13 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
             value={angle}
             valueLabelDisplay="auto"
             valueLabelFormat={(value) => `${value}°`}
-            disabled={disabled}
+            disabled={disabled || deviceControl.disabled || deviceControl.busy}
             onChange={(_, value) => setAngle(value as number)}
             onChangeCommitted={(_, value) => move(value as number)}
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Button variant="outlined" disabled={disabled} onClick={probe}>
+          <Button variant="outlined" disabled={disabled || deviceControl.disabled || deviceControl.busy} onClick={probe}>
             Probe registers R0–R3
           </Button>
         </Grid>
@@ -166,14 +210,16 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
         )}
       </Grid>
       <DialogForm title="Configure Modbus" hook={configHook}>
+        <DeviceDisableSetting control={deviceControl} busy={disabled} />
         <Grid container spacing={3}>
           <FieldText
+            disabled={deviceControl.disabled || deviceControl.busy}
             name="address"
             label="Slave address"
             type="number"
             grid
           />
-          <FieldSelect name="baud" label="Baud rate" type="number" grid>
+          <FieldSelect disabled={deviceControl.disabled || deviceControl.busy} name="baud" label="Baud rate" type="number" grid>
             {BaudRates.map((baud) => (
               <MenuItem value={baud} key={baud}>
                 {baud}
@@ -182,8 +228,8 @@ export const Content = ({ title = 'Flomarvel valve', addr }: TProps) => {
           </FieldSelect>
           <Grid size={{ xs: 12 }}>
             <Alert severity="warning">
-              The baud rate applies to the shared Modbus master. Other devices
-              on the same bus must use the same rate.
+              Address and baud changes are sent to the valve's current Modbus
+              address. The baud rate also applies to the shared Modbus master.
             </Alert>
           </Grid>
         </Grid>

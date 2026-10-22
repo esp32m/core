@@ -2,6 +2,7 @@
 
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/fs/littlefs.hpp"
+#include "esp32m/fs/root.hpp"
 
 namespace esp32m {
   namespace fs {
@@ -39,7 +40,9 @@ namespace esp32m {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("format")) {
-        auto res = ESP_ERROR_CHECK_WITHOUT_ABORT(esp_littlefs_format(_label));
+        auto res = fs::formatRoot([this]() {
+          return esp_littlefs_format(_label);
+        });
         if (res == ESP_OK)
           req.respond();
         else
@@ -59,6 +62,9 @@ namespace esp32m {
             ESP_OK)
           return false;
         _inited = true;
+        registerRoot("LittleFS", _label, [this](size_t& total, size_t& used) {
+          return _inited && esp_littlefs_info(_label, &total, &used) == ESP_OK;
+        });
         logD("root mounted");
       }
       return _inited;

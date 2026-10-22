@@ -10,7 +10,7 @@
         "cover": "jest --coverage"
     },
     "dependencies": {
-        "@reduxjs/toolkit": "^2.12.0",
+        "@reduxjs/toolkit": "^2.13.0",
         "@ts-libs/config": "*",
         "@ts-libs/log": "*",
         "@ts-libs/plugins": "*",

@@ -27,7 +27,7 @@ namespace esp32m {
     JsonDocument *MoistureSensor::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       arr.add(_mv);
       return doc;
@@ -40,7 +40,7 @@ namespace esp32m {
       auto err = ESP_ERROR_CHECK_WITHOUT_ABORT(_adc->read(raw, &_mv));
       if (err == ESP_OK) {
         _value = 1.0 - ((float)raw / _divisor);
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
         _moisture.set(_value);
       }
       return true;

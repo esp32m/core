@@ -26,7 +26,7 @@ namespace esp32m {
     JsonDocument *Ztsyux::getState(RequestContext &ctx) {
       JsonDocument *doc = new JsonDocument(); /* JSON_ARRAY_SIZE(3) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_value);
       return doc;
@@ -85,7 +85,7 @@ namespace esp32m {
       ESP_CHECK_RETURN_BOOL(
           mb.request(_addr, modbus::Command::ReadHolding, 0x00, 1, &value));
       _value = value != 0;
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
       _sensor.set(value);
       return true;
     }

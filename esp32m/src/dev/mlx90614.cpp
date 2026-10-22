@@ -104,13 +104,12 @@ namespace esp32m {
     JsonDocument* Mlx90614::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(6) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_i2c->address());
-      float value;
-      getAmbientTemperature(value);
-      arr.add(value);
-      getObjectTemperature(value);
-      arr.add(value);
+      // Snapshot values must belong to the acquisition identified by _stamp.
+      // The independent sensor poller performs the physical I2C reads.
+      arr.add(_ambientTemperature.get());
+      arr.add(_objectTemperature.get());
       return doc;
     }
 
@@ -121,7 +120,7 @@ namespace esp32m {
       _ambientTemperature.set(value, &changed);
       ESP_CHECK_RETURN_BOOL(getObjectTemperature(value));
       _objectTemperature.set(value, &changed);
-      _stamp = millis();
+      _stamp = esp_timer_get_time() / 1000LL;
 /*      if (changed)
         sensor::GroupChanged::publish(_ambientTemperature.group);*/
       return true;

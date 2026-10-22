@@ -43,7 +43,7 @@ namespace esp32m {
     JsonDocument* Fan::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(4) */
       JsonObject obj = doc->to<JsonObject>();
-      json::to(obj, "stamp", millis() - _stamp);
+      json::to(obj, "sampledAtMs", _stamp ? int64_t(_stamp) : -1);
       if (_tach)
         json::to(obj, "rpm", _rpm);
       json::to(obj, "on", _on);
@@ -73,7 +73,7 @@ namespace esp32m {
       int pc;
       auto err = ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->read(pc, true));
       if (err == ESP_OK) {
-        auto ms = millis();
+        const auto ms = uint64_t(esp_timer_get_time()) / 1000;
         auto passed = ms - _stamp;
         _rpm = pc * 60000.0f / passed / _ppr;
         _stamp = ms;

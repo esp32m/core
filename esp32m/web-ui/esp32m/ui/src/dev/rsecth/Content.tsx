@@ -1,5 +1,5 @@
 import { Name, TState, TProps, TConfig } from './types';
-import { useModuleConfig, useModuleState } from '../..';
+import { useModuleConfig, useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 import { Grid, IconButton } from '@mui/material';
@@ -28,8 +28,9 @@ export const Content = ({
     validationSchema,
   });
   const state = useModuleState<TState>(name);
+  const age = useSampleAge(state?.[0], name);
   if (!state) return null;
-  const [age = -1, a, moisture, temperature, conductivity, salinity, tds] =
+  const [, a, moisture, temperature, conductivity, salinity, tds] =
     state;
   if (age < 0 || age > 60 * 1000) return null;
   if (addr && addr != a) return null;

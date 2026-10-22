@@ -1,12 +1,13 @@
 import { Name, IState, IProps } from './types';
-import {  useModuleState } from '../..';
+import {  useModuleState, useSampleAge } from '../..';
 import { NameValueList } from '../../app';
 import { CardBox } from '@ts-libs/ui-app';
 
 export default ({ title, addr }: IProps) => {
   const state = useModuleState<IState>(Name);
+  const age = useSampleAge(state?.[0], Name);
   if (!state) return null;
-  const [age = -1, a, pv = 0, ad = 0] = state;
+  const [, a, pv = 0, ad = 0] = state;
   if (age < 0 || age > 60 * 1000) return null;
   if (addr && addr != a) return null;
   const list = [];

@@ -404,6 +404,10 @@ namespace esp32m {
       };
       struct Command {
         CommandType type;
+        bool thermostat = false;
+        uint64_t revision = 0;
+        uint64_t validUntilMs = 0;
+        uint64_t lease = 0;
       };
 
       struct RxFrame {
@@ -599,8 +603,148 @@ namespace esp32m {
         std::lock_guard guard(_mutex);
         return _desired;
       }
+      Desired effectiveDesired() const {
+        std::lock_guard control(_controlMutex);
+        return _thermostatOverride ? _thermostatDesired : desired();
+      }
+      void manualTakeover() {
+        // Call while holding _controlMutex. Queued supervisor requests carry
+        // this generation and are discarded before any CAN transmission.
+        ++_manualRevision;
+        _thermostatRestorePending |= _thermostatOverride;
+        _thermostatOverride = false;
+        _thermostatPending = false;
+        _thermostatUncertain = false;
+      }
+      thermostat::Capabilities thermostatCapabilities() const {
+        thermostat::Capabilities result;
+        result.startStop = result.nativeTarget = result.power = true;
+        result.nativeStandby = result.externalRequiresShutdown = true;
+        result.nativeTemperature = _options.thermostatNativeTemperatureQualified;
+        return result;
+      }
+      thermostat::Feedback thermostatSnapshot() const {
+        std::lock_guard control(_controlMutex);
+        Runtime runtime;
+        { std::lock_guard guard(_mutex); runtime = _runtime; }
+        const auto now = esp_timer_get_time();
+        thermostat::Feedback result;
+        result.revision = _manualRevision;
+        result.sampledAtMs = runtime.receivedUs / 1000;
+        // Partial snapshots are useful diagnostics, never control authority.
+        result.valid = runtime.valid && !runtime.partial && !runtimeIsStale(runtime, now) &&
+            _connected.load() && _sourceSelected.load();
+        result.enabled = !_priming.load() && !_normalModeRestorePending.load();
+        result.fault = runtime.faultActive || runtime.state == 31;
+        result.commandPending = _thermostatPending;
+        result.commandUncertain = _thermostatUncertain;
+        if (result.fault) result.phase = thermostat::Phase::Fault;
+        else if (!result.valid) result.phase = thermostat::Phase::Unknown;
+        else if (runtime.state == 1) result.phase = thermostat::Phase::Off;
+        else if (runtime.state == 15 || runtime.state == 16) result.phase = thermostat::Phase::Standby;
+        else if ((runtime.state >= 17 && runtime.state <= 20) || runtime.state == 28 || runtime.state == 30)
+          result.phase = thermostat::Phase::Cooling;
+        else if (runtime.state == 13) result.phase = thermostat::Phase::Heating;
+        else result.phase = thermostat::Phase::Starting;
+        const bool standby = runtime.state == 15 || runtime.state == 16;
+        result.minimumKnown = standby || (std::isfinite(_options.thermostatLowPumpHz) &&
+            _options.thermostatLowPumpHz > 0);
+        result.atMinimum = result.valid && (standby ||
+            (runtime.state == 13 && result.minimumKnown &&
+             std::isfinite(runtime.pumpFrequencyHz) && runtime.pumpFrequencyHz > 0 &&
+             runtime.pumpFrequencyHz <= _options.thermostatLowPumpHz));
+        result.nativeTemperature = {runtime.ambientC, uint64_t(runtime.receivedUs / 1000),
+            result.valid && _options.thermostatNativeTemperatureQualified && std::isfinite(runtime.ambientC)};
+        return result;
+      }
+      thermostat::Result thermostatApply(const thermostat::Request& request) {
+        using namespace thermostat;
+        std::lock_guard control(_controlMutex);
+        if (request.expectedRevision != _manualRevision) return Result::Rejected;
+        if (request.command == thermostat::Command::Release) {
+          const bool changed = _thermostatOverride;
+          _thermostatOverride = false;
+          _thermostatRestorePending |= changed;
+          // Invalidate queued pulses while preserving an already sent outcome.
+          ++_thermostatLease;
+          if (!_thermostatSentUs) _thermostatPending = false;
+          if (changed) enqueue(CommandType::ApplySetpoint);
+          return Result::Accepted;
+        }
+        const auto now = esp_timer_get_time();
+        if (!request.validUntilMs || uint64_t(now / 1000) >= request.validUntilMs) return Result::Rejected;
+        if (!_connected.load() || !_sourceSelected.load()) return Result::Unavailable;
+        Runtime runtime;
+        { std::lock_guard guard(_mutex); runtime = _runtime; }
+        if (!runtime.valid || runtime.partial || runtimeIsStale(runtime, now)) return Result::Unavailable;
+        if (_priming.load() || _normalModeRestorePending.load() ||
+            ((runtime.faultActive || runtime.state == 31) && request.command != thermostat::Command::Stop))
+          return Result::Rejected;
+        if (_thermostatUncertain) return Result::Rejected;
+        if (_thermostatPending) return Result::Busy;
+        CommandType type = CommandType::ApplySetpoint;
+        auto target = effectiveDesired();
+        if (request.command == thermostat::Command::Start) {
+          if (runtime.state != 1 || _commandedOn.load()) return Result::Busy;
+          type = CommandType::TurnOn;
+        } else if (request.command == thermostat::Command::Stop) {
+          if (runtime.state == 1 || runtime.state == 30 || runtime.state == 31 ||
+              (runtime.state >= 17 && runtime.state <= 20)) return Result::Busy;
+          type = CommandType::TurnOff;
+        } else if (request.command == thermostat::Command::NativeTarget) {
+          if (std::isfinite(request.ambientC)) return Result::Unsupported;
+          if (!std::isfinite(request.targetC) || request.targetC < 10 || request.targetC > 35) return Result::Invalid;
+          target.controlMode = ControlMode::Temperature;
+          target.temperatureC = request.targetC;
+        } else if (request.command == thermostat::Command::Power) {
+          if (!std::isfinite(request.powerFraction) || request.powerFraction < 0 || request.powerFraction > 1)
+            return Result::Invalid;
+          target.controlMode = ControlMode::Power;
+          target.powerW = _options.minimumPowerW + request.powerFraction *
+              (_options.maximumPowerW - _options.minimumPowerW);
+        } else return Result::Unsupported;
+        const auto result = enqueue(type, true, request.validUntilMs);
+        if (result != ESP_OK) return Result::Busy;
+        _thermostatValidUntilMs = request.validUntilMs;
+        if (type == CommandType::ApplySetpoint) {
+          _thermostatDesired = target;
+          _thermostatOverride = true;
+        } else {
+          _thermostatPending = true;
+          _thermostatPulse = type;
+          _thermostatSentUs = 0;
+        }
+        return Result::Accepted;
+      }
+      void setThermostatAttached(bool attached) {
+        _thermostatAttached.store(attached);
+        _climate.setDisabled(attached);
+        _powerSetpoint.setDisabled(attached);
+      }
+      void expireThermostat() {
+        std::lock_guard control(_controlMutex);
+        if (_thermostatOverride && uint64_t(esp_timer_get_time() / 1000) >= _thermostatValidUntilMs) {
+          _thermostatOverride = false;
+          _thermostatRestorePending = true;
+          // Restore the user's saved native setting; this is not a shutdown
+          // guarantee when the supervisory control lease has disappeared.
+          enqueue(CommandType::ApplySetpoint);
+        }
+      }
+      void observeThermostat(const Runtime& runtime) {
+        std::lock_guard control(_controlMutex);
+        if (!_thermostatPending || !_thermostatSentUs || runtime.partial ||
+            runtime.receivedUs <= _thermostatSentUs) return;
+        const bool observed = _thermostatPulse == CommandType::TurnOn ?
+            ((runtime.state >= 2 && runtime.state <= 16) || runtime.state == 29) :
+            (runtime.state == 1 || (runtime.state >= 17 && runtime.state <= 20) || runtime.state == 30);
+        if (observed) _thermostatPending = false;
+      }
 
       bool setDesired(Desired desired) {
+        std::lock_guard control(_controlMutex);
+        const bool hadOverride = _thermostatOverride;
+        manualTakeover();
         desired.temperatureC = std::clamp(desired.temperatureC, 10.0f, 35.0f);
         desired.powerW = std::clamp(desired.powerW, _options.minimumPowerW,
                                     _options.maximumPowerW);
@@ -612,7 +756,7 @@ namespace esp32m {
                     _desired.powerW != desired.powerW;
           _desired = desired;
         }
-        if (changed) {
+        if (changed || hadOverride) {
           updateComponents();
           enqueue(CommandType::ApplySetpoint);
         }
@@ -620,6 +764,7 @@ namespace esp32m {
       }
 
       esp_err_t setTemperature(float value) {
+        std::lock_guard control(_controlMutex);
         if (!std::isfinite(value) || value < 10.0f || value > 35.0f)
           return ESP_ERR_INVALID_ARG;
         auto valueState = desired();
@@ -631,6 +776,7 @@ namespace esp32m {
       }
 
       esp_err_t setPower(float value) {
+        std::lock_guard control(_controlMutex);
         if (!std::isfinite(value) || value < _options.minimumPowerW ||
             value > _options.maximumPowerW)
           return ESP_ERR_INVALID_ARG;
@@ -643,9 +789,14 @@ namespace esp32m {
       }
 
       esp_err_t setControlMode(ControlMode mode) {
+        std::lock_guard control(_controlMutex);
         auto valueState = desired();
-        if (valueState.controlMode == mode)
+        if (valueState.controlMode == mode) {
+          const bool hadOverride = _thermostatOverride;
+          manualTakeover();
+          if (hadOverride) enqueue(CommandType::ApplySetpoint);
           return ESP_OK;
+        }
         valueState.controlMode = mode;
         if (setDesired(valueState))
           config::Changed::publish(_owner);
@@ -653,14 +804,18 @@ namespace esp32m {
       }
 
       esp_err_t turn(bool on) {
+        std::lock_guard control(_controlMutex);
         if (!_connected.load() || !_sourceSelected.load())
           return ESP_ERR_INVALID_STATE;
         if (on && (_priming.load() || _normalModeRestorePending.load()))
           return ESP_ERR_INVALID_STATE;
-        return enqueue(on ? CommandType::TurnOn : CommandType::TurnOff);
+        const auto result = enqueue(on ? CommandType::TurnOn : CommandType::TurnOff);
+        if (result == ESP_OK) manualTakeover();
+        return result;
       }
 
       esp_err_t clearFault() {
+        std::lock_guard control(_controlMutex);
         if (!_connected.load() || !_sourceSelected.load())
           return ESP_ERR_INVALID_STATE;
         Runtime runtime;
@@ -670,10 +825,13 @@ namespace esp32m {
         }
         if (!runtime.valid || runtime.state != 31 || !runtime.faultActive)
           return ESP_ERR_INVALID_STATE;
-        return enqueue(CommandType::ClearFault);
+        const auto result = enqueue(CommandType::ClearFault);
+        if (result == ESP_OK) manualTakeover();
+        return result;
       }
 
       esp_err_t startPriming() {
+        std::lock_guard control(_controlMutex);
         if (!_connected.load() || !_sourceSelected.load() ||
             _commandedOn.load() || _priming.load() ||
             _normalModeRestorePending.load())
@@ -685,7 +843,9 @@ namespace esp32m {
         }
         if (!runtime.valid || runtime.state != 1 || runtime.faultActive)
           return ESP_ERR_INVALID_STATE;
-        return enqueue(CommandType::StartPriming);
+        const auto result = enqueue(CommandType::StartPriming);
+        if (result == ESP_OK) manualTakeover();
+        return result;
       }
 
       float minimumPower() const {
@@ -704,10 +864,6 @@ namespace esp32m {
           runtime = _runtime;
         }
         const auto now = esp_timer_get_time();
-        const auto telemetryAgeUs =
-            runtime.valid && runtime.receivedUs > 0
-                ? std::max<int64_t>(0, now - runtime.receivedUs)
-                : 0;
         const bool telemetryStale = runtimeIsStale(runtime, now);
         const bool mode1Pumping =
             runtime.valid && runtime.state == 23 && _priming.load() &&
@@ -743,7 +899,7 @@ namespace esp32m {
         heater["valid"] = runtime.valid;
         heater["stale"] = telemetryStale;
         if (runtime.valid)
-          heater["telemetryAgeMs"] = telemetryAgeUs / 1000;
+          heater["telemetrySampledAtMs"] = runtime.receivedUs / 1000;
         if (runtime.valid) {
           heater["firmwareTag"] = runtime.firmwareTag;
           heater["partial"] = runtime.partial;
@@ -880,7 +1036,7 @@ namespace esp32m {
       }
 
       void describeHa(Request& request) {
-        {
+        if (!_thermostatAttached.load()) {
           JsonDocument doc;
           auto root = doc.to<JsonObject>();
           root["id"] = _climate.uid();
@@ -924,7 +1080,7 @@ namespace esp32m {
           config["precision"] = 1;
           request.respond(_owner->name(), doc.as<JsonVariantConst>());
         }
-        {
+        if (!_thermostatAttached.load()) {
           JsonDocument doc;
           auto root = doc.to<JsonObject>();
           root["id"] = _powerSetpoint.uid();
@@ -952,6 +1108,7 @@ namespace esp32m {
           return false;
 
         if (request.componentId == _climate.id()) {
+          if (_thermostatAttached.load()) return false;
           JsonDocument doc;
           auto error = deserializeJson(doc, payload);
           if (error) {
@@ -991,6 +1148,15 @@ namespace esp32m {
       Lfbros* _owner;
       Options _options;
       mutable std::mutex _mutex;
+      mutable std::recursive_mutex _controlMutex;
+      uint64_t _manualRevision = 1, _thermostatLease = 1;
+      uint64_t _thermostatValidUntilMs = 0;
+      int64_t _thermostatSentUs = 0;
+      bool _thermostatOverride = false, _thermostatPending = false, _thermostatUncertain = false;
+      bool _thermostatRestorePending = false;
+      CommandType _thermostatPulse = CommandType::TurnOff;
+      Desired _thermostatDesired;
+      std::atomic<bool> _thermostatAttached = false;
       Desired _desired;
       Runtime _runtime;
 
@@ -1095,10 +1261,11 @@ namespace esp32m {
         _stage.store(SessionStage::Error);
       }
 
-      esp_err_t enqueue(CommandType type) {
+      esp_err_t enqueue(CommandType type, bool thermostat = false, uint64_t validUntilMs = 0) {
         if (!_commandQueue)
           return ESP_ERR_INVALID_STATE;
-        Command command = {.type = type};
+        Command command = {.type = type, .thermostat = thermostat,
+            .revision = _manualRevision, .validUntilMs = validUntilMs, .lease = _thermostatLease};
         return xQueueSend(_commandQueue, &command, 0) == pdTRUE
                    ? ESP_OK
                    : ESP_ERR_TIMEOUT;
@@ -1109,6 +1276,7 @@ namespace esp32m {
           drainRx();
           updateConnection();
           recoverCan();
+          expireThermostat();
           processCommands();
           restoreNormalModeWhenSafe();
           processSession();
@@ -1119,6 +1287,7 @@ namespace esp32m {
       }
 
       void processSession() {
+        std::lock_guard control(_controlMutex);
         if (!_canEnabled.load())
           return;
         const auto now = esp_timer_get_time();
@@ -1185,6 +1354,24 @@ namespace esp32m {
           return;
         Command command;
         while (xQueueReceive(_commandQueue, &command, 0) == pdTRUE) {
+          std::lock_guard control(_controlMutex);
+          if (command.thermostat && (command.revision != _manualRevision ||
+              command.lease != _thermostatLease ||
+              uint64_t(esp_timer_get_time() / 1000) >= command.validUntilMs)) {
+            if (command.revision == _manualRevision && command.lease == _thermostatLease)
+              _thermostatPending = false;
+            continue;
+          }
+          if (command.thermostat) {
+            Runtime runtime;
+            { std::lock_guard guard(_mutex); runtime = _runtime; }
+            const bool safe = _connected.load() && _sourceSelected.load() && runtime.valid &&
+                !runtime.partial && !runtimeIsStale(runtime, esp_timer_get_time()) &&
+                (command.type == CommandType::TurnOff || (!runtime.faultActive && runtime.state != 31)) && !_priming.load() &&
+                !_normalModeRestorePending.load() &&
+                (command.type != CommandType::TurnOn || (runtime.state == 1 && !_commandedOn.load()));
+            if (!safe) { _thermostatPending = false; continue; }
+          }
           esp_err_t result = ESP_ERR_INVALID_STATE;
           switch (command.type) {
             case CommandType::TurnOn:
@@ -1192,7 +1379,9 @@ namespace esp32m {
                 const uint8_t source[] = {4, 1};
                 const uint8_t mode[] = {2, 0};
                 const uint8_t on[] = {3, 1};
-                result = sendFrame(ControlIdentifier, source, sizeof(source));
+                result = command.thermostat || _thermostatRestorePending ? applyDesiredSetpoint() : ESP_OK;
+                if (result == ESP_OK)
+                  result = sendFrame(ControlIdentifier, source, sizeof(source));
                 if (result == ESP_OK)
                   result = sendFrame(ControlIdentifier, mode, sizeof(mode));
                 if (result == ESP_OK) {
@@ -1201,6 +1390,9 @@ namespace esp32m {
                   _normalModeRestorePending.store(false);
                   _normalModeRestoreRequestedUs = 0;
                 }
+                if (result == ESP_OK && command.thermostat &&
+                    uint64_t(esp_timer_get_time() / 1000) >= command.validUntilMs)
+                  result = ESP_ERR_INVALID_STATE;
                 if (result == ESP_OK)
                   result = sendFrame(ControlIdentifier, on, sizeof(on));
                 if (result == ESP_OK) {
@@ -1275,6 +1467,13 @@ namespace esp32m {
           }
           if (result != ESP_OK)
             _lastError.store(result);
+          if (command.thermostat) {
+            if (result != ESP_OK) {
+              _thermostatPending = false;
+              _thermostatUncertain = true;
+            } else if (command.type == CommandType::TurnOn || command.type == CommandType::TurnOff)
+              _thermostatSentUs = esp_timer_get_time();
+          }
           publishState();
         }
       }
@@ -1320,6 +1519,8 @@ namespace esp32m {
       }
 
       void resetSessionAfterControllerReset() {
+        std::lock_guard control(_controlMutex);
+        manualTakeover();
         const auto now = esp_timer_get_time();
         _connected.store(false);
         _applicationSeen.store(false);
@@ -1352,14 +1553,16 @@ namespace esp32m {
       }
 
       esp_err_t applyDesiredSetpoint() {
-        const auto valueState = desired();
+        const auto valueState = effectiveDesired();
         uint8_t data[5];
         data[0] = valueState.controlMode == ControlMode::Temperature ? 0 : 1;
         const auto value = valueState.controlMode == ControlMode::Temperature
                                ? valueState.temperatureC
                                : valueState.powerW;
         std::memcpy(data + 1, &value, sizeof(value));
-        return sendFrame(ControlIdentifier, data, sizeof(data));
+        const auto result = sendFrame(ControlIdentifier, data, sizeof(data));
+        if (result == ESP_OK) _thermostatRestorePending = false;
+        return result;
       }
 
       esp_err_t sendFrame(uint32_t id, const uint8_t* data, size_t size) {
@@ -1419,6 +1622,8 @@ namespace esp32m {
           const bool newSession = !previous || now - previous > NewSessionGapUs;
           _connected.store(true);
           if (newSession) {
+            std::lock_guard control(_controlMutex);
+            manualTakeover();
             _sourceSelected.store(false);
             _commandedOn.store(false);
             _operationMode.store(0);
@@ -1695,16 +1900,24 @@ namespace esp32m {
         runtime.supplyVoltageV = readFloat(payload + 0x98);
         runtime.receivedUs = now;
 
-        std::lock_guard guard(_mutex);
-        _runtime = runtime;
+        {
+          std::lock_guard guard(_mutex);
+          _runtime = runtime;
+        }
+        observeThermostat(runtime);
       }
 
       void updateConnection() {
         const auto last = _lastApplicationResponseUs.load();
         const bool connected =
             last && esp_timer_get_time() - last <= ConnectionTimeoutUs;
-        if (_connected.exchange(connected) != connected)
+        if (_connected.exchange(connected) != connected) {
+          if (!connected) {
+            std::lock_guard control(_controlMutex);
+            manualTakeover();
+          }
           publishState();
+        }
       }
 
       void updateComponents() {
@@ -1782,11 +1995,11 @@ namespace esp32m {
           return;
         }
         if (std::isfinite(runtime.chamberC))
-          _chamberSensor.set(runtime.chamberC);
+          _chamberSensor.setSample(runtime.chamberC, uint64_t(runtime.receivedUs / 1000));
         else
           _chamberSensor.resetState();
         if (std::isfinite(runtime.ambientC))
-          _ambientSensor.set(runtime.ambientC);
+          _ambientSensor.setSample(runtime.ambientC, uint64_t(runtime.receivedUs / 1000));
         else
           _ambientSensor.resetState();
         if (std::isfinite(runtime.supplyVoltageV))
@@ -1994,6 +2207,10 @@ namespace esp32m {
     float Lfbros::maximumPower() const {
       return _impl->maximumPower();
     }
+    thermostat::Capabilities Lfbros::capabilities() const { return _impl->thermostatCapabilities(); }
+    thermostat::Feedback Lfbros::snapshot() const { return _impl->thermostatSnapshot(); }
+    thermostat::Result Lfbros::apply(const thermostat::Request& request) { return _impl->thermostatApply(request); }
+    void Lfbros::thermostatAttached(bool attached) { _impl->setThermostatAttached(attached); }
 
     const JsonVariantConst Lfbros::descriptor() const {
       static JsonDocument doc;

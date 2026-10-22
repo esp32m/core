@@ -32,7 +32,8 @@ namespace esp32m {
       TaskHandle_t _task = nullptr;
       io::Sampler *_sampler;
       int _divisor = 0;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
+      std::mutex _sampleMutex;
       void run();
       Sensor _motion;
     };

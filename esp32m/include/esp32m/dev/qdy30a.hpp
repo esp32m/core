@@ -51,7 +51,7 @@ namespace esp32m {
       uint16_t _regs[14] = {};
       uint8_t _units = 0, _decimals = 0;
       float _min = 0, _max = 0, _value = 0;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _sensor;
     };
 

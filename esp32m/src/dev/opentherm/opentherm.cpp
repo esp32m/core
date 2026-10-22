@@ -1,6 +1,9 @@
 #include "esp32m/dev/opentherm.hpp"
 
 #include <esp_task_wdt.h>
+#include <esp_timer.h>
+#include <algorithm>
+#include <cmath>
 #include <cinttypes>
 
 namespace esp32m {
@@ -277,15 +280,18 @@ namespace esp32m {
       return ESP_OK;
     }
 
-    esp_err_t Core::send(MessageType type, DataId id, uint16_t value) {
+    esp_err_t Core::send(MessageType type, DataId id, uint16_t value,
+                         bool fromModel) {
       std::lock_guard lock(_mutex);
       if (_outgoing.isValid())
         return ESP_ERR_INVALID_STATE;
       _outgoing.init(type, id, value);
+      _outgoingFromModel = fromModel;
       return ESP_OK;
     }
 
     esp_err_t Core::transmit(bool retransmit) {
+      std::lock_guard stateLock(_stateMutex);
       uint32_t frame;
       {
         std::lock_guard lock(_mutex);
@@ -297,6 +303,9 @@ namespace esp32m {
         }
         frame = _outgoing.frame;
       }
+      Message message(frame);
+      prepareTransmit(message);
+      frame = message.frame;
       ESP_CHECK_RETURN(_driver->send(frame));
       {
         std::lock_guard lock(_mutex);
@@ -649,6 +658,7 @@ namespace esp32m {
     }
 
     bool Master::isSupported(Message& msg) {
+      std::lock_guard stateLock(_stateMutex);
       auto idInfo = _ids.get(msg.id);
       switch (msg.type) {
         case MessageType::ReadData:
@@ -658,6 +668,98 @@ namespace esp32m {
           return idInfo.writable || !idInfo.writableSet;
         default:
           return false;
+      }
+    }
+
+    Master::HeatingState Master::heatingState() const {
+      std::lock_guard stateLock(_stateMutex);
+      HeatingState state;
+      state.enabled = _hvac.status.master.CH;
+      state.active = _hvac.status.slave.CH;
+      state.dhwActive = _hvac.status.slave.DHW;
+      state.fault = _hvac.status.slave.Fault;
+      state.statusReceivedAtMs = _statusReceivedAtMs;
+      state.revision = _controlRevision;
+      state.configuredFlowC = _hvac.tSet;
+      state.overrideActive = state.enabled && std::isfinite(_thermostatFlowC) &&
+                             uint64_t(esp_timer_get_time() / 1000) <
+                                 _thermostatFlowValidUntilMs;
+      state.requestedFlowC = state.overrideActive ? _thermostatFlowC : _hvac.tSet;
+      state.maximumFlowC = std::isfinite(_hvac.maxTSet) && _hvac.maxTSet > 0
+                               ? std::min(100.0f, _hvac.maxTSet)
+                               : 80.0f;
+      {
+        std::lock_guard lock(_mutex);
+        state.manualOverride = _job != nullptr;
+      }
+      return state;
+    }
+
+    esp_err_t Master::applyThermostatFlow(float celsius,
+                                         uint64_t expectedRevision,
+                                         uint64_t validUntilMs) {
+      std::lock_guard stateLock(_stateMutex);
+      if (!_hvac.status.master.CH || expectedRevision != _controlRevision)
+        return ESP_ERR_INVALID_STATE;
+      {
+        std::lock_guard lock(_mutex);
+        if (_job)
+          return ESP_ERR_INVALID_STATE;
+      }
+      const auto maximum = heatingState().maximumFlowC;
+      if (!std::isfinite(celsius) || celsius < 0 || celsius > maximum ||
+          validUntilMs <= uint64_t(esp_timer_get_time() / 1000))
+        return ESP_ERR_INVALID_ARG;
+      // Zero is an explicit no-demand flow target. It does not clear CH or DHW.
+      _thermostatFlowC = celsius;
+      _thermostatFlowValidUntilMs = validUntilMs;
+      return ESP_OK;
+    }
+
+    void Master::clearThermostatFlow() {
+      std::lock_guard stateLock(_stateMutex);
+      _thermostatFlowC = NAN;
+      _thermostatFlowValidUntilMs = 0;
+    }
+
+    void Master::reconcileManualFlow(float previousFlow,
+                                     float previousMaximum) {
+      const auto differs = [](float first, float second) {
+        return first != second && !(std::isnan(first) && std::isnan(second));
+      };
+      if (differs(previousFlow, _hvac.tSet) ||
+          differs(previousMaximum, _hvac.maxTSet)) {
+        manualFlowTakeover();
+      }
+      // CH is a device-owned gate, not manual thermostat takeover. Re-enabling
+      // it lets the configured controller resume after its next fresh snapshot.
+      if (!_hvac.status.master.CH)
+        clearThermostatFlow();
+    }
+
+    void Master::manualFlowTakeover() {
+      ++_controlRevision;
+      clearThermostatFlow();
+    }
+
+    void Master::prepareTransmit(Message& msg) {
+      // Core::transmit holds _stateMutex through the actual driver send. A CH
+      // change after policy evaluation or request scheduling wins this gate.
+      if (!_hvac.status.master.CH ||
+          uint64_t(esp_timer_get_time() / 1000) >=
+              _thermostatFlowValidUntilMs)
+        _thermostatFlowC = NAN;
+      if (!_outgoingFromModel)
+        return;
+      if (msg.type == MessageType::ReadData && msg.id == DataId::Status) {
+        // Preserve the model's slave-side magic byte and all device-owned bits.
+        const auto value = (msg.value & 0xff) |
+                           (uint16_t(_hvac.status.master.value) << 8);
+        msg.init(msg.type, msg.id, value);
+      } else if (msg.type == MessageType::WriteData && msg.id == DataId::TSet &&
+                 _hvac.status.master.CH && std::isfinite(_thermostatFlowC)) {
+        const auto maximum = heatingState().maximumFlowC;
+        msg.write(DataId::TSet, std::min(_thermostatFlowC, maximum));
       }
     }
 
@@ -677,6 +779,7 @@ namespace esp32m {
     }
 
     void Master::processResponse(Message& msg) {
+      std::lock_guard stateLock(_stateMutex);
       if (_logTraffic)
         logD("ID %i: %s %i -> %s %i", static_cast<int>(_outgoing.id),
              MessageTypeNames[static_cast<int>(_outgoing.type)],
@@ -731,6 +834,7 @@ namespace esp32m {
         switch (msg.id) {
           case DataId::Status:
             _hvac.status.slave.value = msg.value & 0xff;
+            _statusReceivedAtMs = esp_timer_get_time() / 1000;
             break;
           case DataId::TSet:
             break;
@@ -878,7 +982,12 @@ namespace esp32m {
       Message msg;
       for (int counter = 0; counter < 256; counter++) {
         if (job) {
-          if (job->nextRequest(msg)) {
+          bool next;
+          {
+            std::lock_guard stateLock(_stateMutex);
+            next = job->nextRequest(msg);
+          }
+          if (next) {
             send(msg);
             break;
           }
@@ -890,8 +999,13 @@ namespace esp32m {
           delete job;
           job = nullptr;
         }
-        if (_model && _model->nextRequest(msg) && isSupported(msg)) {
-          send(msg);
+        bool next = false;
+        {
+          std::lock_guard stateLock(_stateMutex);
+          next = _model && _model->nextRequest(msg) && isSupported(msg);
+        }
+        if (next) {
+          send(msg, true);
           break;
         }
       }
@@ -1084,6 +1198,59 @@ namespace esp32m {
       opentherm::Master::init(driver, model, name);
     }
 
+    thermostat::Capabilities OpenthermMaster::capabilities() const {
+      thermostat::Capabilities caps;
+      caps.flow = true;
+      caps.deviceGate = true;
+      caps.minimumFlowC = 0;  // Zero withdraws flow demand without clearing CH.
+      caps.maximumFlowC = heatingState().maximumFlowC;
+      return caps;
+    }
+
+    thermostat::Feedback OpenthermMaster::snapshot() const {
+      const auto state = heatingState();
+      thermostat::Feedback feedback;
+      feedback.sampledAtMs = state.statusReceivedAtMs;
+      feedback.valid = state.statusReceivedAtMs != 0;
+      feedback.enabled = state.enabled;
+      feedback.fault = state.fault;
+      feedback.manualOverride = state.manualOverride;
+      feedback.revision = state.revision;
+      if (!feedback.valid)
+        feedback.phase = thermostat::Phase::Unknown;
+      else if (state.fault)
+        feedback.phase = thermostat::Phase::Fault;
+      else if (!state.enabled)
+        feedback.phase = thermostat::Phase::Off;
+      else if (state.active && !state.dhwActive)
+        feedback.phase = thermostat::Phase::Heating;
+      else
+        feedback.phase = thermostat::Phase::Standby;
+      return feedback;
+    }
+
+    thermostat::Result OpenthermMaster::apply(
+        const thermostat::Request& request) {
+      if (request.command == thermostat::Command::Release) {
+        clearThermostatFlow();
+        return thermostat::Result::Accepted;
+      }
+      if (request.command != thermostat::Command::FlowTarget)
+        return thermostat::Result::Unsupported;
+      const auto error = applyThermostatFlow(
+          request.targetC, request.expectedRevision, request.validUntilMs);
+      if (error == ESP_OK)
+        return thermostat::Result::Accepted;
+      if (error == ESP_ERR_INVALID_ARG)
+        return thermostat::Result::Invalid;
+      const auto state = heatingState();
+      // A gate closure between snapshot and apply is resumable, whereas a
+      // changed target owner requires an explicit thermostat rearm.
+      return state.revision != request.expectedRevision || state.manualOverride
+                 ? thermostat::Result::Rejected
+                 : thermostat::Result::Unavailable;
+    }
+
     bool OpenthermMaster::handleRequest(Request& req) {
       if (AppObject::handleRequest(req))
         return true;
@@ -1096,6 +1263,15 @@ namespace esp32m {
       bool processed = false;
       if (req.is("request")) {
         auto data = req.data();
+        std::lock_guard stateLock(_stateMutex);
+        if (data["type"].as<uint8_t>() ==
+                static_cast<uint8_t>(opentherm::MessageType::WriteData) &&
+            data["id"].as<uint8_t>() ==
+                static_cast<uint8_t>(opentherm::DataId::TSet)) {
+          // A diagnostic/manual flow write takes ownership before any queued
+          // thermostat output can be sent, even if this one-shot send is busy.
+          manualFlowTakeover();
+        }
         err = send(
             static_cast<opentherm::MessageType>(data["type"].as<uint8_t>()),
             static_cast<opentherm::DataId>(data["id"].as<uint8_t>()),
@@ -1118,8 +1294,11 @@ namespace esp32m {
     }
 
     void OpenthermMaster::setState(RequestContext& ctx) {
+      std::lock_guard stateLock(_stateMutex);
       JsonVariantConst hvac = ctx.data["hvac"];
       if (hvac) {
+        const auto previousFlow = _hvac.tSet;
+        const auto previousMaximum = _hvac.maxTSet;
         json::from(hvac["status"], _hvac.status.value);
         json::from(hvac["ts"], _hvac.tSet);
         bool changed = false;
@@ -1138,10 +1317,12 @@ namespace esp32m {
         json::from(hvac["hcr"], _hvac.hcratio);
         json::from(hvac["otvm"], _hvac.otverMaster);
         json::from(hvac["vm"], _hvac.verMaster);
+        reconcileManualFlow(previousFlow, previousMaximum);
       }
     }
 
     JsonDocument* OpenthermMaster::getState(RequestContext& ctx) {
+      std::lock_guard stateLock(_stateMutex);
       JsonDocument* doc = new JsonDocument(); /* _hvac.jsonSize() */
       JsonObject root = doc->to<JsonObject>();
       _hvac.toJson(root);
@@ -1149,11 +1330,14 @@ namespace esp32m {
     }
 
     bool OpenthermMaster::setConfig(RequestContext& ctx) {
+      std::lock_guard stateLock(_stateMutex);
       bool changed = false;
       auto cfg = ctx.data.as<JsonObjectConst>();
       _ids.fromJson(cfg, &changed);
       JsonVariantConst hvac = cfg["hvac"];
       if (hvac) {
+        const auto previousFlow = _hvac.tSet;
+        const auto previousMaximum = _hvac.maxTSet;
         opentherm::Status s = _hvac.status;
         uint8_t prevMaster = s.master.value;
         s.slave.value = 0;
@@ -1172,11 +1356,13 @@ namespace esp32m {
         json::from(hvac["ts"], _hvac.tSet, &changed);
         json::from(hvac["tdhws"], _hvac.tDhwSet, &changed);
         json::from(hvac["maxts"], _hvac.maxTSet, &changed);
+        reconcileManualFlow(previousFlow, previousMaximum);
       }
       return changed;
     }
 
     JsonDocument* OpenthermMaster::getConfig(RequestContext& ctx) {
+      std::lock_guard stateLock(_stateMutex);
       JsonDocument* doc = new JsonDocument();
       JsonObject root = doc->to<JsonObject>();
       _ids.toJson(root);

@@ -63,7 +63,7 @@ namespace esp32m {
     JsonDocument* Dds238::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument(); /* JSON_ARRAY_SIZE(11) */
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_addr);
       arr.add(_te);
       arr.add(_ee);
@@ -107,7 +107,7 @@ namespace esp32m {
         _rap = (float)(int16_t)reg[0xF] / 1000;
         _pf = (float)reg[0x10] / 1000;
         _f = (float)reg[0x11] / 100;
-        _stamp = millis();
+        _stamp = esp_timer_get_time() / 1000LL;
       } else if (err == ESP_ERR_TIMEOUT) {
         if (_timeoutStreak < std::numeric_limits<uint8_t>::max())
           _timeoutStreak++;

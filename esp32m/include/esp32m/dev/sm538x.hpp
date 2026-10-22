@@ -32,7 +32,7 @@ namespace esp32m {
       uint8_t _addr;
       uint16_t _model;
       float _value = NAN;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor *_sensor = nullptr;
     };
 

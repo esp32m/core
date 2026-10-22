@@ -171,7 +171,7 @@ namespace esp32m {
       bool initSensors() override;
 
      private:
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _voltage, _current, _power;
       float _shuntVolts = NAN;
     };

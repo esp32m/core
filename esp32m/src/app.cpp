@@ -15,12 +15,14 @@
 #include "esp32m/config/vfs.hpp"
 #include "esp32m/debug/button.hpp"
 #include "esp32m/debug/crashguard.hpp"
+#include "esp32m/debug/stack-monitor.hpp"
 #include "esp32m/events/broadcast.hpp"
 #include "esp32m/fs/littlefs.hpp"
 #include "esp32m/fs/spiffs.hpp"
 #include "esp32m/json.hpp"
 #include "esp32m/log/console.hpp"
 #include "esp32m/log/udp.hpp"
+#include "esp32m/log/store.hpp"
 #include "esp32m/logging.hpp"
 
 namespace esp32m {
@@ -36,9 +38,16 @@ namespace esp32m {
     _subscription = EventManager::instance().subscribe([this](Event& ev) {
       Request* req;
       EventDescribe* ed;
-      if (Request::is(ev, interactiveName(), &req))
-        handleRequest(*req);
-      else if (EventDescribe::is(ev, &ed)) {
+      if (Request::is(ev, interactiveName(), &req)) {
+        const bool handled = handleRequest(*req);
+        // Commands can change diagnostics even when they fail, and custom
+        // commands do not necessarily pass through setState()/setConfig().
+        // Defer state capture until after the complete handler has returned.
+        // Read requests must not invalidate their own subscription capture.
+        if (handled && !req->is(KeyStateGet) && !req->is(KeyInfoGet) &&
+            !req->is(Config::KeyConfigGet) && !req->is("device-state"))
+          EventStateChanged::publish(this);
+      } else if (EventDescribe::is(ev, &ed)) {
         ed->add(name(), descriptor());
       } else
         handleEvent(ev);
@@ -78,8 +87,11 @@ namespace esp32m {
       RequestContext ctx(req, req.data());
       JsonDocument* state = getState(ctx);
       if (state) {
-        json::check(this, state, "getState()");
-        req.respond(iname, *state, false);
+        // A partial document must not become a valid subscription baseline.
+        if (json::check(this, state, "getState()"))
+          req.respond(iname, *state, false);
+        else
+          req.respond(iname, ESP_ERR_NO_MEM);
         delete state;
       }
       return true;
@@ -244,6 +256,9 @@ namespace esp32m {
 #if CONFIG_ESP32M_LOG_HOOK_UART
     log::hookUartLogger();
 #endif
+#if CONFIG_ESP32M_LOG_STORAGE
+    log::Store::instance();
+#endif
 #if CONFIG_ESP32M_CRASH_GUARD
     debug::CrashGuard::instance();
 #endif
@@ -283,6 +298,9 @@ namespace esp32m {
       fs::Spiffs::instance();
 #endif
     }
+#if CONFIG_ESP32M_LOG_STORAGE
+    log::Store::instance().prepare();
+#endif
     if (!_config)
       _config.reset(new Config(new config::Vfs("/config.json")));
     _config->load();
@@ -369,6 +387,7 @@ namespace esp32m {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
       esp_task_wdt_reset();
       evp.publish();
+      debug::pollStackMonitor();
     }
   }
 

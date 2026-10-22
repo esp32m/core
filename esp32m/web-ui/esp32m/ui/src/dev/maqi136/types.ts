@@ -6,7 +6,7 @@ export type TProps = {
 };
 
 export type TState = [
-  age: number,
+  sampledAtMs: number,
   address: number,
   unit: number,
   decimals: number,
@@ -19,4 +19,15 @@ export type TState = [
   calibrated: boolean,
   calibrationMultiplier: number,
   calibrationOffset: number,
+  baud: number,
+  communicationPending: boolean,
+  lastError: number,
 ];
+
+export type TConfig = {
+  address: number;
+  baud: number;
+  communicationError?: number;
+  pendingAddress?: number;
+  pendingBaud?: number;
+};

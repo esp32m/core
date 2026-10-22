@@ -39,7 +39,9 @@ namespace esp32m {
       io::IPin *_pin;
       float _value = NAN;
       float _consumption = 0, _dumpedConsumption = 0;
-      unsigned long _stamp = 0, _lastDump = 0;
+      int64_t _stamp = -1;
+      // Keep the existing wrap-safe pulse interval/compute(int ms) contract.
+      unsigned long _flowStampMs = 0, _lastDump = 0;
       Sensor _sensorFlow, _sensorConsumption;
     };
 

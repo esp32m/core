@@ -1,54 +1,67 @@
 #include "esp32m/dev/flmvalve.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+
+#include <esp_timer.h>
 
 #include "esp32m/base.hpp"
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/defs.hpp"
+#include "esp32m/dev/flmvalve/protocol.hpp"
+#include "esp32m/integrations/ha/ha.hpp"
 
 namespace esp32m {
   namespace dev {
 
     namespace {
-      constexpr uint8_t ConfigureAddressFunction = 0x20;
-      constexpr uint8_t ConfigureBaudrateFunction = 0x30;
+      namespace p = flmvalve::protocol;
 
-      uint16_t modbusCrc16(const uint8_t* data, size_t size) {
-        uint16_t crc = 0xffff;
-        while (size--) {
-          crc ^= *data++;
-          for (int bit = 0; bit < 8; bit++)
-            crc = crc & 1 ? (crc >> 1) ^ 0xa001 : crc >> 1;
+      // This valve's firmware recognizes a frame boundary only after 11 ms of
+      // silence. Reserve a little margin so traffic for another slave cannot
+      // be concatenated with our first request on a shared bus.
+      constexpr uint32_t PollQuietBeforeMs = 15;
+
+      struct VendorReplyContext {
+        uint8_t address;
+        uint8_t function;
+        size_t normalSize;
+        p::Reply reply;
+
+        static bool complete(const uint8_t* bytes, size_t size, void* data) {
+          auto& context = *static_cast<VendorReplyContext*>(data);
+          return p::findReply(bytes, size, context.address, context.function,
+                              context.normalSize, context.reply);
         }
-        return crc;
-      }
+      };
 
-      esp_err_t transactVendor(uint8_t address, uint8_t function,
-                               const uint8_t* payload, size_t payloadSize,
-                               uint8_t* response, size_t responseCapacity,
-                               size_t* responseSize) {
-        uint8_t request[16] = {};
-        const size_t requestSize = payloadSize + 4;
-        if (!payload || requestSize > sizeof(request))
+      esp_err_t transactVendor(const p::Frame& request, uint8_t replyAddress,
+                               uint8_t function, uint8_t* response,
+                               size_t responseCapacity, size_t* responseSize) {
+        if (!response || !responseCapacity || !responseSize)
           return ESP_ERR_INVALID_ARG;
-        request[0] = address;
-        request[1] = function;
-        memcpy(request + 2, payload, payloadSize);
-        const auto crc = modbusCrc16(request, requestSize - 2);
-        request[requestSize - 2] = crc & 0xff;
-        request[requestSize - 1] = crc >> 8;
-        return modbus::Master::instance().transactRaw(
-            request, requestSize, response, responseCapacity, responseSize);
+        uint8_t received[32] = {};
+        size_t receivedSize = 0;
+        VendorReplyContext context{replyAddress, function, responseCapacity,
+                                   {}};
+        const auto err = modbus::Master::instance().exchangeRaw(
+            request.bytes.data(), request.size, received, sizeof(received),
+            &receivedSize, 0, 1500, VendorReplyContext::complete, &context);
+        if (err != ESP_OK)
+          return err;
+        if (!context.reply.size || context.reply.size > responseCapacity)
+          return ESP_ERR_INVALID_SIZE;
+        memcpy(response, received + context.reply.offset, context.reply.size);
+        *responseSize = context.reply.size;
+        return ESP_OK;
       }
 
       esp_err_t validateVendorResponse(const uint8_t* response, size_t size,
                                        uint8_t address, uint8_t function) {
         if (!response || size < 5)
           return ESP_ERR_INVALID_RESPONSE;
-        const auto crc = modbusCrc16(response, size - 2);
-        if (response[size - 2] != (crc & 0xff) ||
-            response[size - 1] != (crc >> 8))
+        if (!p::validCrc(response, size))
           return ESP_ERR_INVALID_CRC;
         if (response[0] != address)
           return ESP_ERR_INVALID_RESPONSE;
@@ -59,16 +72,28 @@ namespace esp32m {
     }  // namespace
 
     FlomarvelValve::FlomarvelValve(uint8_t addr)
-        : _addr(addr), _position(this, "", "position") {
+        : _addr(addr),
+          _position(this, "", "position"),
+          _component(this, "", "valve") {
       _position.setTitle("Actual position");
       _position.unit = "°";
       _position.precision = 2;
       _position.stateClass = StateClass::Measurement;
-      Device::init(Flags::HasSensors);
+      _component.setTitle("Valve");
+      _component.setReportsPosition(true);
+      Device::init(Flags::HasSensors | Flags::CanDisable);
     }
 
     float FlomarvelValve::rawToAngle(uint16_t raw) {
       return raw / 100.0f;
+    }
+
+    int FlomarvelValve::rawToPosition(uint16_t raw) {
+      return static_cast<int>(std::lround(raw * 100.0f / MaxAngleRaw));
+    }
+
+    uint64_t FlomarvelValve::nowMs() {
+      return esp_timer_get_time() / 1000ULL;
     }
 
     bool FlomarvelValve::isSupportedBaudrate(uint32_t baud) {
@@ -97,7 +122,58 @@ namespace esp32m {
 
     void FlomarvelValve::invalidateActual() {
       _actualStamp = 0;
+      _motionStamp = 0;
       _position.resetState();
+      _component.resetState();
+    }
+
+    void FlomarvelValve::observeActual(uint16_t raw, uint64_t now) {
+      const auto movement = raw > _motionRaw ? raw - _motionRaw
+                                             : _motionRaw - raw;
+      if (!_motionStamp || movement >= MotionThresholdRaw) {
+        _motionRaw = raw;
+        _motionStamp = now;
+      }
+      _actualRaw = raw;
+      _actualStamp = now;
+    }
+
+    void FlomarvelValve::observeTarget(uint16_t raw, uint64_t now) {
+      if (!_targetStamp || raw != _targetRaw) {
+        _motionRaw = _actualRaw;
+        _motionStamp = now;
+      }
+      _targetRaw = raw;
+      _targetStamp = now;
+    }
+
+    void FlomarvelValve::updateValveState() {
+      if (!_actualStamp) {
+        _component.resetState();
+        return;
+      }
+      // Use the latest successful position sample rather than wall time. A
+      // communication gap must not make an unobserved movement look settled.
+      const bool settled =
+          _motionStamp && _actualStamp >= _motionStamp &&
+          _actualStamp - _motionStamp >= MotionSettleMs;
+      const bool endpointTarget =
+          _targetRaw <= EndpointToleranceRaw ||
+          _targetRaw >= MaxAngleRaw - EndpointToleranceRaw;
+      const auto tolerance =
+          endpointTarget ? EndpointToleranceRaw : PositionToleranceRaw;
+      ValveState state;
+      if (_targetStamp &&
+          _targetRaw > _actualRaw + tolerance && !settled)
+        state = ValveState::Opening;
+      else if (_targetStamp &&
+               _actualRaw > _targetRaw + tolerance && !settled)
+        state = ValveState::Closing;
+      else if (_actualRaw <= EndpointToleranceRaw)
+        state = ValveState::Closed;
+      else
+        state = ValveState::Open;
+      _component.set(state, rawToPosition(_actualRaw));
     }
 
     void FlomarvelValve::invalidateCommunicationState() {
@@ -107,69 +183,115 @@ namespace esp32m {
       _probeValidMask = 0;
     }
 
+    void FlomarvelValve::expireStaleState(uint64_t now) {
+      if (_actualStamp && now - _actualStamp > StateFreshnessMs)
+        invalidateActual();
+      if (_targetStamp && now - _targetStamp > StateFreshnessMs)
+        _targetStamp = 0;
+      updateValveState();
+    }
+
     esp_err_t FlomarvelValve::configureAddress(uint8_t address) {
       if (!address || address > 254)
         return ESP_ERR_INVALID_ARG;
 
-      const uint8_t payload[] = {0x00, 0x20, 0x00, 0x01,
-                                 0x02, 0x00, address};
+      const auto request = p::configureAddress(_addr, address);
       uint8_t response[7] = {};
       size_t responseSize = 0;
-      ESP_CHECK_RETURN(transactVendor(
-          _addr, ConfigureAddressFunction, payload, sizeof(payload), response,
-          sizeof(response), &responseSize));
-      ESP_CHECK_RETURN(validateVendorResponse(
-          response, responseSize, address, ConfigureAddressFunction));
-      if (responseSize != sizeof(response) || response[2] != 0x00 ||
-          response[3] != address || response[4] != 0x02)
-        return ESP_ERR_INVALID_RESPONSE;
+      auto writeError = transactVendor(
+          request, address, p::ConfigureAddressFunction, response,
+          sizeof(response), &responseSize);
+      bool acknowledged = writeError == ESP_OK;
+      if (acknowledged) {
+        writeError = validateVendorResponse(
+            response, responseSize, address, p::ConfigureAddressFunction);
+        acknowledged = writeError == ESP_OK && responseSize == sizeof(response) &&
+                       response[2] == 0x00 && response[3] == address &&
+                       response[4] == 0x02;
+        if (!acknowledged && writeError == ESP_OK)
+          writeError = ESP_ERR_INVALID_RESPONSE;
+      }
 
-      _addr = address;
-      invalidateCommunicationState();
-      delay(50);
-      return ESP_OK;
+      // The command is sent exactly once. A missing acknowledgement is an
+      // uncertain result, so verify the requested address read-only instead
+      // of retransmitting the configuration write.
+      uint16_t actual = 0;
+      const auto verifyError = modbus::Master::instance().request(
+          address, modbus::Command::ReadHolding, ActualRegister, 1, &actual,
+          false);
+      if (verifyError == ESP_OK || acknowledged) {
+        if (verifyError != ESP_OK)
+          logW("address %u acknowledged but read-back failed: %d",
+               (unsigned)address, (int)verifyError);
+        else if (writeError != ESP_OK)
+          logW("address %u verified after missing/invalid acknowledgement: %d",
+               (unsigned)address, (int)writeError);
+        _addr = address;
+        invalidateCommunicationState();
+        return ESP_OK;
+      }
+
+      logW("address change %u -> %u failed: write=%d verify=%d",
+           (unsigned)_addr, (unsigned)address, (int)writeError,
+           (int)verifyError);
+      return writeError != ESP_OK ? writeError : verifyError;
     }
 
     esp_err_t FlomarvelValve::configureBaudrate(uint32_t baud) {
       if (!isSupportedBaudrate(baud))
         return ESP_ERR_INVALID_ARG;
 
-      const uint8_t payload[] = {
-          0x00, 0x30, 0x00, 0x01, 0x04,
-          static_cast<uint8_t>(baud >> 24),
-          static_cast<uint8_t>(baud >> 16),
-          static_cast<uint8_t>(baud >> 8),
-          static_cast<uint8_t>(baud),
-      };
+      const auto request = p::configureBaudrate(_addr, baud);
       uint8_t response[10] = {};
       size_t responseSize = 0;
-      ESP_CHECK_RETURN(transactVendor(
-          _addr, ConfigureBaudrateFunction, payload, sizeof(payload), response,
-          sizeof(response), &responseSize));
-      ESP_CHECK_RETURN(validateVendorResponse(
-          response, responseSize, _addr, ConfigureBaudrateFunction));
-      if (responseSize != sizeof(response) || response[2] != 0x00 ||
-          response[3] != 0x00 || response[4] != (baud >> 24) ||
-          response[5] != ((baud >> 16) & 0xff) ||
-          response[6] != ((baud >> 8) & 0xff) ||
-          response[7] != (baud & 0xff))
-        return ESP_ERR_INVALID_RESPONSE;
+      auto writeError = transactVendor(
+          request, _addr, p::ConfigureBaudrateFunction, response,
+          sizeof(response), &responseSize);
+      bool acknowledged = writeError == ESP_OK;
+      if (acknowledged) {
+        writeError = validateVendorResponse(
+            response, responseSize, _addr, p::ConfigureBaudrateFunction);
+        acknowledged =
+            writeError == ESP_OK && responseSize == sizeof(response) &&
+            response[2] == 0x00 && response[3] == 0x00 &&
+            response[4] == (baud >> 24) &&
+            response[5] == ((baud >> 16) & 0xff) &&
+            response[6] == ((baud >> 8) & 0xff) &&
+            response[7] == (baud & 0xff);
+        if (!acknowledged && writeError == ESP_OK)
+          writeError = ESP_ERR_INVALID_RESPONSE;
+      }
 
-      delay(50);
-      ESP_CHECK_RETURN(modbus::Master::instance().setBaudrate(baud));
-      invalidateCommunicationState();
-      return ESP_OK;
+      auto& mb = modbus::Master::instance();
+      const auto previousBaud = mb.config().ser_opts.baudrate;
+      ESP_CHECK_RETURN(mb.setBaudrate(baud));
+      uint16_t actual = 0;
+      const auto verifyError = mb.request(
+          _addr, modbus::Command::ReadHolding, ActualRegister, 1, &actual,
+          false);
+      if (verifyError == ESP_OK || acknowledged) {
+        if (verifyError != ESP_OK)
+          logW("baud %lu acknowledged but read-back failed: %d",
+               (unsigned long)baud, (int)verifyError);
+        else if (writeError != ESP_OK)
+          logW("baud %lu verified after missing/invalid acknowledgement: %d",
+               (unsigned long)baud, (int)writeError);
+        invalidateCommunicationState();
+        return ESP_OK;
+      }
+
+      const auto restoreError = mb.setBaudrate(previousBaud);
+      logW("baud change %lu -> %lu failed: write=%d verify=%d restore=%d",
+           (unsigned long)previousBaud, (unsigned long)baud, (int)writeError,
+           (int)verifyError, (int)restoreError);
+      if (restoreError != ESP_OK)
+        return restoreError;
+      return writeError != ESP_OK ? writeError : verifyError;
     }
 
     bool FlomarvelValve::initSensors() {
       modbus::Master& mb = modbus::Master::instance();
-      if (mb.isRunning())
-        ESP_ERROR_CHECK_WITHOUT_ABORT(mb.stop());
-      delay(500);
-      if (!mb.isRunning())
-        ESP_ERROR_CHECK_WITHOUT_ABORT(mb.start());
-      delay(500);
-      return mb.isRunning();
+      return mb.start() == ESP_OK;
     }
 
     bool FlomarvelValve::pollSensors() {
@@ -180,40 +302,45 @@ namespace esp32m {
       }
 
       uint16_t actual = 0;
+      // Keep the quiet interval and transmission under the master's UART
+      // mutex. Retain the recovery retry as a fallback for the essential read.
       auto err = mb.request(_addr, modbus::Command::ReadHolding,
-                            ActualRegister, 1, &actual);
+                            ActualRegister, 1, &actual, true,
+                            PollQuietBeforeMs);
       if (err != ESP_OK) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(err);
-        invalidateActual();
-        return false;
+        expireStaleState(nowMs());
+        return true;
       }
       if (actual > MaxAngleRaw) {
         logW("invalid actual angle register value: %u", (unsigned)actual);
-        invalidateActual();
-        return false;
+        expireStaleState(nowMs());
+        return true;
       }
-      _actualRaw = actual;
-      _actualStamp = millis();
+      observeActual(actual, nowMs());
       _position.set(actualAngle());
 
       uint16_t target = 0;
       err = mb.request(_addr, modbus::Command::ReadHolding, CommandRegister, 1,
-                       &target);
+                       &target, false);
       if (err == ESP_OK && target <= MaxAngleRaw) {
-        _targetRaw = target;
-        _targetStamp = millis();
+        observeTarget(target, nowMs());
       } else {
-        _targetStamp = 0;
         if (err != ESP_OK)
           ESP_ERROR_CHECK_WITHOUT_ABORT(err);
         else
           logW("invalid commanded angle register value: %u",
                (unsigned)target);
+        if (_targetStamp && nowMs() - _targetStamp > StateFreshnessMs)
+          _targetStamp = 0;
       }
+      updateValveState();
       return true;
     }
 
     esp_err_t FlomarvelValve::setTargetAngle(float angle) {
+      std::lock_guard guard(_deviceMutex);
+      if (isDisabled()) return ESP_ERR_INVALID_STATE;
       if (!std::isfinite(angle) || angle < 0 || angle > 90)
         return ESP_ERR_INVALID_ARG;
       modbus::Master& mb = modbus::Master::instance();
@@ -222,12 +349,28 @@ namespace esp32m {
       auto raw = static_cast<uint16_t>(std::lround(angle * 100.0f));
       ESP_CHECK_RETURN(mb.request(_addr, modbus::Command::WriteRegister,
                                   CommandRegister, 1, &raw));
-      _targetRaw = raw;
-      _targetStamp = millis();
+      observeTarget(raw, nowMs());
+      updateValveState();
       return ESP_OK;
     }
 
+    esp_err_t FlomarvelValve::setPosition(float position) {
+      if (!std::isfinite(position) || position < 0 || position > 100)
+        return ESP_ERR_INVALID_ARG;
+      return setTargetAngle(position * 90.0f / 100.0f);
+    }
+
+    esp_err_t FlomarvelValve::open() {
+      return setTargetAngle(90);
+    }
+
+    esp_err_t FlomarvelValve::close() {
+      return setTargetAngle(0);
+    }
+
     esp_err_t FlomarvelValve::probeRegisters() {
+      std::lock_guard guard(_deviceMutex);
+      if (isDisabled()) return ESP_ERR_INVALID_STATE;
       modbus::Master& mb = modbus::Master::instance();
       if (!mb.isRunning())
         return ESP_ERR_INVALID_STATE;
@@ -249,21 +392,23 @@ namespace esp32m {
           logW("probe R%u failed: %d", (unsigned)reg, (int)err);
         }
       }
-      _probeStamp = millis();
+      _probeStamp = nowMs();
 
       if (_probeValidMask & (1 << CommandRegister)) {
-        _targetRaw = _probeRegs[CommandRegister];
-        _targetStamp = _targetRaw <= MaxAngleRaw ? _probeStamp : 0;
+        if (_probeRegs[CommandRegister] <= MaxAngleRaw)
+          observeTarget(_probeRegs[CommandRegister], _probeStamp);
+        else
+          _targetStamp = 0;
       }
       if (_probeValidMask & (1 << ActualRegister)) {
-        _actualRaw = _probeRegs[ActualRegister];
-        if (_actualRaw <= MaxAngleRaw) {
-          _actualStamp = _probeStamp;
+        if (_probeRegs[ActualRegister] <= MaxAngleRaw) {
+          observeActual(_probeRegs[ActualRegister], _probeStamp);
           _position.set(actualAngle());
         } else {
           invalidateActual();
         }
       }
+      updateValveState();
 
       // Partial results are useful during protocol discovery. Only fail the
       // request if no register answered at all.
@@ -271,10 +416,45 @@ namespace esp32m {
     }
 
     bool FlomarvelValve::handleRequest(Request& req) {
-      if (AppObject::handleRequest(req))
+      std::lock_guard deviceGuard(_deviceMutex);
+      if (Device::handleRequest(req))
         return true;
       if (req.is("probe")) {
         req.respond(probeRegisters());
+        return true;
+      }
+      if (req.is(integrations::ha::StateRequest::Name)) {
+        auto id = req.data()["id"].as<const char*>();
+        auto component = id ? Component::find(id) : nullptr;
+        if (!component || component->device() != this)
+          return false;
+        JsonDocument doc;
+        auto root = doc.to<JsonObject>();
+        auto state = root["state"].to<JsonObject>();
+        component->exportState(state);
+        req.respond(name(), doc.as<JsonVariantConst>());
+        return true;
+      }
+      if (req.is(integrations::ha::CommandRequest::Name)) {
+        auto& command =
+            static_cast<integrations::ha::CommandRequest&>(req);
+        if (command.componentId != _component.id())
+          return false;
+        esp_err_t err = ESP_ERR_INVALID_ARG;
+        auto payload = req.data().as<const char*>();
+        if (payload) {
+          if (!strcasecmp(payload, "open"))
+            err = open();
+          else if (!strcasecmp(payload, "close"))
+            err = close();
+          else {
+            char* end = nullptr;
+            auto position = strtof(payload, &end);
+            if (end != payload && end && *end == '\0')
+              err = setPosition(position);
+          }
+        }
+        req.respond(err);
         return true;
       }
       return false;
@@ -282,12 +462,28 @@ namespace esp32m {
 
     void FlomarvelValve::setState(RequestContext& ctx) {
       auto state = ctx.data.as<JsonObjectConst>();
-      auto value = state["angle"];
-      if (value.is<float>())
-        ctx.errors.check(setTargetAngle(value.as<float>()));
+      auto angle = state["angle"];
+      auto position = state["position"];
+      if (angle.is<float>())
+        ctx.errors.check(setTargetAngle(angle.as<float>()));
+      else if (position.is<float>())
+        ctx.errors.check(setPosition(position.as<float>()));
+      else {
+        const char* action = state["state"];
+        if (!action)
+          return;
+        esp_err_t err = ESP_ERR_INVALID_ARG;
+        if (!strcasecmp(action, "open"))
+          err = open();
+        else if (!strcasecmp(action, "close"))
+          err = close();
+        else
+          logW("unrecognized valve action: %s", action);
+        ctx.errors.check(err);
+      }
     }
 
-    bool FlomarvelValve::setConfig(RequestContext& ctx) {
+    bool FlomarvelValve::setDeviceConfig(RequestContext& ctx) {
       auto cfg = ctx.data.as<JsonObjectConst>();
       auto& mb = modbus::Master::instance();
       uint8_t address = _addr;
@@ -350,7 +546,7 @@ namespace esp32m {
       return changed;
     }
 
-    JsonDocument* FlomarvelValve::getConfig(RequestContext& ctx) {
+    JsonDocument* FlomarvelValve::getDeviceConfig(RequestContext& ctx) {
       auto doc = new JsonDocument();
       auto root = doc->to<JsonObject>();
       root["address"] = _addr;
@@ -361,25 +557,34 @@ namespace esp32m {
     JsonDocument* FlomarvelValve::getState(RequestContext& ctx) {
       auto doc = new JsonDocument();
       auto root = doc->to<JsonObject>();
+      const auto now = nowMs();
+      const auto actualAge =
+          _actualStamp ? now - _actualStamp : uint64_t(0);
+      const bool actualFresh =
+          _actualStamp && actualAge <= StateFreshnessMs;
       root["address"] = _addr;
-      root["actualValid"] = _actualStamp != 0;
+      root["actualValid"] = actualFresh;
       if (_actualStamp)
-        root["actualAge"] = millis() - _actualStamp;
+        root["actualSampledAtMs"] = _actualStamp;
       else
-        root["actualAge"] = -1;
+        root["actualSampledAtMs"] = -1;
       root["actual"] = actualAngle();
       root["actualRaw"] = _actualRaw;
       root["targetValid"] = _targetStamp != 0;
       if (_targetStamp)
-        root["targetAge"] = millis() - _targetStamp;
+        root["targetSampledAtMs"] = _targetStamp;
       else
-        root["targetAge"] = -1;
+        root["targetSampledAtMs"] = -1;
       root["target"] = targetAngle();
       root["targetRaw"] = _targetRaw;
+      root["state"] = actualFresh
+                            ? _component.getState()["state"] | "unknown"
+                            : "unknown";
+      root["position"] = actualFresh ? rawToPosition(_actualRaw) : -1;
       if (_probeStamp)
-        root["probeAge"] = millis() - _probeStamp;
+        root["probeSampledAtMs"] = _probeStamp;
       else
-        root["probeAge"] = -1;
+        root["probeSampledAtMs"] = -1;
       root["probeValidMask"] = _probeValidMask;
       auto registers = root["probeRegisters"].to<JsonArray>();
       for (auto value : _probeRegs)

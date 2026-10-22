@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 #include <memory>
+#include <mutex>
 
 #include "esp32m/bus/modbus.hpp"
 #include "esp32m/device.hpp"
@@ -24,7 +25,7 @@ namespace esp32m {
         MmH2O = 9,
       };
 
-      Maqi136(uint8_t addr = 1);
+      Maqi136(uint8_t addr = 1, uint32_t baud = 9600);
       Maqi136(const Maqi136 &) = delete;
       const char *name() const override {
         return "MAQI-136";
@@ -63,23 +64,43 @@ namespace esp32m {
       bool pollSensors() override;
       bool initSensors() override;
       JsonDocument *getState(RequestContext &ctx) override;
+      JsonDocument *getDeviceConfig(RequestContext &ctx) override;
+      bool setDeviceConfig(RequestContext &ctx) override;
 
      private:
+      static constexpr uint16_t AddressRegister = 0;
+      static constexpr uint16_t BaudRegister = 1;
+
       static bool metersPerUnit(Units units, float &factor);
       static uint8_t precisionForStep(float step);
+      static int baudCode(uint32_t baud);
+      static bool validAddress(unsigned address);
+      esp_err_t ready();
+      esp_err_t prepareBus(uint32_t baud);
+      esp_err_t probe(uint8_t address, uint32_t baud,
+                      JsonObject details = JsonObject());
+      esp_err_t resolvePending();
+      esp_err_t changeCommunication(uint16_t reg, uint16_t raw,
+                                    uint8_t address, uint32_t baud,
+                                    bool &changed, JsonObject details);
       void invalidate();
 
-      uint8_t _addr;
+      mutable std::recursive_mutex _mutex;
+      uint8_t _addr, _pendingAddress = 0;
+      uint32_t _baud, _pendingBaud = 0;
       uint16_t _regs[8] = {};
       uint8_t _units = 0, _decimals = 0, _precision = 2;
       float _min = 0, _max = 0, _value = 0, _offset = 0;
       float _calibrationMultiplier = 0, _calibrationOffset = 0;
       float _rangeMin = 0, _rangeMax = 0;
       bool _calibrated = false, _rangeOverridden = false;
-      unsigned long _stamp = 0;
+      bool _pending = false, _restoreBus = false;
+      esp_err_t _lastError = ESP_OK;
+      std::unique_ptr<JsonDocument> _communicationChange;
+      int64_t _stamp = -1;
       Sensor _sensor;
     };
 
-    Maqi136 *useMaqi136(uint8_t addr = 1);
+    Maqi136 *useMaqi136(uint8_t addr = 1, uint32_t baud = 9600);
   }  // namespace dev
 }  // namespace esp32m

@@ -40,7 +40,7 @@ namespace esp32m {
     JsonDocument* FlowSensor::getState(RequestContext& ctx) {
       JsonDocument* doc = new JsonDocument();
       JsonArray arr = doc->to<JsonArray>();
-      arr.add(millis() - _stamp);
+      arr.add(_stamp);
       arr.add(_value);
       arr.add(_consumption);
       return doc;
@@ -54,10 +54,11 @@ namespace esp32m {
       auto err = ESP_ERROR_CHECK_WITHOUT_ABORT(pcnt->read(pc, true));
       if (err == ESP_OK) {
         auto ms = millis();
-        auto passed = ms - _stamp;
+        auto passed = ms - _flowStampMs;
         _value = compute(pc, passed);
         _consumption += _value * passed / 1000 / 60;
-        _stamp = ms;
+        _flowStampMs = ms;
+        _stamp = esp_timer_get_time() / 1000LL;
         _sensorFlow.set(_value * 0.06);  // convert l/min to m³/h
         _sensorConsumption.set(_consumption / 1000);  // convert l to m³
         if (ms - _lastDump > 10000 &&

@@ -31,7 +31,7 @@ namespace esp32m {
       const char *_name;
       uint8_t _addr;
       float _value = 0;
-      unsigned long _stamp = 0;
+      int64_t _stamp = -1;
       Sensor _sensor;
     };
 

@@ -3,3 +3,4 @@ export * from './pins';
 export * from './lwip';
 export * from './crashguard';
 export * from './opentherm';
+export * from './rs485';
