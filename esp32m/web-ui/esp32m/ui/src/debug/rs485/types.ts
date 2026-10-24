@@ -20,7 +20,8 @@ export type Peer = {
   kind: 'modbus' | 'raw' | 'overflow';
   address: number;
   lastAttemptAtMs: number;
-  recent: Counts;
+  recent: Counts | null;
+  recentAvailable: boolean;
   total: Counts;
 };
 export type State = {

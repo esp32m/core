@@ -60,6 +60,10 @@ export const content = () => {
         {state.windowMs < state.windowSeconds * 1000 && ` · Warming up (${value(state.windowMs / 1000, 1)} s collected)`}
       </Typography>
       <NameValueList list={list} />
+      {state.peers.some(peer => !peer.recent) && <Alert severity="warning" sx={{ mt: 1 }}>
+        Recent per-address history is incomplete after a memory shortage or comparison reset.
+        Scores resume when a full recent window is available. Bus totals and cumulative scores remain available.
+      </Alert>}
       <TableContainer sx={{ mt: 2 }}>
         <Table size="small" aria-label="RS485 health by address">
           <TableHead><TableRow>
@@ -68,8 +72,8 @@ export const content = () => {
           </TableRow></TableHead>
           <TableBody>{state.peers.map((peer) => <TableRow key={`${peer.kind}-${peer.address}`}>
             <TableCell>{peerName(peer)}</TableCell>
-            <TableCell align="right">{score(stale ? null : peer.recent.health)}</TableCell>
-            <TableCell align="right">{peer.recent.errors} / {peer.recent.attempts}</TableCell>
+            <TableCell align="right">{score(stale ? null : peer.recent?.health)}</TableCell>
+            <TableCell align="right">{peer.recent ? `${peer.recent.errors} / ${peer.recent.attempts}` : 'Unavailable'}</TableCell>
             <TableCell align="right">{score(stale ? null : peer.total.health)}</TableCell>
           </TableRow>)}</TableBody>
         </Table>

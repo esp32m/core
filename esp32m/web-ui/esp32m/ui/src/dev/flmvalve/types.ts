@@ -10,16 +10,11 @@ export type TState = {
   actualValid: boolean;
   actualSampledAtMs: number;
   actual: number;
-  actualRaw: number;
   targetValid: boolean;
   targetSampledAtMs: number;
   target: number;
-  targetRaw: number;
   state: 'unknown' | 'opening' | 'open' | 'closing' | 'closed';
   position: number;
-  probeSampledAtMs: number;
-  probeValidMask: number;
-  probeRegisters: number[];
 };
 
 export type TConfig = {

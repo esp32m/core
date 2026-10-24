@@ -47,6 +47,7 @@ struct httpd_req_t {
 struct FakeRing {
   struct Item { void* bytes; size_t size; bool complete = false; };
   size_t capacity = 8192, used = 0;
+  bool deleted = false;
   std::deque<Item> items;
   std::map<void*, size_t> received;
   ~FakeRing() {
@@ -66,6 +67,8 @@ namespace fake {
   bool hasId = true, taskFailure = false, asyncFailure = false, sendFailure = false;
   bool queueFailure = false;
   bool nvsOpenFailure = false;
+  int queueCreates = 0, queueDeletes = 0, workerCreates = 0;
+  bool shortQueue = false;
   bool rootReady = true;
   size_t rootTotal = 8 * 1024 * 1024;
   bool stepping = false;
@@ -106,6 +109,7 @@ const char* pcTaskGetName(TaskHandle_t) { return fake::taskName.c_str(); }
 int xTaskCreate(void (*fn)(void*), const char* name, int, void* argument, int priority,
                 TaskHandle_t* handle) {
   if (fake::taskFailure) return 0;
+  if (std::string(name) == "m/log-store") ++fake::workerCreates;
   fake::tasks[name] = [=]() { fn(argument); };
   fake::priorities[name] = priority;
   if (handle) *handle = reinterpret_cast<void*>(1);
@@ -128,14 +132,21 @@ void vTaskDelete(TaskHandle_t) { throw fake::StopTask{}; }
 RingbufHandle_t xRingbufferCreate(size_t bytes, int) {
   if (fake::queueFailure) return nullptr;
   auto ring = std::make_unique<FakeRing>();
-  ring->capacity = bytes;
+  ring->capacity = fake::shortQueue ? bytes / 2 : bytes;
   auto* value = ring.get();
   fake::rings.push_back(std::move(ring));
+  ++fake::queueCreates;
   return value;
 }
 size_t xRingbufferGetMaxItemSize(RingbufHandle_t ring) { return ring->capacity / 2 - 8; }
+void vRingbufferDelete(RingbufHandle_t ring) {
+  assert(ring && !ring->deleted && ring->items.empty() && ring->received.empty());
+  ring->deleted = true;
+  ++fake::queueDeletes;
+}
 int xRingbufferSendAcquire(RingbufHandle_t ring, void** item, size_t bytes, int ticks) {
   assert(ticks == 0);
+  assert(!ring->deleted);
   if (bytes > xRingbufferGetMaxItemSize(ring) || ring->used + bytes + 8 > ring->capacity)
     return 0;
   *item = malloc(bytes);
@@ -144,12 +155,14 @@ int xRingbufferSendAcquire(RingbufHandle_t ring, void** item, size_t bytes, int 
   return pdTRUE;
 }
 void xRingbufferSendComplete(RingbufHandle_t ring, void* item) {
+  assert(!ring->deleted);
   for (auto& queued : ring->items)
     if (queued.bytes == item) { queued.complete = true; return; }
   assert(false);
 }
 void* xRingbufferReceive(RingbufHandle_t ring, size_t* bytes, int ticks) {
   assert(ticks == 0);
+  assert(!ring->deleted);
   if (fake::stepping && fake::receivesRemaining-- <= 0) throw fake::StopWorker{};
   if (ring->items.empty() || !ring->items.front().complete) return nullptr;
   auto item = ring->items.front();
@@ -159,6 +172,7 @@ void* xRingbufferReceive(RingbufHandle_t ring, size_t* bytes, int ticks) {
   return item.bytes;
 }
 void vRingbufferReturnItem(RingbufHandle_t ring, void* item) {
+  assert(!ring->deleted);
   ring->used -= ring->received.at(item) + 8;
   ring->received.erase(item);
   free(item);
@@ -346,6 +360,7 @@ std::string caseDirectory(const std::string& root, const char* name) {
   fake::rootReady = true;
   fake::rootTotal = 8 * 1024 * 1024;
   fake::queueFailure = false;
+  fake::shortQueue = false;
   fake::nvsOpenFailure = false;
   fake::onStateHint = {};
   fake::stateHints.clear();
@@ -358,10 +373,19 @@ void relocate(Store& store, const std::string& directory) {
   new (&store._engine) storage::Engine(directory, [&store]() { return store.reserveId(); });
 }
 void step(Store& store, int count = 1) {
+  fake::monotonic = std::max(fake::monotonic, store._nextMaintenance);
+  if (!store._task) {
+    Event periodic{Event::Periodic};
+    for (int i = 0; i < count; ++i) {
+      fake::monotonic += 100;
+      store.handleEvent(periodic);
+    }
+    if (!store._task) return;
+  }
   fake::receivesRemaining = count;
   fake::stepping = true;
   fake::stepWithoutQueue = !store._queue;
-  try { store.run(); } catch (fake::StopWorker&) {}
+  try { store.run(); } catch (fake::StopWorker&) {} catch (fake::StopTask&) {}
   fake::stepping = false;
   fake::stepWithoutQueue = false;
 }
@@ -434,6 +458,162 @@ int main(int argc, char** argv) {
   std::cout << std::unitbuf;
   require(argc == 2, "temporary directory missing");
   const std::string root = argv[1];
+  {
+    const auto directory = caseDirectory(root, "lazy-lifecycle");
+    const auto queues = fake::queueCreates, workers = fake::workerCreates;
+    Store store;
+    relocate(store, directory);
+    store.prepare();
+    start(store);
+    auto snapshot = state(store);
+    require(!store._queue && !store._task && fake::queueCreates == queues &&
+            fake::workerCreates == workers && (*snapshot)["ready"] == true &&
+            (*snapshot)["workerRunning"] == false && (*snapshot)["captureQueueBytes"] == 0,
+            "disabled Store allocated capture resources or lost catalog readiness");
+    configure(store, true, 65536);
+    step(store);
+    require(store._capture && store._queue && store._task &&
+            fake::queueCreates == queues + 1 && fake::workerCreates == workers + 1,
+            "enabling capture did not allocate its queue and worker on demand");
+    auto* firstQueue = store._queue;
+    const auto notifications = fake::notifications;
+    auto* record = message("retained across idle teardown");
+    require(store.append(record), "lazy lifecycle could not queue record");
+    free(record);
+    require(fake::notifications == notifications,
+            "producer touched a potentially retiring worker handle");
+    configure(store, false, 65536);
+    require(!store._queue && firstQueue->deleted && !store._pending,
+            "disable did not drain and release the capture queue");
+    step(store);
+    require(!store._task, "disabled capture retained its idle worker");
+    const auto id = store._engine.files().front().id;
+    storage::Read page;
+    require(bool(store._engine.read(id, 0, 8192, page)) &&
+            page.text.find("retained across idle teardown") != std::string::npos,
+            "resource teardown lost accepted history");
+    configure(store, true, 65536);
+    step(store);
+    require(store._capture && store._queue != firstQueue && !store._queue->deleted &&
+            fake::workerCreates == workers + 2,
+            "re-enable did not recreate an independent usable worker and queue");
+    configure(store, false, 65536);
+    step(store);
+    require(!store._task && !store._queue, "second disable leaked capture resources");
+    httpd_req_t download;
+    download.query = "id=" + id;
+    store.handle(&download);
+    require(store._exportActive && store._task && !store._queue,
+            "disabled download allocated a capture queue or lacked watchdog");
+    fake::monotonic = store._exportDeadline + 1;
+    step(store);
+    require(store._exportCancel && !store._queue, "disabled download lost independent deadline");
+    try { fake::tasks.at("m/log-export")(); } catch (fake::StopTask&) {}
+    step(store);
+    require(!store._exportActive && !store._task && !store._queue &&
+            !store._engine.hasSnapshots() && download.completed && !download.terminated,
+            "disabled download leaked watchdog, capture resources or pins");
+    httpd_req_t asyncFailed;
+    asyncFailed.query = "id=" + id;
+    fake::asyncFailure = true;
+    store.handle(&asyncFailed);
+    fake::asyncFailure = false;
+    require(!store._exportActive && !store._engine.hasSnapshots() && !store._queue,
+            "disabled async-begin failure leaked export pins or allocated capture queue");
+    step(store);
+    require(!store._task && !store._queue,
+            "disabled async-begin failure left the watchdog allocated");
+    std::cout << "lazy capture lifecycle, disabled download watchdog and resource release passed\n";
+  }
+  {
+    const auto directory = caseDirectory(root, "disabled-retention");
+    uint64_t next = 5000;
+    storage::Engine old(directory, [&]() { return next++; });
+    require(bool(old.configure({65536, 1}, {fake::rootTotal, 0, 16384})),
+            "prepare disabled retention fixture");
+    require(bool(old.append("expired retained record", fake::utc - 2 * 86400000LL,
+                            "previous", {fake::rootTotal, 0, 16384})) && bool(old.seal()),
+            "write disabled retention fixture");
+    old.reset();
+    Store store;
+    relocate(store, directory);
+    store.prepare();
+    configure(store, false, 65536, 1);
+    start(store);
+    require(!store._engine.files().empty() && !store._queue && !store._task,
+            "disabled recovery deleted history before trusted time or allocated resources");
+    const auto generation = store._generation;
+    store.timeSynchronized();
+    fake::monotonic += 60000;
+    fake::utc += 60000;
+    step(store);
+    require(store._engine.files().empty() && store._generation != generation &&
+            store._timeValid && !store._queue && !store._task,
+            "disabled periodic retention did not expire history and update catalog");
+    configurePercent(store, false, 50);
+    foreignFile(directory, 131072);
+    step(store);
+    require((*configuration(store))["quotaBytes"].as<size_t>() ==
+                (fake::rootTotal - 131072) / 2 && !store._queue && !store._task,
+            "disabled periodic maintenance lost dynamic quota refresh");
+    require(store.beforeFormat(), "disabled Store refused quiescent format");
+    store.afterFormat(true);
+    step(store);
+    require(store._ready && !store._queue && !store._task,
+            "disabled format recovery required capture resources");
+    std::cout << "disabled retained-file age, catalog, quota and format maintenance passed\n";
+  }
+  {
+    const auto directory = caseDirectory(root, "late-producer-teardown");
+    Store store;
+    relocate(store, directory);
+    store.prepare();
+    configure(store, true, 65536);
+    start(store);
+    auto* record = message("late producer survives bounded disable drain");
+    const size_t bytes = sizeof(Store::Queued) + record->size();
+    void* item = nullptr;
+    auto* queue = store._queue;
+    require(xRingbufferSendAcquire(queue, &item, bytes, 0) == pdTRUE,
+            "reserve late producer item");
+    store._producers = 1;
+    configure(store, false, 65536);
+    require(store._queue == queue && !queue->deleted && store._draining && store._task,
+            "bounded drain freed queue still owned by producer");
+    auto* queued = static_cast<Store::Queued*>(item);
+    queued->valid = record->copyTo(queued + 1, bytes - sizeof(Store::Queued),
+                                   &queued->truncated) != nullptr;
+    store._pending.fetch_add(bytes);
+    xRingbufferSendComplete(queue, item);
+    store._producers = 0;
+    free(record);
+    step(store, 4);
+    storage::Read page;
+    require(!store._task && !store._queue && queue->deleted && !store._draining &&
+            bool(store._engine.read(store._engine.files().back().id, 0, 8192, page)) &&
+            page.text.find("late producer survives bounded disable drain") != std::string::npos &&
+            !store._engine.files().back().active,
+            "late accepted record was lost or queue leaked after producer completion");
+    std::cout << "late producer holds queue through bounded disable and drains before release passed\n";
+  }
+  for (const bool shortQueue : {false, true}) {
+    const auto directory = caseDirectory(root, shortQueue ? "short-queue" : "queue-retry");
+    Store store;
+    relocate(store, directory);
+    store.prepare();
+    configure(store, true, 65536);
+    fake::queueFailure = !shortQueue;
+    fake::shortQueue = shortQueue;
+    start(store);
+    require(!store._capture && !store._queue && !store._task &&
+            store._error == "Log queue could not be allocated",
+            "queue allocation/size failure leaked unusable capture resources");
+    fake::queueFailure = fake::shortQueue = false;
+    step(store);
+    require(store._capture && store._queue && store._task && store._error.empty(),
+            "transient queue allocation/size failure did not recover on periodic retry");
+    std::cout << "queue allocation/size failure cleanup and periodic recovery passed\n";
+  }
   {
     storage::Read page;
     page.text = std::string("valid ") + "\xd0\x96" + " malformed " +
@@ -1209,7 +1389,6 @@ int main(int argc, char** argv) {
     fake::queueFailure = failure == 1;
     fake::nvsOpenFailure = failure == 2;
     Store store;
-    fake::queueFailure = false;
     relocate(store, directory);
     store.prepare();
     if (failure) configure(store, true, 65536);
@@ -1244,6 +1423,7 @@ int main(int argc, char** argv) {
               "application-marker recovery did not publish resumed healthy state");
     }
     fake::onStateHint = {};
+    fake::queueFailure = false;
     fake::nvsOpenFailure = false;
     std::cout << (failure == 1 ? "missing queue" : failure == 2 ? "marker failure/recovery" : "paused quota")
               << " state avoids repeated unchanged error invalidation passed\n";
@@ -1257,15 +1437,19 @@ int main(int argc, char** argv) {
     fake::taskFailure = true;
     Event init{Event::Init};
     store.handleEvent(init);
-    fake::taskFailure = false;
     require(!store._task, "worker-failure pubsub fixture unexpectedly started worker");
+    // A successful session marker can precede an unavailable worker; allow the
+    // next filesystem sample to settle that one real used-space change.
+    Event periodic{Event::Periodic};
+    fake::monotonic += 1000;
+    store.handleEvent(periodic);
     fake::stateHints.clear();
     std::vector<JsonDocument> captured;
     fake::onStateHint = [&](AppObject* source) {
       require(source == static_cast<AppObject*>(&store), "fallback hint named wrong source");
       captured.push_back(*state(store));
     };
-    Event periodic{Event::Periodic};
+    store.markStateChanged(true);
     store.handleEvent(periodic);
     require(captured.size() == 1 && !captured.back()["ready"].as<bool>() &&
             !captured.back()["lastError"].as<std::string>().empty(),
@@ -1283,6 +1467,13 @@ int main(int argc, char** argv) {
     store.handleEvent(periodic);
     require(captured.size() == 2 && captured.back()["dropped"] == 1,
             "periodic fallback did not publish worker-unavailable drop counter");
+    fake::taskFailure = false;
+    fake::monotonic += 1000;
+    store.handleEvent(periodic);
+    require(store._capture && store._queue && store._task &&
+            captured.back()["ready"].as<bool>() &&
+            captured.back()["lastError"].as<std::string>().empty(),
+            "periodic retry failed to recover worker allocation failure");
     fake::onStateHint = {};
     std::cout << "Store pubsub periodic fallback without worker and cached snapshot reentry passed\n";
   }

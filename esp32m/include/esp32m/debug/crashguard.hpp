@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <stdio.h>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -400,6 +401,55 @@ namespace esp32m {
       bool handleRequest(Request& req) override;
 
      private:
+      // Separate from the original health-score blob: an older fallback can
+      // continue writing that blob without destroying this incident.
+      enum class RecoveryPhase : uint32_t {
+        Pending = 1,
+        Confirmed = 2,
+        Resolved = 3,
+        Canceled = 4,
+      };
+      struct RecoveryImage {
+        int32_t slot = -1;
+        char ver[32] = {};
+        uint8_t sha256[32] = {};
+        uint32_t valid = 0;
+      };
+      struct RecoveryRecord {
+        uint32_t version = 1;
+        RecoveryPhase phase = RecoveryPhase::Pending;
+        uint32_t selectionSucceeded = 0;
+        uint32_t boot = 0;
+        uint32_t resetReason = 0;
+        uint32_t checkpoint = 0;
+        uint32_t uptime = 0;
+        int32_t strike = 0;
+        uint32_t early = 0;
+        RecoveryImage from;
+        RecoveryImage to;
+      };
+      enum class RecoveryStatus { Pending, Fallback, Testing, Resolved, Inactive };
+      std::mutex _recoveryMutex;
+      RecoveryRecord _recovery;
+      RecoveryRecord _recoveryIntent;
+      RecoveryImage _currentImage;
+      bool _haveRecovery = false;
+      bool _haveRecoveryIntent = false;
+      RecoveryStatus _recoveryStatus = RecoveryStatus::Inactive;
+
+      static RecoveryImage recoveryImage(const esp_partition_t* partition);
+      static bool sameImage(const RecoveryImage& a, const RecoveryImage& b);
+      static bool readRecovery(RecoveryRecord& record, bool intent = false);
+      bool writeRecovery(const RecoveryRecord& record, bool intent = false);
+      void loadRecovery(uint32_t lastSwitchBoot);
+      void prepareRecovery(const esp_partition_t* target, const Run& previous,
+                           const Slot& health);
+      void finishRecoverySelection(bool selected);
+      void cancelPendingRecovery();
+      void resolveRecovery();
+      bool updateRecoveryStatus();  // caller holds _recoveryMutex
+      void recoveryToJson(JsonObject root);
+
       State _state = {};
       constexpr static const char* FilePath = "/crashguard.json";
 

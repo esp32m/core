@@ -19,11 +19,14 @@ import { useMainMenuSections } from './utils';
 import NavbarVertical from './vertical/Navbar';
 import { NavLink } from 'react-router-dom';
 import { useNavPath } from '@ts-libs/ui-base';
+import type { TUiElementsPlugin } from '@ts-libs/ui-base';
+import { getPlugins } from '@ts-libs/plugins';
 
 const MainStyle = styled('main')(({ theme }) => {
   const { collapseClick } = useNavbarContext();
   return {
     display: 'flex',
+    flexDirection: 'column',
     flexGrow: 1,
     paddingTop: theme.config.header.mobileHeight + 12,
     paddingBottom: theme.config.header.mobileHeight + 12,
@@ -78,6 +81,14 @@ function Crumbs() {
     </Grid>
   );
 }
+function ContentNotices() {
+  return getPlugins<TUiElementsPlugin>().flatMap((plugin) =>
+    (plugin.ui?.content?.notices || []).map((component, index) =>
+      createElement(component, { key: `${plugin.name}:${index}` })
+    )
+  );
+}
+
 export function Layout() {
   const sections = useMainMenuSections();
   const [open, setOpen] = useState(false);
@@ -107,6 +118,7 @@ export function Layout() {
         }}
       >
         <MainStyle>
+          <ContentNotices />
           <Grid container>
             {breadcrumbs && <Crumbs />}
             <Outlet />

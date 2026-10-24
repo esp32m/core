@@ -2,10 +2,11 @@
 
 Run `node tests/ws-subscriptions/run.mjs` from the esp32m component root.
 The runner compiles the production `src/ui/subscriptions.cpp` with ArduinoJson 7
-and a native C++ compiler; only capture, transport delivery and session liveness
-are injected. Set `ARDUINOJSON_INCLUDE` / `CXX` if the default local paths differ.
+and a native C++ compiler with C++ exceptions disabled, matching firmware.
+Capture, transport delivery, session liveness and the checked payload allocator
+are injected. Set `ARDUINOJSON_INCLUDE` / `CXX` if default local paths differ.
 
-The eight scenario groups cover shared stream allocation and immutable payloads,
+The fifteen scenario groups cover shared stream allocation and immutable payloads,
 unchanged-state silence, coalescing, canonical query identity, duplicate interest
 delivery, atomic subscribe/resync commits, concurrent invalidation, structural
 patches, explicit null/removal and tuple semantics, resource rejection/cleanup,
@@ -13,6 +14,18 @@ connection generations, timer rollover, and strict bool/number/string/null
 category changes in scalar patches. Clock metadata remains outside revisioned
 state: advancing time alone is silent, while a new acquisition with equal values
 publishes its new timestamp. Sample times and clock references retain 64 bits.
+
+Deterministic payload allocation failures exercise both full-state and selected
+delta output. They must emit no partial JSON, retain the previous baseline and
+revision, release temporary JSON and retry with a contiguous revision/baseRev.
+Subscribe and resync reply failures must not activate an undelivered interest.
+Sustained pressure closes the unhealthy connection generation, reclaims its
+streams and allows a fresh full snapshot after reconnect. Output queue admission
+rejection follows the same generation/recovery path. Direct payload checks cover
+size arithmetic overflow, failed allocation/fill, exact escaped JSON, termination,
+and shared copy/move lifetime without further allocations. Twenty-four tiny
+streams verify that shrunk JSON baselines release full-pool slack and retain
+the configured stream capacity.
 
 These are host tests. They do not establish device timing, physical sampling,
 heap headroom under the actual firmware workload, or HTTPD socket behavior.
@@ -26,6 +39,12 @@ The baseline pool limit is 48 KiB, each snapshot is limited to 16 KiB, and the
 combined baseline/working JSON allocation limit is 72 KiB. Allocation accounting
 includes actual ArduinoJson allocation requests, slack and coordinator headers;
 stream objects/strings and libc heap metadata are additional bounded overhead.
+Completed snapshots shrink their ArduinoJson pools to live slot counts.
+
+Outgoing wire data uses an immutable intrusive `Payload`: one checked allocation
+owns its exact bytes and reference count. Serialization writes within that fixed
+buffer; sharing/copying never allocates. Failure closes the affected connection,
+and changed state commits only after its complete event payload exists.
 
 Only one source is captured at a time on the UI task. Its existing `getState()`
 implementation temporarily owns its original JSON document while the capture

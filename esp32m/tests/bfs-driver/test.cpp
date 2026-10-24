@@ -1,4 +1,5 @@
 #include <ArduinoJson.h>
+#include "esp32m/ui/payload.hpp"
 #include "esp32m/dev/bfs/parameters.hpp"
 #include <algorithm>
 #include <array>
@@ -91,12 +92,12 @@ struct Response {
     if (doc) {
       const auto wire = ui::makeResponse(request->command.c_str(), "bfs", 1,
                                         doc->as<JsonVariantConst>(), error, false);
-      // Include the actual platform's JSON copy and std::string growth path:
+      // Include the actual platform's JSON copy and checked wire allocation:
       // the original 21 KB metadata reply crashed here on the ESP32-S3.
-      assert(wire.size() < 4096);
+      assert(wire && wire.size() < 4096);
       assert(wire.capacity() < 8192);
       JsonDocument decoded;
-      assert(!deserializeJson(decoded, wire));
+      assert(!deserializeJson(decoded, wire.data(), wire.size()));
       request->response.set(decoded[error ? "error" : "data"]);
     }
     request->error = error ? request->response.as<int>() : ESP_OK;

@@ -19,6 +19,11 @@ namespace esp32m {
       return i;
     }
 
+    void Master::prepareObservation(bool raw, uint8_t address) {
+      if (auto* observer = _observer.load())
+        observer->prepareTransaction(raw, address);
+    }
+
     void Master::observe(bool raw, uint8_t address, esp_err_t result,
                          uint64_t durationUs, bool validated) {
       auto* observer = _observer.load();
@@ -232,6 +237,7 @@ namespace esp32m {
                                         : size_t(reg_size) * sizeof(uint16_t);
       if (dataSize > sizeof(_requestData))
         return ESP_ERR_INVALID_SIZE;
+      prepareObservation(false, addr);
       std::lock_guard guard(*_mutex);
       auto preparation = _recoveryPending ? resetNoLock() : ESP_OK;
       if (preparation == ESP_OK && !_running) preparation = startNoLock();
@@ -307,6 +313,7 @@ namespace esp32m {
           !responseSize)
         return ESP_ERR_INVALID_ARG;
 
+      prepareObservation(true, 0);
       std::lock_guard guard(*_mutex);
       uint64_t duration = 0;
       auto execute = [&]() -> esp_err_t {
@@ -370,6 +377,7 @@ namespace esp32m {
       if (!_mutex || !_configured)
         return ESP_ERR_INVALID_STATE;
 
+      prepareObservation(true, 0);
       std::lock_guard guard(*_mutex);
       uint64_t duration = 0;
       auto execute = [&]() -> esp_err_t {

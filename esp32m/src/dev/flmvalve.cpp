@@ -179,8 +179,6 @@ namespace esp32m {
     void FlomarvelValve::invalidateCommunicationState() {
       invalidateActual();
       _targetStamp = 0;
-      _probeStamp = 0;
-      _probeValidMask = 0;
     }
 
     void FlomarvelValve::expireStaleState(uint64_t now) {
@@ -368,61 +366,10 @@ namespace esp32m {
       return setTargetAngle(0);
     }
 
-    esp_err_t FlomarvelValve::probeRegisters() {
-      std::lock_guard guard(_deviceMutex);
-      if (isDisabled()) return ESP_ERR_INVALID_STATE;
-      modbus::Master& mb = modbus::Master::instance();
-      if (!mb.isRunning())
-        return ESP_ERR_INVALID_STATE;
-
-      _probeValidMask = 0;
-      esp_err_t firstError = ESP_OK;
-      for (uint16_t reg = 0; reg < 4; reg++) {
-        uint16_t value = 0;
-        auto err = mb.request(_addr, modbus::Command::ReadHolding, reg, 1,
-                              &value);
-        if (err == ESP_OK) {
-          _probeRegs[reg] = value;
-          _probeValidMask |= 1 << reg;
-          logI("probe R%u = %u (0x%04X)", (unsigned)reg, (unsigned)value,
-               (unsigned)value);
-        } else {
-          if (firstError == ESP_OK)
-            firstError = err;
-          logW("probe R%u failed: %d", (unsigned)reg, (int)err);
-        }
-      }
-      _probeStamp = nowMs();
-
-      if (_probeValidMask & (1 << CommandRegister)) {
-        if (_probeRegs[CommandRegister] <= MaxAngleRaw)
-          observeTarget(_probeRegs[CommandRegister], _probeStamp);
-        else
-          _targetStamp = 0;
-      }
-      if (_probeValidMask & (1 << ActualRegister)) {
-        if (_probeRegs[ActualRegister] <= MaxAngleRaw) {
-          observeActual(_probeRegs[ActualRegister], _probeStamp);
-          _position.set(actualAngle());
-        } else {
-          invalidateActual();
-        }
-      }
-      updateValveState();
-
-      // Partial results are useful during protocol discovery. Only fail the
-      // request if no register answered at all.
-      return _probeValidMask ? ESP_OK : firstError;
-    }
-
     bool FlomarvelValve::handleRequest(Request& req) {
       std::lock_guard deviceGuard(_deviceMutex);
       if (Device::handleRequest(req))
         return true;
-      if (req.is("probe")) {
-        req.respond(probeRegisters());
-        return true;
-      }
       if (req.is(integrations::ha::StateRequest::Name)) {
         auto id = req.data()["id"].as<const char*>();
         auto component = id ? Component::find(id) : nullptr;
@@ -569,26 +516,16 @@ namespace esp32m {
       else
         root["actualSampledAtMs"] = -1;
       root["actual"] = actualAngle();
-      root["actualRaw"] = _actualRaw;
       root["targetValid"] = _targetStamp != 0;
       if (_targetStamp)
         root["targetSampledAtMs"] = _targetStamp;
       else
         root["targetSampledAtMs"] = -1;
       root["target"] = targetAngle();
-      root["targetRaw"] = _targetRaw;
       root["state"] = actualFresh
                             ? _component.getState()["state"] | "unknown"
                             : "unknown";
       root["position"] = actualFresh ? rawToPosition(_actualRaw) : -1;
-      if (_probeStamp)
-        root["probeSampledAtMs"] = _probeStamp;
-      else
-        root["probeSampledAtMs"] = -1;
-      root["probeValidMask"] = _probeValidMask;
-      auto registers = root["probeRegisters"].to<JsonArray>();
-      for (auto value : _probeRegs)
-        registers.add(value);
       return doc;
     }
 

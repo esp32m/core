@@ -38,9 +38,8 @@ namespace esp32m {
     struct FlomarvelValve {
       static constexpr uint64_t StateFreshnessMs = 5000;
       uint8_t _addr = 3;
-      uint64_t _actualStamp = 0, _targetStamp = 0, _probeStamp = 0;
-      uint16_t _actualRaw = 100, _targetRaw = 200, _probeValidMask = 0;
-      std::array<uint16_t, 8> _probeRegs{};
+      uint64_t _actualStamp = 0, _targetStamp = 0;
+      uint16_t _actualRaw = 100, _targetRaw = 200;
       struct Component {
         JsonDocument doc;
         Component() { doc["state"] = "open"; }
@@ -91,17 +90,17 @@ void valve() {
   esp32m::dev::FlomarvelValve device;
   auto initial = state(device);
   assert(initial["actualSampledAtMs"] == -1 && initial["targetSampledAtMs"] == -1 &&
-         initial["probeSampledAtMs"] == -1 && !initial["actualValid"].as<bool>());
+         !initial["actualValid"].as<bool>());
   const uint64_t late = (uint64_t(1) << 33) + 1000;
-  device._actualStamp = late; device._targetStamp = late - 100; device._probeStamp = late - 200;
+  device._actualStamp = late; device._targetStamp = late - 100;
   fake::nowMs = late + 50;
   const auto first = state(device);
   assert(first["actualSampledAtMs"] == late && first["targetSampledAtMs"] == late - 100 &&
-         first["probeSampledAtMs"] == late - 200 && first["actualValid"] == true);
+         first["actualValid"] == true);
   fake::nowMs += 37;
   auto repeated = state(device);
   assert(repeated == first && repeated["actualAge"].isUnbound() &&
-         repeated["targetAge"].isUnbound() && repeated["probeAge"].isUnbound());
+         repeated["targetAge"].isUnbound());
   fake::nowMs += 5000;
   repeated = state(device);
   assert(repeated["actualSampledAtMs"] == late && repeated["actualValid"] == false &&

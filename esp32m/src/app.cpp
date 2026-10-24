@@ -401,6 +401,11 @@ namespace esp32m {
     info["built"] = __DATE__ " " __TIME__;
     info["sdk"] = esp_get_idf_version();
     info["size"] = _sketchSize;
+#if CONFIG_ESP32M_CRASH_GUARD
+    info["crashGuard"] = true;
+#else
+    info["crashGuard"] = false;
+#endif
     return doc;
   }
 

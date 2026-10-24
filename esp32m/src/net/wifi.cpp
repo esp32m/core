@@ -6,6 +6,7 @@
 #include "esp32m/events/response.hpp"
 #include "esp32m/integrations/ha/ha.hpp"
 #include "esp32m/net/net.hpp"
+#include "esp32m/net/ota.hpp"
 #include "esp32m/props.hpp"
 
 #if CONFIG_ESP32M_BOARD_TYPE_XIAO_ESP32C6
@@ -43,6 +44,12 @@ namespace esp32m {
       ApRunning = BIT4,
       Scanning = BIT5,
       ScanDone = BIT6,
+      // Event handlers post notifications; roaming policy and scan ownership
+      // are updated only by the m/wifi worker.
+      RoamConnected = BIT7,
+      RoamDisconnected = BIT8,
+      RoamAssociation = BIT9,
+      RoamNeighbor = BIT10,
     };
 
     namespace wifi {
@@ -663,7 +670,10 @@ namespace esp32m {
             xEventGroupClearBits(_eventGroup, WifiFlags::StaRunning);
             break;
           case WIFI_EVENT_STA_CONNECTED: {
-            _roaming = false;
+            xEventGroupClearBits(_eventGroup, WifiFlags::RoamDisconnected |
+                                                WifiFlags::RoamAssociation |
+                                                WifiFlags::RoamNeighbor);
+            xEventGroupSetBits(_eventGroup, WifiFlags::RoamConnected);
             if (_rssiThreshold)
               ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_set_rssi_threshold(_rssiThreshold));
             auto* sc = (wifi_event_sta_connected_t*)wifi->data();
@@ -689,8 +699,12 @@ namespace esp32m {
             _errReason = (wifi_err_reason_t)r->reason;
             xEventGroupClearBits(_eventGroup,
                                  WifiFlags::StaConnected | WifiFlags::StaGotIp);
+            xEventGroupClearBits(_eventGroup, WifiFlags::RoamConnected |
+                                                WifiFlags::RoamAssociation |
+                                                WifiFlags::RoamNeighbor);
+            xEventGroupSetBits(_eventGroup, WifiFlags::RoamDisconnected);
             if (_errReason == WIFI_REASON_ROAMING) {
-              _roaming = true;
+              xEventGroupSetBits(_eventGroup, WifiFlags::RoamAssociation);
               logI("roaming: leaving bssid=" MACSTR " rssi=%d",
                    MAC2STR(r->bssid), (int)r->rssi);
             } else
@@ -700,23 +714,17 @@ namespace esp32m {
           }
           case WIFI_EVENT_STA_BSS_RSSI_LOW: {
             auto* re = (wifi_event_bss_rssi_low_t*)wifi->data();
-            logI("RSSI low (%d dBm), requesting neighbor report",
+            logI("RSSI low (%d dBm), scheduling roaming check",
                  re ? (int)re->rssi : 0);
-            int e = esp_rrm_send_neighbor_report_request();
-            if (e < 0) {
-              logW("failed to send neighbor report request: %i", e);
-              e = esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
-                                                         NULL, 0);
-              if (e < 0) {
-                logW("failed to send btm query: %i", e);
-              }
-            }
           } break;
 #if CONFIG_WPA_11KV_SUPPORT
           case WIFI_EVENT_STA_NEIGHBOR_REP: {
             auto* nr = (wifi_event_neighbor_report_t*)wifi->data();
             logI("neighbor report received, len=%u",
                  nr ? (unsigned)nr->report_len : 0u);
+            // NULL/empty reports also complete the request. The worker asks
+            // the AP for its BTM candidate list and has a timeout fallback.
+            xEventGroupSetBits(_eventGroup, WifiFlags::RoamNeighbor);
           } break;
 #endif
           case WIFI_EVENT_STA_WPS_ER_SUCCESS: {
@@ -956,9 +964,11 @@ namespace esp32m {
       return changed;
     }
 
-    bool Wifi::tryConnect(ApInfo* ap, bool noBssid) {
+    bool Wifi::tryConnect(ApInfo* ap, bool noBssid, bool remember) {
       esp_task_wdt_reset();
       _sta.disconnect();
+      if (!waitState([this] { return !_sta.isConnected(); }, 1000))
+        return false;
       if (_sta.enable(true) != ESP_OK) {
         return false;
       }
@@ -1002,9 +1012,16 @@ namespace esp32m {
         // Enable 802.11k (RRM) and 802.11v (BTM) so the WPA supplicant
         // advertises support to the AP and the RSSI-low handler
         // (WIFI_EVENT_STA_BSS_RSSI_LOW) can drive seamless roaming.
+#if CONFIG_ESP_WIFI_11R_SUPPORT || CONFIG_WPA_11R_SUPPORT
         conf.sta.ft_enabled = 1;
+#endif
+#if CONFIG_ESP_WIFI_11KV_SUPPORT || CONFIG_WPA_11KV_SUPPORT
         conf.sta.rm_enabled = 1;
-        conf.sta.btm_enabled = 1;
+        // IDF clears explicit BSSID/channel constraints when BTM is enabled.
+        // Preserve the user's pinned first association; the worker still
+        // provides bounded stronger-AP selection for pinned connections.
+        conf.sta.btm_enabled = conf.sta.bssid_set ? 0 : 1;
+#endif
 
         wifi_config_t current_conf;
         ESP_ERROR_CHECK_WITHOUT_ABORT(
@@ -1026,11 +1043,15 @@ namespace esp32m {
         return false;
       int i = 30;
       while (!isConnected() && --i) {
+        if (!remember && (_connect || _stopped || ota::isRunning()))
+          break;
         delay(100);
         esp_task_wdt_reset();
       }
       i = 100;
       while (!isConnected() && !_errReason && --i) {
+        if (!remember && (_connect || _stopped || ota::isRunning()))
+          break;
         delay(100);
         esp_task_wdt_reset();
       }
@@ -1053,7 +1074,7 @@ namespace esp32m {
         else
           delay(1000);
       }
-      if (ap) {
+      if (ap && remember) {
         if (!ok)
           ap->failed();
         else
@@ -1102,6 +1123,9 @@ namespace esp32m {
           }
       }
       if (connected) {
+        // A successful saved fallback also completes the one-shot manual
+        // intent; retaining it would suppress background roaming forever.
+        _connect.reset();
         _sta.setStatus(StaStatus::Connected);
         _connectFailures = 0;
         // updateTimeConfig();
@@ -1205,6 +1229,7 @@ namespace esp32m {
       init();
       for (;;) {
         esp_task_wdt_reset();
+        checkRoaming();
         if (!_managedExternally) {
           auto curtime = millis();
           switch (_sta._status) {
@@ -1242,8 +1267,12 @@ namespace esp32m {
                 _sta.setStatus(StaStatus::Initial);
               break;
             case StaStatus::Connected:
-              if (!isConnected() && !_roaming)
+              if (!isConnected() && !_roaming.associationPending(millis())) {
+                // Cancel a stuck driver association too: Sta::disconnect()
+                // intentionally only disconnects an established link.
+                ESP_ERROR_CHECK_WITHOUT_ABORT(esp_wifi_disconnect());
                 _sta.setStatus(StaStatus::Initial);
+              }
               break;
           }
           if (_ap)
@@ -1269,7 +1298,188 @@ namespace esp32m {
           1000);
     }
 
+    void Wifi::checkRoaming() {
+      const uint32_t now = millis();
+      const auto events = xEventGroupClearBits(
+          _eventGroup, WifiFlags::RoamConnected | WifiFlags::RoamDisconnected |
+                           WifiFlags::RoamNeighbor);
+      if (events & WifiFlags::RoamDisconnected)
+        _roaming.disconnected(events & WifiFlags::RoamAssociation, now);
+      if (events & WifiFlags::RoamConnected) {
+        _roaming.connected(now);
+        // CONNECTED is a layer-2 event; DHCP may complete later. Keep the
+        // bounded association grace until IP arrives instead of cancelling
+        // a successful transition on the next worker iteration.
+        if (!isConnected())
+          _roaming.disconnected(true, now);
+      }
+      if (events & WifiFlags::RoamNeighbor)
+        _roaming.neighborReport(now);
+
+      const bool allowed = !_managedExternally && !_stopped && !_connect &&
+                           !ota::isRunning() && _rssiThreshold &&
+                           (!_ap || _ap->clientsCount() == 0);
+      if (_roamScan) {
+        if (events & WifiFlags::ScanDone) {
+          finishRoamingScan();
+        } else if (!allowed || uint32_t(now - _roamScanStarted) >= 15000) {
+          esp_wifi_scan_stop();
+          esp_wifi_clear_ap_list();
+          xEventGroupClearBits(_eventGroup,
+                              WifiFlags::Scanning | WifiFlags::ScanDone);
+          _roamScan = false;
+          _roaming.scanComplete(now);
+        }
+        return;
+      }
+
+      wifi_ap_record_t current = {};
+      const bool connected = isConnected();
+      const bool weak = connected &&
+                        esp_wifi_sta_get_ap_info(&current) == ESP_OK &&
+                        current.rssi < _rssiThreshold;
+      // A manual UI scan owns the driver's one shared result list. Defer the
+      // background scan until it has consumed that list; never stop its scan.
+      const bool scanAvailable = !_pendingResponse &&
+                                 !(events & WifiFlags::Scanning) &&
+                                 (!_ap || _ap->clientsCount() == 0);
+      switch (_roaming.poll(now, allowed, connected, weak, scanAvailable)) {
+        case wifi::RoamingPolicy::Action::RequestNeighbors:
+          logI("weak signal %d dBm; checking stronger APs", (int)current.rssi);
+          // IDF's RSSI notification is one-shot. Rearm once per bounded
+          // attempt; polling also catches links already weak at association.
+          ESP_ERROR_CHECK_WITHOUT_ABORT(
+              esp_wifi_set_rssi_threshold(_rssiThreshold));
+          if (esp_rrm_send_neighbor_report_request() < 0)
+            _roaming.neighborRequestFailed(now);
+          break;
+        case wifi::RoamingPolicy::Action::QueryBtm:
+          // An AP can supply its own candidate list. This handles a received
+          // report, an empty report, and an unanswered neighbor request alike.
+          if (esp_wnm_send_bss_transition_mgmt_query(REASON_FRAME_LOSS,
+                                                    nullptr, 0) < 0)
+            _roaming.transitionRequestFailed(now);
+          break;
+        case wifi::RoamingPolicy::Action::Scan:
+          memcpy(_roamScanSsid, current.ssid, sizeof(_roamScanSsid));
+          _roamScanConfig = {};
+          _roamScanConfig.ssid = _roamScanSsid;
+          _roamScanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+          _roamScanConfig.scan_time.active.min = 40;
+          _roamScanConfig.scan_time.active.max = 80;
+          xEventGroupClearBits(_eventGroup, WifiFlags::ScanDone);
+          if (esp_wifi_scan_start(&_roamScanConfig, false) == ESP_OK) {
+            _roamScan = true;
+            _roamScanStarted = now;
+            xEventGroupSetBits(_eventGroup, WifiFlags::Scanning);
+          } else
+            _roaming.scanComplete(now);
+          break;
+        case wifi::RoamingPolicy::Action::None:
+          break;
+      }
+    }
+
+    void Wifi::finishRoamingScan() {
+      _roamScan = false;
+      xEventGroupClearBits(_eventGroup,
+                          WifiFlags::Scanning | WifiFlags::ScanDone);
+      _roaming.scanComplete(millis());
+      uint16_t count = 0;
+      if (esp_wifi_scan_get_ap_num(&count) != ESP_OK || !count) {
+        esp_wifi_clear_ap_list();
+        return;
+      }
+      // Bound temporary RAM use even in a crowded environment. IDF returns
+      // strongest records first and frees the remaining list on this call.
+      count = std::min<uint16_t>(count, 32);
+      auto* records = (wifi_ap_record_t*)calloc(count, sizeof(wifi_ap_record_t));
+      if (!records) {
+        esp_wifi_clear_ap_list();
+        return;
+      }
+      const auto err = esp_wifi_scan_get_ap_records(&count, records);
+      if (err != ESP_OK)
+        esp_wifi_clear_ap_list();
+      wifi_ap_record_t current = {}, best = {};
+      wifi_config_t conf = {};
+      bool found = false;
+      if (err == ESP_OK && !_managedExternally && !_stopped && !_connect &&
+          !_pendingResponse && !ota::isRunning() && _rssiThreshold &&
+          isConnected() && esp_wifi_sta_get_ap_info(&current) == ESP_OK &&
+          current.rssi < _rssiThreshold &&
+          esp_wifi_get_config(WIFI_IF_STA, &conf) == ESP_OK) {
+        for (uint16_t i = 0; i < count; ++i) {
+          const auto& candidate = records[i];
+          if (strcmp((const char*)candidate.ssid, (const char*)current.ssid) ||
+              candidate.authmode < conf.sta.threshold.authmode)
+            continue;
+          // Active PSK credentials cannot authenticate an enterprise AP that
+          // happens to advertise the same SSID.
+          switch (candidate.authmode) {
+            case WIFI_AUTH_WPA_PSK:
+            case WIFI_AUTH_WPA2_PSK:
+            case WIFI_AUTH_WPA_WPA2_PSK:
+            case WIFI_AUTH_WPA3_PSK:
+            case WIFI_AUTH_WPA2_WPA3_PSK:
+              break;
+            default:
+              continue;
+          }
+          if (wifi::RoamingPolicy::betterCandidate(
+                  current.rssi, candidate.rssi, _rssiThreshold,
+                  !memcmp(current.bssid, candidate.bssid, 6)) &&
+              (!found || candidate.rssi > best.rssi)) {
+            best = candidate;
+            found = true;
+          }
+        }
+      }
+      free(records);
+      if (found) {
+        logI("stronger AP " MACSTR " (%d -> %d dBm)", MAC2STR(best.bssid),
+             (int)current.rssi, (int)best.rssi);
+        roamTo(best);
+      }
+    }
+
+    bool Wifi::roamTo(const wifi_ap_record_t& target) {
+      if (_managedExternally || _stopped || _connect || ota::isRunning())
+        return false;
+      wifi_config_t previous = {};
+      if (esp_wifi_get_config(WIFI_IF_STA, &previous) != ESP_OK ||
+          strncmp((const char*)previous.sta.ssid, (const char*)target.ssid,
+                  sizeof(previous.sta.ssid)))
+        return false;
+      // Use the credentials that actually authenticated this ESS. A saved
+      // profile for a nearby BSSID may have an old password. This temporary
+      // target must never be persisted as another user-pinned profile.
+      char password[65] = {};
+      memcpy(password, previous.sta.password, sizeof(previous.sta.password));
+      ApInfo candidate(0, (const char*)target.ssid, password, target.bssid);
+      bool connected = tryConnect(&candidate, false, false);
+      if (_connect) {
+        // A manual connection request arriving during the bounded attempt
+        // must still be serviced even if the target just acquired an IP.
+        _sta.disconnect();
+        connected = false;
+      }
+      if (!connected) {
+        esp_wifi_disconnect();
+        waitState([this] { return !_sta.isConnected(); }, 1000);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(
+            esp_wifi_set_config(WIFI_IF_STA, &previous));
+        // Failed migration must return to ordinary bounded reconnection,
+        // including the saved pinned preference and configured fallbacks.
+        _roaming.disconnected(false, millis());
+        _sta.setStatus(StaStatus::Initial);
+      }
+      return connected;
+    }
+
     void Wifi::checkScan() {
+      if (_roamScan)
+        return;
       if (!_pendingResponse)
         return;
       if (xEventGroupGetBits(_eventGroup) & WifiFlags::ScanDone) {

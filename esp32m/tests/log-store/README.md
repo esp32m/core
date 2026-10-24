@@ -19,6 +19,18 @@ async request, network, and timeout failures. The storage worker's independent
 export deadline is checked before the export task progresses, including socket
 shutdown and pin cleanup.
 
+Lazy-resource scenarios verify that disabled boot/catalog access allocates no
+capture queue or worker; enable, accepted-record drain, disable and re-enable
+release/recreate both resources. Disabled retained-file age, quota, catalog and
+format maintenance runs through `EventPeriodic`. Downloads while disabled create
+only the export/watchdog tasks, preserve the independent two-minute deadline,
+and retire the watchdog after completion/cancellation or async-begin failure.
+Queue allocation/undersized-buffer failures and worker allocation failures
+release partial resources and recover on periodic retry. A producer holding an
+unfinished slot past the bounded disable drain keeps its queue alive, publishes
+later, and is persisted/sealed before queue deletion. The ring stub marks freed
+queues and rejects subsequent use. Producers never notify a retiring task handle.
+
 Quota coverage includes the new disabled-capture/50 percent default; all integer
 percentages from 1 through 100; atomic rejection of negative, fractional,
 out-of-range and malformed percentages; legacy absolute-byte policy restoration;

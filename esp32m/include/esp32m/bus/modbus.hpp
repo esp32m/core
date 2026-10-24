@@ -124,6 +124,7 @@ namespace esp32m {
       uint16_t _requestData[256] = {};
       bool _recoveryPending = false;
       std::atomic<Observer*> _observer{nullptr};
+      void prepareObservation(bool raw, uint8_t address);
       void observe(bool raw, uint8_t address, esp_err_t result,
                    uint64_t durationUs, bool validated = true);
 

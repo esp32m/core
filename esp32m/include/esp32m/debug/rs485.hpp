@@ -10,6 +10,7 @@ namespace esp32m::debug {
    public:
     static Rs485& instance();
     const char* name() const override { return "rs485-health"; }
+    void prepareTransaction(bool raw, uint8_t address) override;
     void onTransaction(const modbus::Transaction& transaction) override;
 
    protected:

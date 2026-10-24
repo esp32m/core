@@ -1,9 +1,11 @@
 #include <ArduinoJson.h>
+#include "esp32m/ui/payload.hpp"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -52,6 +54,7 @@ namespace fake {
   std::deque<Work> queue;
   size_t capacity = 1000;
   bool sendFails = false;
+  bool failNextNothrow = false;
   std::vector<std::pair<int, std::string>> frames;
   std::vector<int> shutdowns;
   std::function<void(esp32m::Request&)> dispatch;
@@ -62,6 +65,11 @@ namespace fake {
   }
   void reset() { assert(queue.empty()); frames.clear(); shutdowns.clear(); capacity = 1000; sendFails = false; dispatch = {}; }
 }
+void* operator new(size_t bytes, const std::nothrow_t&) noexcept {
+  if (fake::failNextNothrow) { fake::failNextNothrow = false; return nullptr; }
+  return std::malloc(bytes);
+}
+void operator delete(void* memory, const std::nothrow_t&) noexcept { std::free(memory); }
 int httpd_queue_work(httpd_handle_t, void (*callback)(void*), void* argument) {
   if (fake::queue.size() >= fake::capacity) return ESP_FAIL;
   fake::queue.push_back({callback, argument}); return ESP_OK;
@@ -162,7 +170,7 @@ namespace esp32m::ui {
       incoming(cid, (void*)text, strlen(text), generation);
     }
     esp_err_t sendTo(uint32_t, const char*) override;
-    esp_err_t sendSession(uint32_t, uint64_t, std::shared_ptr<const std::string>) override;
+    esp_err_t sendSession(uint32_t, uint64_t, Payload) override;
     void closeSession(uint32_t, uint64_t) override;
     void sendStats(JsonObject) override;
     static esp_err_t wsPreHandshake(httpd_req_t*);
@@ -184,7 +192,7 @@ namespace esp32m::ui {
 #include "httpd.inc"
 
 using esp32m::ui::Httpd;
-auto body(const char* value = "payload") { return std::make_shared<const std::string>(value); }
+auto body(const char* value = "payload") { return esp32m::ui::Payload::copy(value); }
 constexpr const char* RequestText = R"({"type":"request","target":"sensor","name":"state-get","seq":1})";
 
 void requestLifetimes() {
@@ -217,10 +225,10 @@ void requestLifetimes() {
 
 void queueAndSendFailures() {
   fake::reset(); esp32m::Ui ui; Httpd http(ui); auto generation = http.open(3);
-  auto shared = body(); std::weak_ptr<const std::string> retained = shared;
-  assert(http.sendSession(3, generation, shared) == ESP_OK); shared.reset();
-  assert(!retained.expired() && http.stats()["queuedWorks"] == 1);
-  fake::drain(); assert(retained.expired() && fake::frames.size() == 1);
+  auto shared = body();
+  assert(http.sendSession(3, generation, shared) == ESP_OK); shared = {};
+  assert(http.stats()["queuedWorks"] == 1);
+  fake::drain(); assert(fake::frames.size() == 1 && fake::frames[0].second == "payload");
   assert(http.stats()["queuedBytes"] == 0 && http.stats()["queuedWorks"] == 0);
   fake::sendFails = true;
   assert(http.sendSession(3, generation, body()) == ESP_OK); fake::drain();
@@ -244,10 +252,55 @@ void closeAndQueuePressure() {
   assert(http.stats()["queuedWorks"] == 32 && http.stats()["queuedBytes"].as<unsigned>() <= 32768);
   fake::drain(); assert(http.stats()["queuedWorks"] == 0 && http.stats()["queuedBytes"] == 0);
   old = http.open(9);
-  auto huge = std::make_shared<const std::string>(33000, 'x');
+  auto huge = body(std::string(33000, 'x').c_str());
   assert(http.sendSession(9, old, huge) == ESP_ERR_NO_MEM); fake::drain();
   assert(http.stats()["queuedWorks"] == 0);
   std::cout << "PASS generation-safe close, full control queue fallback, bounded works/bytes and rollback\n";
+}
+
+void checkedOutputAndWorkFailure() {
+  fake::reset(); esp32m::Ui ui; Httpd http(ui); auto generation = http.open(13);
+  auto invalid = esp32m::ui::Payload::copy("allocation failed", [](size_t) -> void* { return nullptr; });
+  assert(!invalid && http.sendSession(13, generation, invalid) == ESP_ERR_NO_MEM);
+  fake::drain();
+  assert(http.sessionGeneration(13) == 0 && fake::shutdowns == std::vector<int>{13});
+  assert(http.stats()["queuedBytes"] == 0 && http.stats()["queuedWorks"] == 0);
+  const auto successor = http.open(13);
+  assert(http.sendSession(13, generation, invalid) == ESP_ERR_NO_MEM);
+  fake::drain();
+  assert(http.sessionAlive(13, successor) && fake::shutdowns == std::vector<int>{13});
+  auto valid = body();
+  fake::failNextNothrow = true;
+  assert(http.sendSession(13, successor, valid) == ESP_ERR_NO_MEM && !fake::failNextNothrow);
+  fake::drain();
+  assert(http.sessionGeneration(13) == 0 && fake::shutdowns == (std::vector<int>{13, 13}));
+  assert(http.stats()["queuedBytes"] == 0 && http.stats()["queuedWorks"] == 0);
+  std::cout << "PASS failed payload/work allocation releases charges and closes only affected generation\n";
+}
+
+void closePreservesHealthyBroadcasts() {
+  fake::reset(); esp32m::Ui ui; Httpd http(ui);
+  const auto closed = http.open(21), healthy = http.open(22);
+  assert(http.sendSession(21, closed, body("queued before close")) == ESP_OK);
+  http.closeSession(21, closed);
+  http.broadcast("healthy before cleanup");
+  fake::drain();
+  assert(fake::frames == (std::vector<std::pair<int, std::string>>{{22, "healthy before cleanup"}}));
+  assert(!http.sessionAlive(21, closed) && http.sessionAlive(22, healthy));
+  ui.process(http);
+  fake::frames.clear();
+  http.broadcast("healthy after cleanup");
+  fake::drain();
+  assert(fake::frames == (std::vector<std::pair<int, std::string>>{{22, "healthy after cleanup"}}));
+  const auto successor = http.open(21);
+  assert(successor != closed);
+  fake::frames.clear();
+  http.broadcast("fresh broadcast after reconnect");
+  fake::drain();
+  assert(fake::frames.size() == 2 && http.sessionAlive(21, successor));
+  for (const auto& frame : fake::frames)
+    assert(frame.second == "fresh broadcast after reconnect" && (frame.first == 21 || frame.first == 22));
+  std::cout << "PASS close skips stale queued payloads and preserves healthy broadcasts before/after cleanup\n";
 }
 
 void clientQueueIdentity() {
@@ -409,4 +462,4 @@ void idf61Handshake() {
   std::cout << "PASS ESP-IDF6.1 PRE/POST handshake, rejected upgrade and first text-frame response\n";
 }
 
-int main() { requestLifetimes(); queueAndSendFailures(); closeAndQueuePressure(); clientQueueIdentity(); batchedStartupBurst(); rejectedBatchReplies(); inboundReadCounters(); idf61Handshake(); }
+int main() { requestLifetimes(); queueAndSendFailures(); closeAndQueuePressure(); checkedOutputAndWorkFailure(); closePreservesHealthyBroadcasts(); clientQueueIdentity(); batchedStartupBurst(); rejectedBatchReplies(); inboundReadCounters(); idf61Handshake(); }

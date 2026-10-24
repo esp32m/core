@@ -1,16 +1,33 @@
 #include "esp32m/ui/subscriptions.hpp"
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 
 using esp32m::ui::StateSubscriptions;
 using Session = StateSubscriptions::Session;
+namespace payloadFault {
+  bool failNext = false, failAll = false;
+  size_t attempts = 0, failures = 0;
+  void* allocate(size_t bytes) {
+    ++attempts;
+    if (failAll || failNext) {
+      failNext = false;
+      ++failures;
+      return nullptr;
+    }
+    return std::malloc(bytes);
+  }
+}
 struct Frame { Session session; StateSubscriptions::Payload wire; JsonDocument doc; };
 struct Fixture {
   std::map<std::string, JsonDocument> states;
   std::map<uint32_t, uint64_t> sessions{{1, 1}, {2, 1}, {3, 1}};
   std::vector<Frame> frames;
+  std::vector<Session> closed;
+  bool rejectSend = false, closeSessions = false;
   std::function<void()> duringCapture;
   uint64_t serverNow = uint64_t(1) << 40;
   StateSubscriptions subscriptions;
@@ -26,13 +43,24 @@ struct Fixture {
       return nullptr;
     },
     [&](const Session& session, auto payload) {
+      if (rejectSend) {
+        // Match the production Ui/HTTPD adapter: queue admission failure closes
+        // that exact generation, so it must return through a fresh snapshot.
+        if (closeSessions && sessions[session.cid] == session.generation)
+          ++sessions[session.cid];
+        return false;
+      }
       Frame frame{session, payload, JsonDocument()};
-      assert(!deserializeJson(frame.doc, *payload));
+      assert(payload && !deserializeJson(frame.doc, payload.data(), payload.size()));
       frames.push_back(std::move(frame));
       return true;
     },
     [&](const Session& session) { return sessions[session.cid] == session.generation; },
-    {}, [&] { return serverNow; }) {}
+    [&](const Session& session) {
+      closed.push_back(session);
+      if (closeSessions && sessions[session.cid] == session.generation)
+        ++sessions[session.cid];
+    }, [&] { return serverNow; }, payloadFault::allocate) {}
   void state(const char* value, const char* key = "sensor/state") {
     assert(!deserializeJson(states[key], value));
   }
@@ -61,7 +89,7 @@ void sharing() {
   assert(f.subscriptions.invalidate("sensor", 1100));
   f.subscriptions.process(1124); assert(f.frames.empty());
   f.subscriptions.process(1125); assert(f.frames.size() == 3);
-  assert(f.frames[0].wire.get() == f.frames[1].wire.get());
+  assert(f.frames[0].wire.data() == f.frames[1].wire.data());
   auto data = f.frames[0].doc["data"];
   assert(data["rev"] == 2 && data["baseRev"] == 1);
   assert(data["patch"][0]["path"][0] == "value");
@@ -214,7 +242,194 @@ void acquisitionTimestamps() {
   std::cout << "PASS 64-bit clock metadata, quiet clock ticks, unchanged-value acquisitions and resync age\n";
 }
 
+void outgoingAllocationFailure() {
+  Fixture f;
+  f.state(R"({"value":1})");
+  f.states["sensor/state"]["large"] = std::string(3500, 'a');
+  f.subscribe();
+  const auto oldRevision = f.frames.back().doc["data"]["rev"].as<uint64_t>();
+  const auto oldStats = f.stats();
+  f.frames.clear();
+  f.states["sensor/state"]["large"] = std::string(3500, 'b');
+  f.subscriptions.invalidate("sensor", 1100);
+  const auto failures = payloadFault::failures;
+  payloadFault::failNext = true;
+  f.subscriptions.process(1125);
+  assert(!payloadFault::failNext && payloadFault::failures == failures + 1);
+  assert(f.frames.empty() && f.closed.size() == 1);
+  auto failed = f.stats();
+  assert(failed["publishes"] == oldStats["publishes"]);
+  assert(failed["baselineBytes"] == oldStats["baselineBytes"]);
+  assert(failed["allocatedBytes"] == oldStats["allocatedBytes"]);
+  assert(f.subscriptions.waitTime(1125) > 0);
+  f.subscriptions.process(2124); assert(f.frames.empty());
+  f.subscriptions.process(2125);
+  assert(f.frames.size() == 1 && f.frames[0].doc["data"]["rev"] == oldRevision + 1);
+  const auto update = f.frames[0].doc["data"];
+  assert(update["state"]["large"].as<std::string>() == std::string(3500, 'b'));
+  f.frames.clear();
+  f.request("state-resync", R"({"id":"a"})", 2200);
+  assert(f.frames.size() == 1 && f.frames[0].doc["data"]["rev"] == oldRevision + 1);
+  assert(f.frames[0].doc["data"]["state"]["large"].as<std::string>() == std::string(3500, 'b'));
+  std::cout << "PASS outgoing allocation failure preserves baseline/revision, bounds retry and recovers valid state\n";
+}
+
+void replyAllocationFailure() {
+  Fixture f;
+  f.state(R"({"value":1})");
+  f.states["sensor/state"]["large"] = std::string(3500, 'x');
+  payloadFault::failNext = true;
+  f.subscribe();
+  assert(!payloadFault::failNext && f.frames.empty() && f.closed.size() == 1);
+  assert(f.stats()["interests"] == 0);
+  f.subscriptions.process(1000);
+  assert(f.stats()["streams"] == 0 && f.stats()["allocatedBytes"] == 0);
+  f.subscribe();
+  assert(f.frames.size() == 1 && f.stats()["interests"] == 1);
+  const auto revision = f.frames[0].doc["data"]["rev"].as<uint64_t>();
+  f.frames.clear();
+  payloadFault::failNext = true;
+  f.request("state-resync", R"({"id":"a"})", 1100);
+  assert(!payloadFault::failNext && f.frames.empty() && f.closed.size() == 2);
+  f.request("state-resync", R"({"id":"a"})", 1200);
+  assert(f.frames.size() == 1 && f.frames[0].doc["data"]["rev"] == revision);
+  assert(f.frames[0].doc["data"]["state"]["large"].as<std::string>() == std::string(3500, 'x'));
+  f.frames.clear();
+  f.states["sensor/state"]["large"] = std::string(3500, 'y');
+  payloadFault::failNext = true;
+  f.request("state-resync", R"({"id":"a"})", 1300);
+  assert(!payloadFault::failNext && f.frames.size() == 1);
+  assert(f.frames[0].doc["error"][0] == "payload-memory");
+  f.frames.clear();
+  f.request("state-resync", R"({"id":"a"})", 1400);
+  assert(f.frames.size() == 2 && f.frames.back().doc["data"]["rev"] == revision + 1);
+  assert(f.frames.back().doc["data"]["state"]["large"].as<std::string>() == std::string(3500, 'y'));
+  std::cout << "PASS subscribe/resync reply OOM rejects activation, preserves revisions and restores full snapshots\n";
+}
+
+void deltaAllocationFailure() {
+  Fixture f;
+  f.state(R"({"value":1})");
+  f.states["sensor/state"]["stable"] = std::string(3500, 's');
+  f.subscribe(); f.frames.clear();
+  f.states["sensor/state"]["value"] = 2;
+  payloadFault::failNext = true;
+  f.subscriptions.process(1000);
+  assert(!payloadFault::failNext && f.frames.empty());
+  f.subscriptions.process(2000);
+  assert(f.frames.size() == 1);
+  auto update = f.frames[0].doc["data"];
+  assert(update["rev"] == 2 && update["baseRev"] == 1);
+  assert(update["state"].isUnbound() && update["patch"].size() == 1);
+  assert(update["patch"][0]["path"][0] == "value" && update["patch"][0]["value"] == 2);
+  std::cout << "PASS delta allocation failure retries with original base and contiguous revision\n";
+}
+
+void persistentPressureAndReconnect() {
+  Fixture f;
+  f.state(R"({"value":1})");
+  f.subscribe();
+  f.frames.clear();
+  f.closeSessions = true;
+  f.states["sensor/state"]["value"] = 2;
+  payloadFault::failAll = true;
+  f.subscriptions.process(1000);
+  assert(f.frames.empty() && f.closed.size() == 1 && f.sessions[1] == 2);
+  f.subscriptions.process(1001);
+  assert(f.stats()["streams"] == 0 && f.stats()["allocatedBytes"] == 0);
+  f.subscribe();
+  assert(f.frames.empty() && f.stats()["interests"] == 0 && f.sessions[1] == 3);
+  payloadFault::failAll = false;
+  f.subscriptions.process(1002);
+  assert(f.stats()["allocatedBytes"] == 0);
+  f.subscribe();
+  assert(f.frames.size() == 1 && f.frames[0].session.generation == 3);
+  assert(f.frames[0].doc["data"]["state"]["value"] == 2);
+  assert(f.frames[0].doc["data"]["rev"] == 1 && f.stats()["interests"] == 1);
+  std::cout << "PASS sustained payload pressure closes unhealthy generation, releases memory and reconnects from fresh snapshot\n";
+}
+
+void checkedPayloadOwnership() {
+  using esp32m::ui::Payload;
+  const auto attempts = payloadFault::attempts;
+  auto impossible = Payload::build(std::numeric_limits<size_t>::max(),
+      [](char*, size_t) { assert(false); return true; }, payloadFault::allocate);
+  assert(!impossible && payloadFault::attempts == attempts);
+  assert(!Payload::copy(nullptr, 1, payloadFault::allocate));
+  payloadFault::failNext = true;
+  assert(!Payload::copy("bounded", payloadFault::allocate) && !payloadFault::failNext);
+  assert(!Payload::build(12, [](char*, size_t) { return false; }, payloadFault::allocate));
+  JsonDocument document;
+  document["text"] = std::string("quotes\" newline\n control") + char(1);
+  document["value"] = uint64_t(1) << 40;
+  auto payload = Payload::fromJson(document, payloadFault::allocate);
+  assert(payload && payload.size() == measureJson(document));
+  assert(payload.capacity() == payload.size() && payload.c_str()[payload.size()] == 0);
+  const auto afterBuild = payloadFault::attempts;
+  auto copy = payload;
+  assert(copy.data() == payload.data() && payloadFault::attempts == afterBuild);
+  payload = {};
+  JsonDocument decoded;
+  assert(!deserializeJson(decoded, copy.data(), copy.size()));
+  assert(decoded["text"] == document["text"] && decoded["value"] == document["value"]);
+  auto moved = std::move(copy);
+  assert(!copy && moved && payloadFault::attempts == afterBuild);
+  std::cout << "PASS checked immutable payload size overflow, allocation/fill failure, exact JSON and allocation-free copy/move\n";
+}
+
+void outputAdmissionAndReconnect() {
+  Fixture f;
+  f.state(R"({"value":1})");
+  f.closeSessions = true;
+  f.rejectSend = true;
+  f.subscribe();
+  assert(f.frames.empty() && f.stats()["interests"] == 0 && f.sessions[1] == 2);
+  f.subscriptions.process(1000);
+  assert(f.stats()["streams"] == 0 && f.stats()["allocatedBytes"] == 0);
+  f.rejectSend = false;
+  f.subscribe();
+  assert(f.frames.size() == 1 && f.frames[0].doc["data"]["rev"] == 1);
+  f.frames.clear();
+  f.rejectSend = true;
+  f.states["sensor/state"]["value"] = 2;
+  f.subscriptions.process(2000);
+  assert(f.frames.empty() && f.sessions[1] == 3 && f.stats()["sendFailures"] == 2);
+  f.subscriptions.process(2001);
+  assert(f.stats()["allocatedBytes"] == 0 && f.stats()["interests"] == 0);
+  f.rejectSend = false;
+  f.subscribe();
+  assert(f.frames.size() == 1 && f.frames[0].session.generation == 3);
+  assert(f.frames[0].doc["data"]["state"]["value"] == 2 &&
+         f.frames[0].doc["data"]["rev"] == 1);
+  std::cout << "PASS rejected snapshot/update admission activates no stale interest and reconnects current full state\n";
+}
+
+void compactSmallBaselines() {
+  Fixture f;
+  for (size_t i = 0; i < StateSubscriptions::MaxStreams; ++i) {
+    const auto target = "tiny" + std::to_string(i);
+    f.states[target + "/state"]["value"] = 1;
+    const auto request = "{\"id\":\"" + target + "\",\"target\":\"" +
+        target + "\",\"view\":\"state\"}";
+    f.request("state-subscribe", request.c_str());
+    assert(f.frames.back().doc["error"].isUnbound());
+  }
+  auto compact = f.stats();
+  assert(compact["streams"] == StateSubscriptions::MaxStreams);
+  assert(compact["interests"] == StateSubscriptions::MaxStreams);
+  assert(compact["baselineBytes"].as<size_t>() < 1024 * StateSubscriptions::MaxStreams);
+  assert(compact["allocatedBytes"] == compact["baselineBytes"]);
+  f.frames.clear(); f.subscriptions.process(1000);
+  assert(f.frames.empty() && f.stats()["baselineBytes"] == compact["baselineBytes"]);
+  std::cout << "PASS tiny baselines release JSON pool slack and preserve all 24 stream slots\n";
+}
+
 int main() {
   sharing(); identity(); atomicSnapshot(); structuralChanges(); limits(); burstsAndWrap(); scalarTypes();
   acquisitionTimestamps();
+  outgoingAllocationFailure(); replyAllocationFailure(); persistentPressureAndReconnect();
+  deltaAllocationFailure();
+  checkedPayloadOwnership();
+  outputAdmissionAndReconnect();
+  compactSmallBaselines();
 }

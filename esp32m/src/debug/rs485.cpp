@@ -76,6 +76,10 @@ namespace esp32m::debug {
     }
   }
 
+  void Rs485::prepareTransaction(bool raw, uint8_t address) {
+    _stats.prepare(raw, address);
+  }
+
   void Rs485::onTransaction(const modbus::Transaction& transaction) {
     _stats.record(transaction, nowMs());
   }
@@ -110,6 +114,7 @@ namespace esp32m::debug {
     root["comparisonStartedAtMs"] = s->startedAtMs;
     root["session"] = s->session;
     root["publisherRunning"] = _task != nullptr;
+    root["historyBytes"] = s->historyBytes;
     root["lastAttemptAtMs"] = s->total.attempts ? int64_t(s->lastMs) : -1;
     counts(root["recent"].to<JsonObject>(), s->recent);
     counts(root["total"].to<JsonObject>(), s->total);
@@ -123,7 +128,9 @@ namespace esp32m::debug {
       row["kind"] = i == rs485::MaxPeers ? "overflow" : p.raw ? "raw" : "modbus";
       row["address"] = p.address;
       row["lastAttemptAtMs"] = int64_t(p.lastMs);
-      counts(row["recent"].to<JsonObject>(), p.recent);
+      row["recentAvailable"] = p.recentAvailable;
+      if (p.recentAvailable) counts(row["recent"].to<JsonObject>(), p.recent);
+      else row["recent"] = nullptr;
       counts(row["total"].to<JsonObject>(), p.total);
     }
     return doc;

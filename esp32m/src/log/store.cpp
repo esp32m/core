@@ -89,9 +89,6 @@ namespace esp32m::log {
   Store::Store()
       : ui::IHttpHandler("/logs/download", HTTP_GET),
         _engine("/", [this]() { return reserveId(); }), _bootId(randomId()) {
-    _queue = xRingbufferCreate(QueueBytes, RINGBUF_TYPE_NOSPLIT);
-    if (!_queue || xRingbufferGetMaxItemSize(_queue) < ItemBytes)
-      _error = "Log queue could not be allocated";
     addAppender(this);
     fs::setRootFormatHooks([this]() { return beforeFormat(); },
                            [this](bool ok) { afterFormat(ok); });
@@ -192,11 +189,8 @@ namespace esp32m::log {
 
   void Store::markStateChanged(bool urgent) {
     _stateDirty.fetch_or(urgent ? 2 : 1);
-    // Counter changes may originate in a suspended/ISR logging caller. They
-    // only set an atomic bit; the existing worker wake or 100 ms wait handles it.
-    if (urgent && _task && xPortCanYield() &&
-        xTaskGetSchedulerState() != taskSCHEDULER_SUSPENDED)
-      xTaskNotifyGive(_task);
+    // Producers must not read a worker handle: an idle worker can retire while
+    // the caller is preempted. Its 100 ms wait or EventPeriodic publishes later.
   }
 
   void Store::publishStateChanged() {
@@ -244,6 +238,7 @@ namespace esp32m::log {
     _clockOffset = offset;
     _clockTrusted = true;
     trustedNowLocked();
+    _nextMaintenance = 0;
     if (_task) xTaskNotifyGive(_task);
   }
 
@@ -298,7 +293,6 @@ namespace esp32m::log {
     _pending.fetch_add(bytes);
     xRingbufferSendComplete(_queue, item);
     markStateChanged();
-    if (_task) xTaskNotifyGive(_task);
     return true;
   }
 
@@ -339,8 +333,8 @@ namespace esp32m::log {
     auto root = doc->to<JsonObject>();
     root["available"] = _root.ready;
     root["enabled"] = _enabled.load();
-    root["ready"] = _ready && _task && _queue && !_suspended && !_otaPaused &&
-                    (!_enabled || _capture.load());
+    root["ready"] = _ready && !_suspended && !_otaPaused &&
+                    (!_enabled || (_capture.load() && _task && _queue));
     root["usedBytes"] = status.usedBytes;
     root["quotaBytes"] = quotaBudgetLocked();
     root["quotaPercent"] = _policy.quotaPercent;
@@ -353,6 +347,8 @@ namespace esp32m::log {
     root["dropped"] = _dropped.load();
     root["truncated"] = _truncated.load();
     root["pendingBytes"] = _pending.load();
+    root["workerRunning"] = _task != nullptr;
+    root["captureQueueBytes"] = _queue ? QueueBytes : 0;
     root["timeValid"] = _timeValid;
     root["exporting"] = _exportActive.load();
     root["catalogGeneration"] = _generation;
@@ -433,13 +429,19 @@ namespace esp32m::log {
       // Stop its network task; housekeeping applies the new policy once unpinned.
       cancelExportLocked();
       if (!enabled) {
+        _draining = true;
         drainLocked();
-        applyLocked(_engine.seal());
-        _sessionMarked = false;
+        if (!_pending && !_producers) {
+          applyLocked(_engine.seal());
+          _sessionMarked = false;
+          _draining = false;
+          releaseQueueLocked();
+        }
       }
     }
     _enabled = enabled;
     _policy = policy;
+    _nextMaintenance = 0;
     markStateChanged(true);
     if (_task) xTaskNotifyGive(_task);
     return true;
@@ -541,6 +543,13 @@ namespace esp32m::log {
       recordErrorLocked("Log export did not stop; filesystem format refused");
       return false;
     }
+    drainLocked();
+    if (_producers || _pending) {
+      _suspended = false;
+      recordErrorLocked("Log capture did not stop; filesystem format refused");
+      return false;
+    }
+    releaseQueueLocked();
     applyLocked(_engine.seal());
     _engine.reset();
     _sessionMarked = false;
@@ -552,6 +561,7 @@ namespace esp32m::log {
     std::lock_guard guard(_mutex);
     _reopen = true;
     _suspended = false;
+    _nextMaintenance = 0;
     markStateChanged(true);
     if (!success) recordErrorLocked("Filesystem format failed");
     if (_task) xTaskNotifyGive(_task);
@@ -559,8 +569,13 @@ namespace esp32m::log {
 
   void Store::handleEvent(Event& event) {
     if (EventPeriodic::is(event)) {
-      // Keep invalidation available if the storage worker could not start.
-      if (!_task) publishStateChanged();
+      {
+        std::lock_guard guard(_mutex);
+        // Retained-file age/quota maintenance needs no idle queue or task stack.
+        // Also retry transient capture allocation/capacity failures here.
+        if (_initialized && !_task) maintainLocked();
+      }
+      publishStateChanged();
     } else if (net::EventTimeSync::is(event)) timeSynchronized();
     else if (EventInit::is(event, 0)) {
       std::lock_guard guard(_mutex);
@@ -572,13 +587,8 @@ namespace esp32m::log {
         _ready = applyLocked(_engine.recover(capacity));
       } else recordErrorLocked("Root filesystem capacity is unavailable");
       catalogLocked();
-      const auto created = xTaskCreate([](void* self) {
-        static_cast<Store*>(self)->run();
-      }, "m/log-store", 6144, this, tskIDLE_PRIORITY, &_task);
-      if (created != pdPASS) {
-        _task = nullptr;
-        recordErrorLocked("Log storage worker could not be started");
-      }
+      _initialized = true;
+      maintainLocked();
       const auto registered = ui::Httpd::instance()->addHttpHandler(*this);
       if (registered != ESP_OK) recordErrorLocked("Log download endpoint could not be registered");
       markStateChanged(true);
@@ -589,6 +599,7 @@ namespace esp32m::log {
       _suspended = true;
       cancelExportLocked();
       applyLocked(_engine.seal());
+      releaseQueueLocked();
       markStateChanged(true);
     }
   }
@@ -629,7 +640,7 @@ namespace esp32m::log {
       size_t bytes = 0;
       auto* queued = static_cast<Queued*>(xRingbufferReceive(_queue, &bytes, 0));
       if (queued) {
-        if (queued->valid && _enabled && _ready && !_suspended &&
+        if (queued->valid && (_enabled || _draining) && _ready && !_suspended &&
             !net::ota::isRunning()) writeQueuedLocked(queued);
         else ++_dropped;
         _pending.fetch_sub(bytes);
@@ -640,84 +651,136 @@ namespace esp32m::log {
     }
   }
 
+  bool Store::startWorkerLocked(bool captureQueue) {
+    if (captureQueue && !_queue) {
+      _queue = xRingbufferCreate(QueueBytes, RINGBUF_TYPE_NOSPLIT);
+      if (!_queue || xRingbufferGetMaxItemSize(_queue) < ItemBytes) {
+        releaseQueueLocked();
+        recordErrorLocked("Log queue could not be allocated");
+        return false;
+      }
+    }
+    if (!_task) {
+      const auto created = xTaskCreate([](void* self) {
+        static_cast<Store*>(self)->run();
+      }, "m/log-store", 6144, this, tskIDLE_PRIORITY, &_task);
+      if (created != pdPASS) {
+        _task = nullptr;
+        releaseQueueLocked();
+        recordErrorLocked("Log storage worker could not be started");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void Store::releaseQueueLocked() {
+    // Producers increment their count, then recheck capture before touching
+    // _queue. A late uncounted caller can only return, or use the new queue
+    // after capture starts again; an acquired slot keeps its queue alive.
+    if (_queue && !_capture && !_producers && !_pending) {
+      vRingbufferDelete(_queue);
+      _queue = nullptr;
+    }
+  }
+
+  void Store::maintainLocked() {
+    const auto previousFlags = stateFlagsLocked();
+    // Remains independent of the export task's potentially blocked send.
+    if (_exportActive && monotonicMs() >= _exportDeadline) cancelExportLocked();
+    const bool ota = net::ota::isRunning();
+    if (ota && !_otaPaused) {
+      _capture = false;
+      cancelExportLocked();
+      applyLocked(_engine.seal());
+    }
+    if (_otaPaused != ota) _nextMaintenance = 0;
+    _otaPaused = ota;
+    if (_draining) {
+      drainLocked();
+      if (!_producers && !_pending) {
+        applyLocked(_engine.seal());
+        _sessionMarked = false;
+        _draining = false;
+      }
+    }
+    if (!_draining && !_suspended && !ota && monotonicMs() >= _nextMaintenance) {
+      const auto now = trustedNowLocked();
+      const bool flushed = !_ready || applyLocked(_engine.flush());
+      auto capacity = capacityLocked();
+      if (!_root.ready) {
+        // Unknown capacity must never be fed into pruning as zero capacity.
+        _capture = false;
+        recordErrorLocked("Root filesystem capacity is unavailable");
+      } else if (_reopen || !_ready) {
+        _engine.reset();
+        applyLocked(_engine.configure(_policy, capacity));
+        _ready = applyLocked(_engine.recover(capacity));
+        _reopen = false;
+        capacity = capacityLocked();
+        catalogLocked();
+      }
+      if (_ready && _root.ready) {
+        const bool ok = flushed &&
+            applyLocked(_engine.configure(_policy, capacity, now));
+        _bytesSinceFlush = 0;
+        const bool budgetReady = _engine.status().effectiveQuotaBytes >=
+                                  storage::Engine::MinimumQuota;
+        const bool wanted = _enabled && ok && budgetReady;
+        if (!budgetReady) recordErrorLocked("Log quota is below the minimum usable storage budget");
+        if (wanted && !_sessionMarked) {
+          char marker[256];
+          snprintf(marker, sizeof(marker), "# application=%s version=%s",
+                   App::instance().name(), App::instance().version() ?
+                   App::instance().version() : "unknown");
+          const auto current = _engine.accountedCapacity();
+          _sessionMarked = applyLocked(_engine.append(marker,
+              _clockTrusted ? utcMs() : 0, _bootId, current));
+        }
+        _capture = wanted && _sessionMarked && startWorkerLocked(true);
+        if (ok && budgetReady && (!_enabled || _capture.load())) applyLocked({}, true);
+        catalogLocked();
+      } else _capture = false;
+      _nextMaintenance = monotonicMs() + 1000;
+    }
+    if (!_capture) {
+      drainLocked();
+      releaseQueueLocked();
+    }
+    if (stateFlagsLocked() != previousFlags) markStateChanged(true);
+  }
+
   void Store::run() {
-    int64_t nextMaintenance = 0;
     for (;;) {
-      // Receive only under _mutex: graceful stop can drain every queued item
-      // without racing a worker holding an invisible, already-received record.
       if (!_pending.load()) ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
-      size_t itemBytes = 0;
+      bool retiring = false;
       Queued* queued = nullptr;
       {
         std::lock_guard guard(_mutex);
-        const auto previousFlags = stateFlagsLocked();
+        maintainLocked();
+        // Receive under the same lock as a graceful drain, so no accepted
+        // record can be hidden in a worker-local variable during disable.
+        size_t itemBytes = 0;
         if (_queue) queued = static_cast<Queued*>(xRingbufferReceive(_queue, &itemBytes, 0));
-        // A per-send socket timeout is insufficient for a trickle-reading
-        // client. This independent worker can interrupt a send at the deadline.
-        if (_exportActive && monotonicMs() >= _exportDeadline)
-          cancelExportLocked();
-        const bool ota = net::ota::isRunning();
-        if (ota && !_otaPaused) {
-          _capture = false;
-          cancelExportLocked();
-          applyLocked(_engine.seal());
-        }
-        _otaPaused = ota;
-        if (!_suspended && !ota && monotonicMs() >= nextMaintenance) {
-          const auto now = trustedNowLocked();
-          const bool flushed = !_ready || applyLocked(_engine.flush());
-          auto capacity = capacityLocked();
-          if (!_root.ready) {
-            // Unknown capacity is not zero capacity: never prune on a failed
-            // provider query while the retained files may still be accessible.
-            _capture = false;
-            recordErrorLocked("Root filesystem capacity is unavailable");
-          } else if (_reopen || !_ready) {
-            _engine.reset();
-            applyLocked(_engine.configure(_policy, capacity));
-            _ready = applyLocked(_engine.recover(capacity));
-            _reopen = false;
-            capacity = capacityLocked();
-            catalogLocked();
-          }
-          if (_ready && _root.ready) {
-            const bool ok = flushed &&
-                applyLocked(_engine.configure(_policy, capacity, now));
-            _bytesSinceFlush = 0;
-            const bool budgetReady = _engine.status().effectiveQuotaBytes >=
-                                      storage::Engine::MinimumQuota;
-            _capture = _enabled && ok && budgetReady && _queue && _task;
-            if (!budgetReady) recordErrorLocked("Log quota is below the minimum usable storage budget");
-            if (!_queue) recordErrorLocked("Log queue could not be allocated");
-            if (_capture && !_sessionMarked) {
-              char marker[256];
-              snprintf(marker, sizeof(marker), "# application=%s version=%s",
-                       App::instance().name(), App::instance().version() ?
-                       App::instance().version() : "unknown");
-              const auto current = _engine.accountedCapacity();
-              if (_root.ready)
-                _sessionMarked = applyLocked(_engine.append(marker,
-                    _clockTrusted ? utcMs() : 0, _bootId, current));
-              else recordErrorLocked("Root filesystem capacity is unavailable");
-              if (!_sessionMarked) _capture = false;
-            }
-            if (ok && budgetReady && _queue && (!_enabled || _capture.load()))
-              applyLocked({}, true);
-            catalogLocked();
-          } else _capture = false;
-          nextMaintenance = monotonicMs() + 1000;
-        }
         if (queued) {
-          if (queued->valid && !_suspended && !ota && _ready && _enabled && _capture) {
+          if (queued->valid && !_suspended && !_otaPaused && _ready && _enabled && _capture)
             writeQueuedLocked(queued);
-          } else ++_dropped;
+          else ++_dropped;
           _pending.fetch_sub(itemBytes);
           markStateChanged();
           vRingbufferReturnItem(_queue, queued);
         }
-        if (stateFlagsLocked() != previousFlags) markStateChanged(true);
+        if (!_capture && !_exportActive && !_pending && !_producers) {
+          releaseQueueLocked();
+          // Handle reads/notifications outside producers are under _mutex.
+          // A concurrently restarted worker cannot be this retiring task.
+          _task = nullptr;
+          markStateChanged(true);
+          retiring = true;
+        }
       }
       publishStateChanged();
+      if (retiring) { vTaskDelete(nullptr); return; }
       if (!queued && _pending.load()) vTaskDelay(1);
     }
   }
@@ -750,6 +813,14 @@ namespace esp32m::log {
       if (snapshot) _engine.releaseSnapshot(job->snapshot.token);
       delete job;
       httpd_resp_send_404(request);
+      return ESP_OK;
+    }
+    // The capture queue is unnecessary for retained-file downloads, but the
+    // independent watchdog must exist before an async send can begin.
+    if (!startWorkerLocked(false)) {
+      _engine.releaseSnapshot(job->snapshot.token);
+      delete job;
+      httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Cannot start export watchdog");
       return ESP_OK;
     }
     const auto async = httpd_req_async_handler_begin(request, &job->request);
@@ -825,8 +896,13 @@ namespace esp32m::log {
     }
     httpd_req_async_handler_complete(request);
     delete job;
-    _exportActive = false;
-    markStateChanged(true);
+    {
+      std::lock_guard guard(_mutex);
+      _exportActive = false;
+      _nextMaintenance = 0;
+      markStateChanged(true);
+      if (_task) xTaskNotifyGive(_task);
+    }
     vTaskDelete(nullptr);
   }
 }  // namespace esp32m::log

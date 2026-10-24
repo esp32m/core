@@ -40,13 +40,6 @@ namespace esp32m {
       esp_err_t open();
       esp_err_t close();
 
-      /**
-       * Read holding registers 0..3 one at a time and retain raw results.
-       * Registers 0 and 2 are experimental candidates from a similar valve;
-       * they are not documented for the FH-RS.
-       */
-      esp_err_t probeRegisters();
-
      protected:
       bool pollSensors() override;
       bool initSensors() override;
@@ -87,9 +80,6 @@ namespace esp32m {
       uint64_t _targetStamp = 0, _actualStamp = 0;
       uint16_t _motionRaw = 0;
       uint64_t _motionStamp = 0;
-      uint16_t _probeRegs[4] = {};
-      uint8_t _probeValidMask = 0;
-      uint64_t _probeStamp = 0;
       Sensor _position;
       ValveComponent _component;
     };

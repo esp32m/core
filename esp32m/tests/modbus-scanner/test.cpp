@@ -10,33 +10,52 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 using esp_err_t = int;
 constexpr int ESP_OK=0, ESP_FAIL=-1, ESP_ERR_NO_MEM=257, ESP_ERR_INVALID_ARG=258,
  ESP_ERR_INVALID_STATE=259, ESP_ERR_NOT_SUPPORTED=262, ESP_ERR_TIMEOUT=263,
  ESP_ERR_INVALID_RESPONSE=264;
-constexpr int MB_RTU=0, MB_ASCII=1, pdPASS=1, pdTRUE=1;
+constexpr int MB_RTU=0, MB_ASCII=1, pdPASS=1;
 using TaskHandle_t=void*;
-#define pdMS_TO_TICKS(x) (x)
 #define logE(...) ((void)0)
 namespace fake {
  uint64_t now=1000;
- void (*task)(void*)=nullptr;
- void* taskArg=nullptr;
+ struct Task {
+   void (*entry)(void*);
+   void* arg;
+   bool live=true, running=false, watched=false;
+ };
+ std::vector<std::unique_ptr<Task>> tasks;
+ Task* current=nullptr;
  bool taskOk=true;
- unsigned changes=0;
- struct Wait {};
+ bool responseOk=true;
+ unsigned changes=0, creations=0, deletions=0, responses=0;
+ std::function<void()> finalPublished, retiring;
+ struct Deleted {};
 }
 int xTaskCreate(void (*fn)(void*), const char*, int stack, void* arg, int, TaskHandle_t* task) {
- assert(stack>=4096);
- if(!fake::taskOk) return 0;
- fake::task=fn; fake::taskArg=arg; *task=reinterpret_cast<void*>(1); return pdPASS;
+ assert(stack==6144);
+ if(!fake::taskOk) { *task=reinterpret_cast<void*>(1); return 0; }
+ fake::tasks.push_back(std::make_unique<fake::Task>(fake::Task{fn,arg}));
+ *task=fake::tasks.back().get(); ++fake::creations; return pdPASS;
 }
-void xTaskNotifyGive(TaskHandle_t task) { assert(task); }
-void ulTaskNotifyTake(int, int) { throw fake::Wait{}; }
-void esp_task_wdt_add(void*) {}
-void esp_task_wdt_reset() {}
+// No notification/wait APIs: a retiring worker must never use a stale handle.
+void vTaskDelete(TaskHandle_t task) {
+ assert(!task && fake::current && fake::current->live && !fake::current->watched);
+ fake::current->live=false; ++fake::deletions; throw fake::Deleted{};
+}
+void esp_task_wdt_add(void* task) {
+ assert(!task && fake::current && !fake::current->watched);
+ fake::current->watched=true;
+}
+void esp_task_wdt_reset() { assert(fake::current && fake::current->watched); }
+void esp_task_wdt_delete(void* task) {
+ assert(!task && fake::current && fake::current->watched);
+ fake::current->watched=false;
+ if(fake::retiring) std::exchange(fake::retiring,{})();
+}
 int64_t esp_timer_get_time() { return fake::now*1000; }
 
 namespace esp32m {
@@ -48,7 +67,8 @@ struct Response {
  Request* owner;
  std::unique_ptr<JsonDocument> document;
  bool partial=false;
- explicit Response(Request* owner):owner(owner) {}
+ explicit Response(Request* owner):owner(owner) { ++fake::responses; }
+ ~Response() { assert(fake::responses); --fake::responses; }
  void setData(JsonDocument* doc) { document.reset(doc); }
  void setPartial(bool value) { partial=value; }
  void publish();
@@ -66,12 +86,15 @@ struct Request {
  JsonVariantConst data() const { return payload.as<JsonVariantConst>(); }
  void respond(int code=0) { error=code; responded=true; }
  void respondError(int code,const char*) { respond(code); }
- Response* makeResponse() { return new Response(this); }
+ Response* makeResponse() { return fake::responseOk ? new Response(this) : nullptr; }
 };
 void Response::publish() {
  assert(document);
  if(partial) owner->progress.push_back(*document);
- else { owner->response.set(*document); owner->responded=true; }
+ else {
+   owner->response.set(*document); owner->responded=true;
+   if(fake::finalPublished) std::exchange(fake::finalPublished,{})();
+ }
 }
 struct ErrorList {
  int error=0;
@@ -162,13 +185,23 @@ Request job(const char* kind="scan",unsigned cmd=3,unsigned count=1) {
  return r;
 }
 void reset() {
+ assert(fake::creations==fake::deletions && !fake::responses);
  master=esp32m::modbus::Master{};
  fake::now+=1000;
  auto defaults=job(); assert(scanner.configure(defaults.payload)==ESP_OK);
 }
 void drain() {
- try { fake::task(fake::taskArg); } catch(const fake::Wait&) { return; }
- assert(false);
+ for(;;) {
+   auto next=std::find_if(fake::tasks.begin(),fake::tasks.end(),[](const auto& task) {
+     return task->live && !task->running;
+   });
+   if(next==fake::tasks.end()) return;
+   auto* task=next->get(); auto* previous=fake::current;
+   fake::current=task; task->running=true;
+   try { task->entry(task->arg); assert(false); }
+   catch(const fake::Deleted&) {}
+   assert(!task->live && !task->watched); fake::current=previous;
+ }
 }
 void send(Request& r) {
  assert(scanner.call(r));
@@ -176,10 +209,20 @@ void send(Request& r) {
  assert(r.responded);
 }
 int main() {
- auto early=job();send(early);assert(early.error==ESP_ERR_INVALID_STATE);
- fake::taskOk=false;scanner.initTask();
- auto unavailable=job();send(unavailable);assert(unavailable.error==ESP_ERR_INVALID_STATE);
- fake::taskOk=true;scanner.initTask();
+ scanner.initTask();assert(fake::creations==0);
+ scanner.config();scanner.snapshot();Request idleCancel("cancel");send(idleCancel);
+ assert(fake::creations==0);
+ fake::taskOk=false;
+ const auto beforeFailure=scanner.snapshot(), beforeConfig=scanner.config();
+ const auto beforeChanges=fake::changes;
+ auto unavailable=job();send(unavailable);assert(unavailable.error==ESP_ERR_NO_MEM);
+ assert(scanner.snapshot()==beforeFailure && scanner.config()==beforeConfig);
+ assert(fake::changes==beforeChanges && !fake::responses && !fake::creations);
+ fake::taskOk=true;
+ fake::responseOk=false;auto noResponse=job();send(noResponse);
+ assert(noResponse.error==ESP_ERR_NO_MEM && fake::creations==0);
+ fake::responseOk=true;
+ std::cout<<"PASS no idle worker; task/response creation failures preserve state and release ownership\n";
  reset();
  auto single=job();send(single);
  assert(single.response["progress"]==100 && single.response["scanned"]==1);
@@ -188,7 +231,52 @@ int main() {
  assert(!master.attempts[0].retry && master.attempts[0].quiet==100);
  assert(single.progress.front()["progress"]==0 && single.progress.back()["progress"]==100);
  assert(master.cfg.ser_opts.baudrate==9600 && master.cfg.ser_opts.port==2);
+ assert(fake::creations==1 && fake::deletions==1 && !fake::responses);
  std::cout<<"PASS single-address FC03/R3 scan, progress and unchanged bus\n";
+
+ const auto retained=scanner.snapshot(), retainedConfig=scanner.config();
+ const auto retainedChanges=fake::changes;
+ fake::taskOk=false;
+ auto failedRestart=job("request");failedRestart.payload["regs"]=99;
+ send(failedRestart);assert(failedRestart.error==ESP_ERR_NO_MEM);
+ assert(scanner.snapshot()==retained && scanner.config()==retainedConfig);
+ assert(fake::changes==retainedChanges && !fake::responses && master.attempts.size()==1);
+ fake::taskOk=true;
+
+ reset();
+ auto first=job(), handoff=job("request");handoff.payload["regs"]=99;
+ const auto beforeHandoff=fake::creations;
+ fake::finalPublished=[&] {
+   assert(first.responded && first.response["busy"]==false);
+   assert(scanner.snapshot()["busy"]==false);
+   assert(scanner.call(handoff) && !handoff.responded);
+   assert(fake::creations==beforeHandoff+1 && fake::responses==2);
+   auto overlapping=job();send(overlapping);
+   assert(overlapping.error==ESP_ERR_INVALID_STATE);
+ };
+ send(first);
+ assert(handoff.responded && handoff.response["values"][0]==9004);
+ assert(first.response["results"][0][2]==8908 && first.response["job"]!=handoff.response["job"]);
+ assert(master.attempts.size()==2 && fake::creations==beforeHandoff+1);
+ assert(fake::creations==fake::deletions && !fake::responses);
+
+ reset();
+ auto retiring=job(), replacement=job("request");replacement.payload["regs"]=100;
+ const auto beforeRetirement=fake::creations;
+ fake::retiring=[&] {
+   // The old worker still exists, but has relinquished scanner ownership.
+   // Run its successor to completion before the old task deletes itself.
+   assert(fake::current->live && !fake::responses);
+   assert(scanner.snapshot()["busy"]==false);
+   assert(scanner.call(replacement) && !replacement.responded);
+   assert(fake::creations==beforeRetirement+2);
+   drain();
+   assert(replacement.responded && replacement.response["values"][0]==9005);
+ };
+ send(retiring);
+ assert(master.attempts.size()==2 && fake::creations==fake::deletions && !fake::responses);
+ assert(scanner.snapshot()["values"][0]==9005);
+ std::cout<<"PASS retained-state failure recovery, final-response handoff, overlap rejection and retirement-boundary restart\n";
 
  reset();fake::now=(uint64_t{1}<<32)-50;
  auto range=job();range.payload["to"]=3;

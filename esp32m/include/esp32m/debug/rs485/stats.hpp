@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <mutex>
+#include <new>
 
 #include "esp32m/bus/diagnostics.hpp"
 
@@ -63,8 +65,12 @@ namespace esp32m::debug::rs485 {
     Counts recent, total;
     uint64_t elapsedMs = 0, startedAtMs = 0, windowMs = 0, windowEndMs = 0, lastMs = 0;
     uint32_t session = 0;
+    size_t historyBytes = 0;
   };
-  struct PeerSnapshot : Peer { Counts recent; };
+  struct PeerSnapshot : Peer {
+    Counts recent;
+    bool recentAvailable = true;
+  };
   struct Snapshot : Summary { std::array<PeerSnapshot, PeerCount> peers{}; };
 
   // Bounded memory; no allocations or event publication in the transport hook.
@@ -72,35 +78,69 @@ namespace esp32m::debug::rs485 {
   // interval rather than dropping part of the oldest bucket. At most 1 s lag.
   class Stats {
    public:
-    void reset(uint64_t nowMs) {
+    // Called before taking the UART lock. Only peers actually requested own a
+    // history; allocation failure never prevents the transport operation.
+    bool prepare(bool raw, uint8_t address) {
+      std::lock_guard preparation(_prepareMutex);
+      unsigned index;
+      {
+        std::lock_guard guard(_mutex);
+        index = peer(raw, address);
+        if (_history[index]) return true;
+      }
+      // Do not hold the statistics lock while allocating: a transaction that
+      // already owns the UART can still complete its allocation-free update.
+      std::unique_ptr<History> history(new (std::nothrow) History);
+      if (!history) return false;
       std::lock_guard guard(_mutex);
-      _total = {};
-      for (auto& p : _peers) p = {};
-      for (auto& b : _buckets) b.used = false;
-      _started = nowMs; _last = 0; ++_session;
+      _history[index] = std::move(history);
+      return true;
+    }
+    void reset(uint64_t nowMs) {
+      // Serialize identity reservation/allocation with reset. record() never
+      // takes this mutex, and therefore cannot wait for a heap allocation.
+      std::lock_guard preparation(_prepareMutex);
+      decltype(_history) retired;
+      {
+        std::lock_guard guard(_mutex);
+        _total = {};
+        for (auto& p : _peers) p = {};
+        _reserved.fill(false);
+        _history.swap(retired);
+        for (auto& b : _buckets) b.used = false;
+        _started = nowMs; _last = 0; ++_session;
+      }
+      // Return retired rows to the heap after releasing the completion lock.
     }
     void record(const modbus::Transaction& t, uint64_t nowMs) {
       std::lock_guard guard(_mutex);
       // Reset may win the lock after this completion captured its timestamp.
       if (nowMs < _started) return;
-      unsigned peer = MaxPeers;
-      for (unsigned i = 0; i < MaxPeers; ++i) {
-        if (!_peers[i].used || (_peers[i].raw == t.raw &&
-                               _peers[i].address == t.address)) {
-          peer = i; break;
-        }
-      }
-      auto& p = _peers[peer];
+      const auto index = peer(t.raw, t.address);
+      auto& p = _peers[index];
       p.used = true; p.raw = t.raw; p.address = t.address; p.lastMs = nowMs;
       p.total.add(t); _total.add(t); _last = nowMs;
       const auto second = nowMs / 1000;
-      auto& b = _buckets[second % _buckets.size()];
+      const auto slot = second % _buckets.size();
+      auto& b = _buckets[slot];
       if (!b.used || b.second != second) {
         b.total = {};
-        for (auto& c : b.peers) c = {};
+        b.missingPeers = 0;
+        // All sparse rows share the aggregate bucket's generation. Clearing
+        // this one column avoids duplicating a 64-bit timestamp per peer.
+        for (const auto& h : _history)
+          if (h) (*h)[slot] = {};
         b.used = true; b.second = second;
       }
-      b.total.add(t); b.peers[peer].add(t);
+      b.total.add(t);
+      if (auto* h = _history[index].get()) {
+        (*h)[slot].add(t);
+      } else {
+        // A failed preflight allocation, or reset between preflight and
+        // completion, only affects per-peer recent values. Preserve exact
+        // aggregate and lifetime counts, and never report a partial score.
+        b.missingPeers |= uint32_t(1) << index;
+      }
     }
     void summary(Summary& out, uint64_t nowMs) const {
       std::lock_guard guard(_mutex);
@@ -113,8 +153,16 @@ namespace esp32m::debug::rs485 {
       for (unsigned i = 0; i < PeerCount; ++i) {
         static_cast<Peer&>(out.peers[i]) = _peers[i];
         out.peers[i].recent = {};
-        for (const auto& b : _buckets)
-          if (included(b, end)) out.peers[i].recent.merge(b.peers[i]);
+        out.peers[i].recentAvailable = true;
+        for (unsigned slot = 0; slot < _buckets.size(); ++slot) {
+          const auto& b = _buckets[slot];
+          if (!included(b, end)) continue;
+          if (b.missingPeers & (uint32_t(1) << i))
+            out.peers[i].recentAvailable = false;
+          if (const auto* h = _history[i].get())
+            out.peers[i].recent.merge((*h)[slot]);
+        }
+        if (!out.peers[i].recentAvailable) out.peers[i].recent = {};
       }
     }
 
@@ -123,13 +171,28 @@ namespace esp32m::debug::rs485 {
       bool used = false;
       uint64_t second = 0;
       Counts total;
-      std::array<Counts, PeerCount> peers{};
+      uint32_t missingPeers = 0;
     };
+    using History = std::array<Counts, WindowSeconds + 1>;
+    unsigned peer(bool raw, uint8_t address) {
+      for (unsigned i = 0; i < MaxPeers; ++i) {
+        auto& p = _peers[i];
+        if (_reserved[i] && (p.raw != raw || p.address != address)) continue;
+        _reserved[i] = true; p.raw = raw; p.address = address;
+        return i;
+      }
+      return MaxPeers;
+    }
+    static bool included(uint64_t second, uint64_t end) {
+      return second < end && end - second <= WindowSeconds;
+    }
     bool included(const Bucket& b, uint64_t end) const {
-      return b.used && b.second < end && end - b.second <= WindowSeconds;
+      return b.used && included(b.second, end);
     }
     void summarize(Summary& out, uint64_t nowMs) const {
       out = {}; out.total = _total; out.lastMs = _last; out.session = _session;
+      for (const auto& h : _history)
+        if (h) out.historyBytes += sizeof(History);
       out.startedAtMs = _started;
       // The caller's clock sample can precede a concurrent reset by a tick.
       out.elapsedMs = nowMs >= _started ? nowMs - _started : 0;
@@ -140,9 +203,12 @@ namespace esp32m::debug::rs485 {
         if (included(b, nowMs / 1000)) out.recent.merge(b.total);
     }
     mutable std::mutex _mutex;
+    std::mutex _prepareMutex;
     Counts _total;
     std::array<Peer, PeerCount> _peers{};
+    std::array<bool, MaxPeers> _reserved{};
     std::array<Bucket, WindowSeconds + 1> _buckets{};
+    std::array<std::unique_ptr<History>, PeerCount> _history{};
     uint64_t _started = 0, _last = 0;
     uint32_t _session = 0;
   };

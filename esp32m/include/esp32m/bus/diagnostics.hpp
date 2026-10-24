@@ -12,10 +12,13 @@ namespace esp32m::modbus {
     uint64_t durationUs = 0;  // TX/API start to completion; excludes quiet guards.
   };
 
-  // Optional, process-lifetime observer. Called under the UART lock: must not
-  // access the bus, publish events, allocate, or block on network/UI operations.
+  // Optional, process-lifetime observer. Preparation runs before the UART lock
+  // and may reserve bounded diagnostic storage. It must not access the bus or
+  // prevent a transaction when storage is unavailable. Completion runs under
+  // the UART lock: no bus access, publication, allocation or network/UI waits.
   class Observer {
    public:
+    virtual void prepareTransaction(bool, uint8_t) {}
     virtual void onTransaction(const Transaction& transaction) = 0;
    protected:
     virtual ~Observer() = default;

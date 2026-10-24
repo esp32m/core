@@ -10,6 +10,10 @@ Checks cover FD reuse, inbound generation at enqueue and each batched dispatch,
 old queued replies, deferred response identity, shared payload ownership, async
 send failure, queued close generation, queue-admission failure fallback, output
 work/byte limits, released charges, and incoming request identity/count limits.
+Failure coverage injects a failed checked payload and a failed nothrow output
+work allocation, verifies charge rollback and closes only the matching connection
+generation. Closing a client under pressure retains healthy broadcast delivery
+before and after UI cleanup; queued predecessor payloads remain undeliverable.
 Startup coverage queues eight singleton-array requests with unique sequences
 before dispatch. Overflow coverage fills all eleven document slots and checks
 each rejected batch request receives its own correlated busy response, including

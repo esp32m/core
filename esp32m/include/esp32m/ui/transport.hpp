@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <esp_err.h>
 #include <esp32m/ui/client.hpp>
+#include <esp32m/ui/payload.hpp>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -21,8 +22,12 @@ namespace esp32m {
       virtual ~Transport() = default;
       virtual esp_err_t sendTo(uint32_t cid, const char* text) = 0;
       virtual esp_err_t sendSession(uint32_t cid, uint64_t generation,
-                                   std::shared_ptr<const std::string> text) {
-        return sessionAlive(cid, generation) ? sendTo(cid, text->c_str())
+                                   Payload text) {
+        if (!text) {
+          closeSession(cid, generation);
+          return ESP_ERR_NO_MEM;
+        }
+        return sessionAlive(cid, generation) ? sendTo(cid, text.c_str())
                                              : ESP_ERR_INVALID_STATE;
       }
       virtual void closeSession(uint32_t cid, uint64_t generation);
@@ -35,7 +40,7 @@ namespace esp32m {
         if (!ids)
           return;
         for (auto cid : *ids)
-          sendTo(cid, text);
+          if (sessionGeneration(cid)) sendTo(cid, text);
       }
 
      protected:

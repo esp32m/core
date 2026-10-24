@@ -151,7 +151,7 @@ namespace esp32m::bus::scanner {
     }
     {
       std::lock_guard guard(_mutex);
-      if (_busy || !_task || !modbus::Master::instance().isConfigured()) {
+      if (_busy || !modbus::Master::instance().isConfigured()) {
         request.respondError(ESP_ERR_INVALID_STATE, "Scanner is busy or the shared bus is not ready");
         return true;
       }
@@ -189,17 +189,26 @@ namespace esp32m::bus::scanner {
       }
       job->response.reset(request.makeResponse());
       if (!job->response) { request.respond(ESP_ERR_NO_MEM); return true; }
-      _options = _active = o;
-      _operation = job->operation;
+      _pending = std::move(job);
+      // Starting under _mutex prevents the new worker from observing a partly
+      // initialized job. Retain the previous result/config if creation fails.
+      if (!_task &&
+          xTaskCreate([](void* self) { static_cast<Modbus*>(self)->run(); },
+                      "m/s/modbus", 6144, this, 1, &_task) != pdPASS) {
+        _task = nullptr;
+        _pending.reset();
+        request.respond(ESP_ERR_NO_MEM);
+        return true;
+      }
+      _options = _active = _pending->options;
+      _operation = _pending->operation;
       _busy = true; _cancel = _cancelled = _verified = false;
       ++_jobId; _started = nowMs(); _elapsed = 0;
       _scanned = _valueCount = 0;
-      _total = _operation == Operation::Scan ? o.to - o.from + 1 : 1;
+      _total = _operation == Operation::Scan ? _active.to - _active.from + 1 : 1;
       _error = _writeError = _verifyError = ESP_OK;
-      _pending = std::move(job);
     }
     config::Changed::publish(this, true);
-    xTaskNotifyGive(_task);
     return true;
   }
 
@@ -294,24 +303,25 @@ namespace esp32m::bus::scanner {
     publish(job, true);
   }
 
-  void Modbus::handleEvent(Event& event) {
-    if (EventInit::is(event, 0) && !_task) {
-      if (xTaskCreate([](void* self) { static_cast<Modbus*>(self)->run(); },
-                      "m/s/modbus", 6144, this, 1, &_task) != pdPASS) {
-        _task = nullptr;
-        logE("Could not start Modbus scanner task");
-      }
-    }
-  }
   void Modbus::run() {
     esp_task_wdt_add(nullptr);
     for (;;) {
       esp_task_wdt_reset();
       std::unique_ptr<Job> job;
-      { std::lock_guard guard(_mutex); job = std::move(_pending); }
-      if (job) execute(*job);
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+      {
+        std::lock_guard guard(_mutex);
+        job = std::move(_pending);
+        if (!job) _task = nullptr;
+      }
+      if (!job) break;
+      execute(*job);
     }
+    // No further scanner access after detaching under _mutex. A request either
+    // queues work for this worker before detachment or starts its own worker.
+    // Notifications are unnecessary, so a retiring task handle cannot be used
+    // after deletion (or after FreeRTOS has recycled it for a different task).
+    esp_task_wdt_delete(nullptr);
+    vTaskDelete(nullptr);
   }
   Modbus& Modbus::instance() { static Modbus instance; return instance; }
   Modbus* useModbus() { return &Modbus::instance(); }

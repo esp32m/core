@@ -15,7 +15,7 @@ const temp = path.resolve(os.tmpdir());
 const build = mkdtempSync(path.join(temp, 'esp32m-ws-subscriptions-'));
 try {
   const exe = path.join(build, 'test.exe');
-  execFileSync(compiler, ['-std=c++17', '-Wall', '-Wextra', '-Werror', '-static',
+  execFileSync(compiler, ['-std=c++17', '-fno-exceptions', '-Wall', '-Wextra', '-Werror', '-static',
     '-pthread', '-I', path.join(core, 'include'), '-I', json,
     path.join(core, 'src/ui/subscriptions.cpp'), path.join(here, 'test.cpp'),
     '-o', exe], { stdio: 'inherit' });

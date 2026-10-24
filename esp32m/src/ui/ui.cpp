@@ -15,7 +15,7 @@ namespace esp32m {
   namespace ui {
     JsonDocument /*<JSON_ARRAY_SIZE(1)>*/ _errors;
 
-    std::string makeResponse(const char* name, const char* source, int seq,
+    Payload makeResponse(const char* name, const char* source, int seq,
                              JsonVariantConst data, bool error, bool partial) {
       /*size_t mu = data.memoryUsage();*/
       JsonDocument doc /*(mu + JSON_OBJECT_SIZE(6))*/;
@@ -31,10 +31,8 @@ namespace esp32m {
       if (seq)
         msg["seq"] = seq;
       msg[error ? "error" : "data"] = data;
-      std::string result;
-      serializeJson(doc, result);
-      return result;
-      // return json::allocSerialize(doc);
+      if (doc.overflowed()) return {};
+      return Payload::fromJson(doc);
     }
 
     class Rb : public Response {
@@ -103,11 +101,10 @@ namespace esp32m {
      protected:
       void respondImpl(const char* source, const JsonVariantConst data,
                        bool error) override {
-        std::string text =
+        auto text =
             ui::makeResponse(name(), source, seq(), data, error, false);
-        _transport->sendSession(_clientId, _generation,
-                               std::make_shared<const std::string>(std::move(text)));
-        // free(text);
+        if (_transport->sendSession(_clientId, _generation, std::move(text)) != ESP_OK)
+          _transport->closeSession(_clientId, _generation);
       }
 
       Response* makeResponseImpl() override {
@@ -174,14 +171,12 @@ namespace esp32m {
         JsonDocument* req = nullptr;
         uint32_t cid = 0;
         uint64_t generation = 0;
-        bool refreshSnapshot = false;
         {
           std::lock_guard<std::mutex> guard(_clientsMutex);
           for (auto it = _clients.begin(); it != _clients.end();) {
             auto client = it->second.get();
             if (client->isDisconnected()) {
               it = _clients.erase(it);
-              refreshSnapshot = true;
             } else {
               req = client->dequeue();
               cid = it->first;
@@ -191,8 +186,8 @@ namespace esp32m {
               ++it;
             }
           }
-          if (refreshSnapshot)
-            refreshClientIdsViewLocked();
+          // Removal never allocates a new client-ID view. A later normal
+          // session open rebuilds it; broadcast filters stale disconnected IDs.
         }
         if (!req)
           break;
@@ -214,7 +209,8 @@ namespace esp32m {
       if (i != _clients.end()) {
         i->second->disconnected();
         LOGD(i->second, "session closed");
-        refreshClientIdsViewLocked();
+        // Keep the immutable view until a normal open rebuilds it. Broadcast
+        // filters this disconnected generation without allocating on close.
       }
       if (_ui)
         _ui->notifyIncoming();
@@ -249,7 +245,8 @@ namespace esp32m {
       auto i = _clients.find(cid);
       if (i != _clients.end() && i->second->generation() == generation) {
         i->second->disconnected();
-        refreshClientIdsViewLocked();
+        // Closing on memory pressure must not allocate a replacement view.
+        // Broadcast filters stale IDs; a later normal open rebuilds the view.
         if (_ui)
           _ui->notifyIncoming();
       }
@@ -298,10 +295,10 @@ namespace esp32m {
           const char* type = req["type"];
           if (seq && type && !strcmp(type, "request")) {
             const char* source = req["target"] | "ui";
-            std::string text = ui::makeResponse(req["name"], source, seq,
+            auto text = ui::makeResponse(req["name"], source, seq,
                                                 ui::_errors[0], true, false);
-            sendSession(cid, generation,
-                        std::make_shared<const std::string>(std::move(text)));
+            if (sendSession(cid, generation, std::move(text)) != ESP_OK)
+              closeSession(cid, generation);
           }
         };
         auto batch = json->as<JsonArrayConst>();
@@ -374,9 +371,8 @@ namespace esp32m {
       msg["name"] = b->name();
       if (data)
         msg["data"] = data;
-      std::string text;
-      serializeJson(msg, text);
-      broadcast(text.c_str());
+      auto payload = msg.overflowed() ? ui::Payload{} : ui::Payload::fromJson(msg);
+      if (payload) broadcast(payload.c_str());
       return;
     }
     Response* r;
@@ -388,12 +384,12 @@ namespace esp32m {
         JsonDocument* doc = r->data();
         JsonVariantConst data =
             doc ? doc->as<JsonVariantConst>() : json::null<JsonVariantConst>();
-        std::string response =
+        auto response =
             ui::makeResponse(r->name(), r->source(), r->seq(), data,
                              r->isError(), r->isPartial());
-        transport->sendSession(resp->clientId, resp->generation,
-                              std::make_shared<const std::string>(std::move(response)));
-        // free(response);
+        if (transport->sendSession(resp->clientId, resp->generation,
+                                   std::move(response)) != ESP_OK)
+          transport->closeSession(resp->clientId, resp->generation);
       }
   }
 

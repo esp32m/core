@@ -11,6 +11,7 @@ import { ApInfoBox, MqttStateBox, StaInfoBox } from './net';
 import { TContentPlugin, TUiThemePlugin } from '@ts-libs/ui-base';
 import { pluginUi18n, Ti18nPlugin, useTranslation } from '@ts-libs/ui-i18n';
 import { OtaPlugin } from './net/ota/plugin';
+import { CrashGuardRecoveryPlugin } from './debug/crashguard/recovery';
 import { setDefine } from './utils';
 
 const header = (
@@ -101,6 +102,7 @@ export function startUi(config?: TEsp32mUiConfig) {
       pluginUi18n(),
       pluginUiNavbar(),
       OtaPlugin,
+      CrashGuardRecoveryPlugin,
     ]
   );
   if (config?.defines)

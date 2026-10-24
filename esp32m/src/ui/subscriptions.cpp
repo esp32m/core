@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <new>
 #include <utility>
 
 namespace esp32m::ui {
@@ -10,17 +12,63 @@ namespace esp32m::ui {
     constexpr uint32_t ReconcileMs = 1000;
     constexpr uint32_t CoalesceMs = 25;
 
-    struct AppendWriter {
-      std::string& destination;
-      size_t write(uint8_t ch) { destination += char(ch); return 1; }
+    // The same allocation-free serializer first counts, then writes into one
+    // exactly sized checked payload. No string growth/control-block allocation
+    // can abort a build where C++ exceptions are disabled.
+    struct WireWriter {
+      char* destination = nullptr;
+      size_t capacity = std::numeric_limits<size_t>::max(), used = 0;
+      bool valid = true;
+      size_t write(uint8_t ch) { return write(&ch, 1); }
       size_t write(const uint8_t* data, size_t size) {
-        destination.append((const char*)data, size);
+        if (size > capacity - used) {
+          valid = false;
+          return 0;
+        }
+        if (destination && size) memcpy(destination + used, data, size);
+        used += size;
         return size;
       }
+      void text(const char* value) {
+        write(reinterpret_cast<const uint8_t*>(value), strlen(value));
+      }
+      void number(uint64_t value) {
+        char buffer[20];
+        auto* end = buffer + sizeof(buffer);
+        auto* begin = end;
+        do { *--begin = '0' + value % 10; value /= 10; } while (value);
+        write(reinterpret_cast<const uint8_t*>(begin), end - begin);
+      }
+      void integer(int value) {
+        if (value < 0) { write('-'); number(uint64_t(-int64_t(value))); }
+        else number(uint64_t(value));
+      }
+      void quoted(const char* value, size_t size) {
+        static constexpr char Hex[] = "0123456789abcdef";
+        write('"');
+        for (size_t i = 0; i < size; ++i) {
+          const auto ch = static_cast<uint8_t>(value[i]);
+          if (ch == '"' || ch == '\\') { write('\\'); write(ch); }
+          else if (ch < 32) {
+            text("\\u00"); write(Hex[ch >> 4]); write(Hex[ch & 15]);
+          } else write(ch);
+        }
+        write('"');
+      }
+      void quoted(const char* value) { quoted(value, strlen(value)); }
+      void quoted(const std::string& value) { quoted(value.data(), value.size()); }
+      void json(JsonVariantConst value) { serializeJson(value, *this); }
     };
-    void appendJson(std::string& result, JsonVariantConst value) {
-      AppendWriter writer{result};
-      serializeJson(value, writer);
+    template <class Fill>
+    Payload makePayload(Payload::Allocate allocate, const Fill& fill) {
+      WireWriter count;
+      fill(count);
+      if (!count.valid) return {};
+      return Payload::build(count.used, [&](char* buffer, size_t size) {
+        WireWriter result{buffer, size};
+        fill(result);
+        return result.valid && result.used == size;
+      }, allocate);
     }
 
     void appendString(std::string& result, const std::string& value) {
@@ -149,7 +197,8 @@ namespace esp32m::ui {
    public:
     Allocator(size_t& total, size_t limit) : total(total), limit(limit) {}
     void* allocate(size_t size) override {
-      if (size + sizeof(Header) > limit - std::min(limit, used) ||
+      if (size > std::numeric_limits<size_t>::max() - sizeof(Header) ||
+          size + sizeof(Header) > limit - std::min(limit, used) ||
           size + sizeof(Header) > MaxBaselineBytes + MaxWorkingBytes -
                                      std::min(MaxBaselineBytes + MaxWorkingBytes,
                                               total))
@@ -178,8 +227,19 @@ namespace esp32m::ui {
         return nullptr;
       }
       auto* old = static_cast<Header*>(pointer) - 1;
-      if (size <= old->size - sizeof(Header))
+      if (size == old->size - sizeof(Header))
         return pointer;
+      if (size < old->size - sizeof(Header)) {
+        const auto previous = old->size;
+        auto* smaller = static_cast<Header*>(realloc(old, sizeof(Header) + size));
+        // ArduinoJson requires a shrinking realloc to remain valid even when
+        // the allocator cannot move it; retaining slack is safe on failure.
+        if (!smaller) return pointer;
+        smaller->size = sizeof(Header) + size;
+        used -= previous - smaller->size;
+        total -= previous - smaller->size;
+        return smaller + 1;
+      }
       auto* replacement = allocate(size);
       if (replacement) {
         memcpy(replacement, pointer, old->size - sizeof(Header));
@@ -214,10 +274,11 @@ namespace esp32m::ui {
   };
 
   StateSubscriptions::StateSubscriptions(Capture capture, Send send, Alive alive,
-                                         Close close, Clock clock)
+                                         Close close, Clock clock,
+                                         Payload::Allocate allocatePayload)
       : _capture(std::move(capture)), _send(std::move(send)),
         _alive(std::move(alive)), _close(std::move(close)),
-        _clock(std::move(clock)) {}
+        _clock(std::move(clock)), _allocatePayload(allocatePayload) {}
   StateSubscriptions::~StateSubscriptions() {
     _streams.clear();  // allocator accounting outlives every document
   }
@@ -233,90 +294,97 @@ namespace esp32m::ui {
   bool StateSubscriptions::send(const Session& session, Payload payload) {
     if (!_alive(session))
       return false;
+    if (!payload) {
+      ++_sendFailures;
+      if (_close) _close(session);
+      return false;
+    }
     if (_send(session, std::move(payload)))
       return true;
     ++_sendFailures;
     return false;
   }
 
-  void StateSubscriptions::reply(const Session& session, const char* name,
+  bool StateSubscriptions::reply(const Session& session, const char* name,
                                  int seq, uint32_t now, const char* error,
                                  const Interest* interest) {
-    std::string result = "{\"type\":\"response\",\"source\":\"ui\",\"name\":";
-    appendString(result, name);
-    result += ",\"seq\":" + std::to_string(seq);
-    if (error) {
-      ++_rejected;
-      result += ",\"error\":[";
-      appendString(result, error);
-      result += ']';
-    } else if (interest) {
-      auto& stream = *interest->stream;
-      result.reserve(result.size() + interest->id.size() + stream.target.size() +
-                     stream.id.size() + measureJson(stream.state->doc) + 128);
-      result += ",\"data\":{\"id\":";
-      appendString(result, interest->id);
-      result += ",\"source\":";
-      appendString(result, stream.target);
-      result += ",\"stream\":";
-      appendString(result, stream.id);
-      result += ",\"rev\":" + std::to_string(stream.revision) +
-                ",\"serverTimeMs\":" + std::to_string(_clock ? _clock() : now) +
-                ",\"state\":";
-      appendJson(result, stream.state->doc);
-      result += '}';
-    } else
-      result += ",\"data\":null";
-    result += '}';
-    ++_serialized;
-    send(session, std::make_shared<const std::string>(std::move(result)));
+    const auto serverTime = _clock ? _clock() : now;
+    if (error) ++_rejected;
+    auto payload = makePayload(_allocatePayload, [&](WireWriter& out) {
+      out.text("{\"type\":\"response\",\"source\":\"ui\",\"name\":");
+      out.quoted(name);
+      out.text(",\"seq\":"); out.integer(seq);
+      if (error) {
+        out.text(",\"error\":["); out.quoted(error); out.write(']');
+      } else if (interest) {
+        const auto& stream = *interest->stream;
+        out.text(",\"data\":{\"id\":"); out.quoted(interest->id);
+        out.text(",\"source\":"); out.quoted(stream.target);
+        out.text(",\"stream\":"); out.quoted(stream.id);
+        out.text(",\"rev\":"); out.number(stream.revision);
+        out.text(",\"serverTimeMs\":"); out.number(serverTime);
+        out.text(",\"state\":"); out.json(stream.state->doc);
+        out.write('}');
+      } else out.text(",\"data\":null");
+      out.write('}');
+    });
+    if (payload) ++_serialized;
+    return send(session, std::move(payload));
   }
 
   // Keep publication temporaries out of the source serializer's call stack.
   std::unique_ptr<StateSubscriptions::Snapshot> StateSubscriptions::captureNext(
       const Stream& stream, const char*& error) {
     JsonDocument query;
-    deserializeJson(query, stream.query);
-    auto next = std::make_unique<Snapshot>(_allocated);
+    if (deserializeJson(query, stream.query) || query.overflowed()) {
+      error = "query-memory";
+      return {};
+    }
+    std::unique_ptr<Snapshot> next(new (std::nothrow) Snapshot(_allocated));
+    if (!next) { error = "snapshot-memory"; return {}; }
     ++_captures;
     error = _capture(stream.target, stream.view, query, next->doc);
     if (!error && next->doc.overflowed())
       error = "snapshot-limit";
     if (error)
       return {};
+    next->doc.shrinkToFit();
     return next;
   }
 
   StateSubscriptions::Payload StateSubscriptions::makeChangePayload(
-      const Stream& stream, const Snapshot& next, uint64_t base, uint32_t now) {
-    std::string prefix = "{\"type\":\"event\",\"name\":\"state-changed\",\"source\":";
-    appendString(prefix, stream.target);
-    prefix += ",\"data\":{\"stream\":";
-    appendString(prefix, stream.id);
-    prefix += ",\"rev\":" + std::to_string(stream.revision) +
-              ",\"serverTimeMs\":" + std::to_string(_clock ? _clock() : now);
+      const Stream& stream, const Snapshot& next, uint64_t revision, uint32_t now) {
+    const auto serverTime = _clock ? _clock() : now;
     Snapshot patch(_allocated, MaxWorkingBytes - MaxSnapshotBytes);
     auto array = patch.doc["patch"].to<JsonArray>();
     auto path = patch.doc["path"].to<JsonArray>();
     diff(stream.state->doc, next.doc, path, array);
     // Select using measured wire lengths, then serialize only the winner.
     // This avoids holding both full-state and delta strings during capture.
-    auto deltaHeader = ",\"baseRev\":" + std::to_string(base) + ",\"patch\":";
+    WireWriter deltaHeader;
+    deltaHeader.text(",\"baseRev\":"); deltaHeader.number(stream.revision);
+    deltaHeader.text(",\"patch\":");
     size_t stateSize = measureJson(next.doc) + strlen(",\"state\":");
-    size_t patchSize = measureJson(array) + deltaHeader.size();
-    std::string message = prefix;
-    if (!patch.doc.overflowed() && patchSize < stateSize) {
-      message.reserve(prefix.size() + patchSize + 2);
-      message += deltaHeader;
-      appendJson(message, array);
-    } else {
-      message.reserve(prefix.size() + stateSize + 2);
-      message += ",\"state\":";
-      appendJson(message, next.doc);
-    }
-    message += "}}";
-    auto payload = std::make_shared<const std::string>(std::move(message));
-    ++_serialized;
+    size_t patchSize = measureJson(array) + deltaHeader.used;
+    const bool usePatch = !patch.doc.overflowed() && patchSize < stateSize;
+    // Full-state fallback must not coexist with an unused patch's pool. This
+    // was a significant peak even though the selected JSON was only ~3 KiB.
+    if (!usePatch) patch.doc.clear();
+    auto payload = makePayload(_allocatePayload, [&](WireWriter& out) {
+      out.text("{\"type\":\"event\",\"name\":\"state-changed\",\"source\":");
+      out.quoted(stream.target);
+      out.text(",\"data\":{\"stream\":"); out.quoted(stream.id);
+      out.text(",\"rev\":"); out.number(revision);
+      out.text(",\"serverTimeMs\":"); out.number(serverTime);
+      if (usePatch) {
+        out.text(",\"baseRev\":"); out.number(stream.revision);
+        out.text(",\"patch\":"); out.json(array);
+      } else {
+        out.text(",\"state\":"); out.json(next.doc);
+      }
+      out.text("}}");
+    });
+    if (payload) ++_serialized;
     return payload;
   }
 
@@ -335,6 +403,18 @@ namespace esp32m::ui {
       error = "snapshot-limit";
       return false;
     }
+    const bool changed = !stream.state || !equal(stream.state->doc, next->doc);
+    const auto revision = stream.revision + 1;
+    Payload payload;
+    if (changed && stream.state) {
+      payload = makeChangePayload(stream, *next, revision, now);
+      if (!payload) {
+        error = "payload-memory";
+        return false;
+      }
+    }
+    // A revision is committed only after its complete immutable event exists.
+    // A failed allocation retains both the client's base and our old baseline.
     stream.capturedAt = now;
     stream.seenGeneration = generation;
     {
@@ -347,12 +427,9 @@ namespace esp32m::ui {
           }))
         hint.pending = false;
     }
-    if (stream.state && equal(stream.state->doc, next->doc))
+    if (!changed)
       return true;
-    auto base = stream.revision++;
-    Payload payload;
-    if (stream.state)
-      payload = makeChangePayload(stream, *next, base, now);
+    stream.revision = revision;
     stream.state = std::move(next);
     if (payload) {
       ++_publishes;
@@ -486,9 +563,11 @@ namespace esp32m::ui {
       return true;
     }
     Interest interest{session, id, stream};
-    reply(session, name, seq, now, nullptr, &interest);
-    if (_alive(session))
+    const bool queued = reply(session, name, seq, now, nullptr, &interest);
+    if (queued && _alive(session))
       _interests.push_back(std::move(interest));
+    else if (added)
+      cleanup();
     return true;
   }
 

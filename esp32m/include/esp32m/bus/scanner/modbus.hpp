@@ -20,7 +20,6 @@ namespace esp32m::bus::scanner {
     bool setConfig(RequestContext& ctx) override;
     JsonDocument* getState(RequestContext& ctx) override;
     bool handleRequest(Request& req) override;
-    void handleEvent(Event& ev) override;
 
    private:
     static constexpr unsigned MaxValues = 125;
@@ -48,6 +47,7 @@ namespace esp32m::bus::scanner {
     static void putBus(JsonObject root);
 
     std::mutex _mutex;
+    // Guarded by _mutex; a retiring worker detaches before self-deletion.
     TaskHandle_t _task = nullptr;
     Options _options, _active;
     std::unique_ptr<Job> _pending;

@@ -26,6 +26,9 @@ export type TUiThemePlugin = TPlugin & {
 
 export type TUiElementsPlugin = TPlugin & {
   readonly ui: {
+    readonly content?: {
+      readonly notices?: Array<ComponentType>;
+    };
     readonly header?: {
       readonly actions?: Array<ComponentType>;
     };

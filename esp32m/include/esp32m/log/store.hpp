@@ -53,13 +53,15 @@ namespace esp32m::log {
     std::atomic<uint8_t> _stateDirty{2};
     std::atomic_flag _publishingState = ATOMIC_FLAG_INIT;
     int64_t _nextStatePublish = 0;
-    bool _prepared = false, _ready = false, _reopen = false;
+    bool _prepared = false, _initialized = false, _ready = false, _reopen = false;
+    bool _draining = false;
     bool _sessionMarked = false;
     bool _otaPaused = false, _timeValid = false;
     int _exportFd = -1;
     int64_t _exportDeadline = 0;
     size_t _reserveBytes = 0, _bytesSinceFlush = 0;
     int64_t _clockOffset = 0, _clockStableAt = 0;
+    int64_t _nextMaintenance = 0;
     uint64_t reserveId();
     storage::Capacity capacityLocked();
     size_t reserveLocked() const;
@@ -72,6 +74,9 @@ namespace esp32m::log {
     bool beforeFormat();
     void afterFormat(bool success);
     void run();
+    bool startWorkerLocked(bool captureQueue);
+    void releaseQueueLocked();
+    void maintainLocked();
     void writeQueuedLocked(const Queued* queued);
     void drainLocked();
     void exportFile(Export* job);

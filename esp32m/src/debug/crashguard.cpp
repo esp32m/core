@@ -88,6 +88,8 @@ namespace esp32m {
       constexpr uint32_t NvsVersion = 1;
       constexpr const char* NvsNamespace = "crashguard";
       constexpr const char* NvsKey = "state";
+      constexpr const char* RecoveryNvsKey = "recovery";
+      constexpr const char* RecoveryIntentNvsKey = "recovery_intent";
 
       constexpr uint32_t EarlyCrashMs = 60 * 1000;
       constexpr uint32_t StableMs = 10 * 60 * 1000;
@@ -290,9 +292,9 @@ namespace esp32m {
         return r == ESP_OK;
       }
 
-      static esp_err_t setBootPartitionOtherSlot(const esp_partition_t* running,
-                                                 const esp_partition_t** chosen,
-                                                 int* chosenSlot) {
+      static esp_err_t findOtherSlot(const esp_partition_t* running,
+                                     const esp_partition_t** chosen,
+                                     int* chosenSlot) {
         if (chosen)
           *chosen = nullptr;
         if (chosenSlot)
@@ -313,7 +315,14 @@ namespace esp32m {
           *chosen = other;
         if (chosenSlot)
           *chosenSlot = otherSlot;
-        return esp_ota_set_boot_partition(other);
+        return ESP_OK;
+      }
+
+      static esp_err_t setBootPartitionOtherSlot(const esp_partition_t* running,
+                                                 const esp_partition_t** chosen,
+                                                 int* chosenSlot) {
+        auto err = findOtherSlot(running, chosen, chosenSlot);
+        return err == ESP_OK ? esp_ota_set_boot_partition(*chosen) : err;
       }
 
     }  // namespace
@@ -322,6 +331,291 @@ namespace esp32m {
       CoreDump::instance();
       _bootMs = millis();
       onBoot();
+    }
+
+    CrashGuard::RecoveryImage CrashGuard::recoveryImage(
+        const esp_partition_t* partition) {
+      RecoveryImage image;
+      image.slot = slotIndexFromPartition(partition);
+      esp_app_desc_t desc;
+      if (image.slot >= 0 &&
+          esp_ota_get_partition_description(partition, &desc) == ESP_OK) {
+        memcpy(image.ver, desc.version, sizeof(image.ver) - 1);
+        memcpy(image.sha256, desc.app_elf_sha256, sizeof(image.sha256));
+        const uint8_t zero[sizeof(image.sha256)] = {};
+        image.valid = memcmp(image.sha256, zero, sizeof(zero)) != 0;
+      }
+      return image;
+    }
+
+    bool CrashGuard::sameImage(const RecoveryImage& a, const RecoveryImage& b) {
+      return a.valid && b.valid && a.slot == b.slot &&
+             memcmp(a.sha256, b.sha256, sizeof(a.sha256)) == 0;
+    }
+
+    bool CrashGuard::readRecovery(RecoveryRecord& record, bool intent) {
+      nvs_handle_t handle;
+      if (nvs_open(NvsNamespace, NVS_READONLY, &handle) != ESP_OK)
+        return false;
+      size_t size = sizeof(record);
+      auto err = nvs_get_blob(handle,
+          intent ? RecoveryIntentNvsKey : RecoveryNvsKey, &record, &size);
+      nvs_close(handle);
+      if (err != ESP_OK || size != sizeof(record) || record.version != 1 ||
+          record.phase < RecoveryPhase::Pending ||
+          record.phase > RecoveryPhase::Canceled ||
+          record.selectionSucceeded > 1 || record.boot == 0 ||
+          record.from.slot == record.to.slot)
+        return false;
+      const uint8_t zero[sizeof(record.from.sha256)] = {};
+      for (const auto* image : {&record.from, &record.to})
+        if (image->slot < 0 || image->slot > 1 || image->valid != 1 ||
+            image->ver[sizeof(image->ver) - 1] != '\0' ||
+            memcmp(image->sha256, zero, sizeof(zero)) == 0)
+          return false;
+      return true;
+    }
+
+    bool CrashGuard::writeRecovery(const RecoveryRecord& record, bool intent) {
+      nvs_handle_t handle;
+      auto err = nvs_open(NvsNamespace, NVS_READWRITE, &handle);
+      if (err == ESP_OK) {
+        err = nvs_set_blob(handle,
+            intent ? RecoveryIntentNvsKey : RecoveryNvsKey, &record,
+            sizeof(record));
+        if (err == ESP_OK)
+          err = nvs_commit(handle);
+        nvs_close(handle);
+      }
+      if (err != ESP_OK)
+        logW("CrashGuard: recovery record was not persisted: %d", (int)err);
+      return err == ESP_OK;
+    }
+
+    bool CrashGuard::updateRecoveryStatus() {
+      auto status = RecoveryStatus::Inactive;
+      if (_haveRecovery) {
+        switch (_recovery.phase) {
+          case RecoveryPhase::Pending:
+            status = RecoveryStatus::Pending;
+            break;
+          case RecoveryPhase::Confirmed:
+            if (sameImage(_currentImage, _recovery.to))
+              status = RecoveryStatus::Fallback;
+            else if (_currentImage.valid)
+              status = RecoveryStatus::Testing;
+            break;
+          case RecoveryPhase::Resolved:
+            status = RecoveryStatus::Resolved;
+            break;
+          case RecoveryPhase::Canceled:
+            break;
+        }
+      }
+      if (_recoveryStatus == status)
+        return false;
+      _recoveryStatus = status;
+      return true;
+    }
+
+    void CrashGuard::loadRecovery(uint32_t lastSwitchBoot) {
+      auto current = recoveryImage(esp_ota_get_running_partition());
+      RecoveryRecord record;
+      bool have = readRecovery(record);
+      RecoveryRecord intent;
+      bool haveIntent = readRecovery(intent, true) &&
+                        intent.phase == RecoveryPhase::Pending;
+      if (haveIntent && have && record.boot == intent.boot &&
+          sameImage(record.from, intent.from) &&
+          sameImage(record.to, intent.to)) {
+        // A committed confirmation/resolution wins even if canceling its
+        // staged intent failed. An old intent must never reopen that event.
+        intent.phase = RecoveryPhase::Canceled;
+        writeRecovery(intent, true);
+        haveIntent = false;
+      }
+      if (haveIntent) {
+        // Selecting OTA metadata is not proof that the image actually booted.
+        // Match the actual running slot AND build, then require evidence that
+        // CrashGuard (rather than a later manual switch) selected it.
+        const bool plannedFromSource = rtcValid() &&
+            s_rtc.slot == intent.from.slot && !s_rtc.inProgress &&
+            s_rtc.plannedReset &&
+            s_rtc.checkpoint == (uint8_t)Checkpoint::Done;
+        const bool selected = !plannedFromSource &&
+            (intent.selectionSucceeded ||
+            lastSwitchBoot == intent.boot ||
+            (rtcValid() && s_rtc.bootCount == intent.boot &&
+             s_rtc.slot == intent.to.slot && !s_rtc.inProgress &&
+             s_rtc.plannedReset && !strcmp(s_rtc.lastCrashSig, "switch")));
+        if (plannedFromSource) {
+          // A manual switch/ordinary planned restart out of the source cannot
+          // confirm an old intent, even when its cancellation write failed.
+          intent.phase = RecoveryPhase::Canceled;
+          writeRecovery(intent, true);
+          haveIntent = false;
+        } else if (selected && sameImage(current, intent.to)) {
+          record = intent;
+          record.phase = RecoveryPhase::Confirmed;
+          have = true;
+          if (writeRecovery(record)) {
+            intent.phase = RecoveryPhase::Canceled;
+            writeRecovery(intent, true);
+            haveIntent = false;
+          }
+        } else if (!selected && sameImage(current, intent.from)) {
+          // A prepared intent alone must never report completed recovery.
+          intent.phase = RecoveryPhase::Canceled;
+          writeRecovery(intent, true);
+          haveIntent = false;
+        } else if (!have) {
+          record = intent;
+          have = true;
+        }
+      }
+      bool notify;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        _currentImage = current;
+        _haveRecovery = have;
+        _recovery = record;
+        _haveRecoveryIntent = haveIntent;
+        _recoveryIntent = intent;
+        notify = updateRecoveryStatus();
+      }
+      if (notify)
+        EventStateChanged::publish(this);
+    }
+
+    void CrashGuard::prepareRecovery(const esp_partition_t* target,
+                                    const Run& previous, const Slot& health) {
+      RecoveryRecord record;
+      record.boot = _state.bootCount;
+      record.resetReason = previous.resetReason;
+      record.checkpoint = (uint32_t)previous.checkpoint;
+      record.uptime = previous.uptimeMs;
+      record.strike = health.strike;
+      record.early = health.consecutiveEarly;
+      record.from = _currentImage;
+      record.to = recoveryImage(target);
+      // Best effort only: telemetry failure must never prevent recovery.
+      writeRecovery(record, true);
+      bool notify;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        _recoveryIntent = record;
+        _haveRecoveryIntent = true;
+        // Preserve the previous confirmed incident until the destination has
+        // actually booted, including failed reverse-recovery attempts.
+        if (!_haveRecovery || _recovery.phase == RecoveryPhase::Pending ||
+            _recovery.phase == RecoveryPhase::Canceled) {
+          _recovery = record;
+          _haveRecovery = true;
+        }
+        notify = updateRecoveryStatus();
+      }
+      if (notify)
+        EventStateChanged::publish(this);
+    }
+
+    void CrashGuard::finishRecoverySelection(bool selected) {
+      RecoveryRecord record;
+      bool notify;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        if (!_haveRecoveryIntent)
+          return;
+        if (selected)
+          _recoveryIntent.selectionSucceeded = 1;
+        else
+          _recoveryIntent.phase = RecoveryPhase::Canceled;
+        record = _recoveryIntent;
+        _haveRecoveryIntent = selected;
+        if (_haveRecovery && _recovery.phase == RecoveryPhase::Pending)
+          _recovery = record;
+        notify = updateRecoveryStatus();
+      }
+      // A separate success marker also survives a power cut before the
+      // unchanged v1 score ledger is committed. Confirmation awaits next boot.
+      writeRecovery(record, true);
+      if (notify)
+        EventStateChanged::publish(this);
+    }
+
+    void CrashGuard::cancelPendingRecovery() {
+      // An explicit switch does not promote a historical, unconfirmed intent
+      // into an automatic-recovery incident.
+      finishRecoverySelection(false);
+    }
+
+    void CrashGuard::resolveRecovery() {
+      RecoveryRecord record;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        if (!_haveRecovery || _recoveryStatus != RecoveryStatus::Testing)
+          return;
+        record = _recovery;
+      }
+      record.phase = RecoveryPhase::Resolved;
+      // Keep the warning when acceptance could not be made durable; a later
+      // boot can retry after reaching the same stable checkpoint.
+      if (!writeRecovery(record))
+        return;
+      bool notify;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        _recovery = record;
+        notify = updateRecoveryStatus();
+      }
+      if (notify)
+        EventStateChanged::publish(this);
+    }
+
+    void CrashGuard::recoveryToJson(JsonObject root) {
+      RecoveryRecord record;
+      RecoveryImage current;
+      RecoveryStatus status;
+      bool have;
+      {
+        std::lock_guard<std::mutex> lock(_recoveryMutex);
+        record = _recovery;
+        current = _currentImage;
+        have = _haveRecovery;
+        status = _recoveryStatus;
+      }
+      const auto imageToJson = [](JsonObject node, const RecoveryImage& image) {
+        json::to(node, "slot", image.slot);
+        json::to(node, "ver", image.ver);
+        json::to(node, "sha256", image.valid
+            ? hex_encode(image.sha256, sizeof(image.sha256)) : std::string());
+      };
+      json::to(root, "supported", true);
+      imageToJson(root["current"].to<JsonObject>(), current);
+      if (!have) {
+        root["recovery"] = nullptr;
+        return;
+      }
+      const char* statusName = "inactive";
+      switch (status) {
+        case RecoveryStatus::Pending: statusName = "pending"; break;
+        case RecoveryStatus::Fallback: statusName = "fallback"; break;
+        case RecoveryStatus::Testing: statusName = "testing"; break;
+        case RecoveryStatus::Resolved: statusName = "resolved"; break;
+        case RecoveryStatus::Inactive: break;
+      }
+      auto node = root["recovery"].to<JsonObject>();
+      json::to(node, "active", status == RecoveryStatus::Fallback ||
+                                  status == RecoveryStatus::Testing);
+      json::to(node, "status", statusName);
+      json::to(node, "boot", record.boot);
+      json::to(node, "reason", "unexpected-reset");
+      json::to(node, "resetReason", record.resetReason);
+      json::to(node, "checkpoint", record.checkpoint);
+      json::to(node, "uptime", record.uptime);
+      json::to(node, "strike", record.strike);
+      json::to(node, "early", record.early);
+      imageToJson(node["from"].to<JsonObject>(), record.from);
+      imageToJson(node["to"].to<JsonObject>(), record.to);
     }
 
     void CrashGuard::handleEvent(Event& ev) {
@@ -352,6 +646,7 @@ namespace esp32m {
       if (AppObject::handleRequest(req))
         return true;
       if (req.is("switchOta")) {
+        cancelPendingRecovery();
         const esp_partition_t* running = esp_ota_get_running_partition();
         const esp_partition_t* chosen = nullptr;
         int chosenSlot = -1;
@@ -374,6 +669,8 @@ namespace esp32m {
       (void)ctx;
       auto doc = new JsonDocument();
       auto root = doc->to<JsonObject>();
+
+      recoveryToJson(root);
 
       json::to(root, "boot", _state.bootCount);
       json::to(root, "lastSwitch", _state.lastSwitchBoot);
@@ -438,9 +735,11 @@ namespace esp32m {
     }
 
     JsonDocument* CrashGuard::getState(RequestContext& ctx) {
-      (void)ctx;
       auto doc = new JsonDocument();
       auto root = doc->to<JsonObject>();
+      recoveryToJson(root);
+      if (ctx.data["view"] == "recovery")
+        return doc;
 
       const uint32_t now = millis();
       const uint32_t uptime = now - _bootMs;
@@ -519,6 +818,8 @@ namespace esp32m {
       slotFromNvs(nvs.slot[0], _state.slot0);
       slotFromNvs(nvs.slot[1], _state.slot1);
 
+      loadRecovery(nvs.lastSwitchBoot);
+
       // Update crash signature for the *previous* run (now that coredump UID is
       // known). Store it into RTC immediately for clustering.
       const std::string cdUid = CoreDump::instance().uid();
@@ -589,7 +890,12 @@ namespace esp32m {
       if (shouldSwitch) {
         const esp_partition_t* chosen = nullptr;
         int chosenSlot = -1;
-        auto err = setBootPartitionOtherSlot(running, &chosen, &chosenSlot);
+        auto err = findOtherSlot(running, &chosen, &chosenSlot);
+        if (err == ESP_OK) {
+          prepareRecovery(chosen, prev, *slot);
+          err = esp_ota_set_boot_partition(chosen);
+          finishRecoverySelection(err == ESP_OK);
+        }
         if (err == ESP_OK) {
           logW("CrashGuard: switching from %s to %s",
                partitionId(running).c_str(), partitionId(chosen).c_str());
@@ -679,6 +985,8 @@ namespace esp32m {
         slot->lastGoodUptimeMs = up;
         _savedStableThisBoot = true;
         setCheckpoint(Checkpoint::Stable);
+
+        resolveRecovery();
 
         NvsState nvs;
         if (nvsRead(nvs)) {

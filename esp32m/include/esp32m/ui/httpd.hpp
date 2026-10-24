@@ -74,7 +74,7 @@ namespace esp32m {
       /** Register a plain HTTP endpoint (e.g. for binary file upload). */
       esp_err_t addHttpHandler(IHttpHandler &handler);
       esp_err_t sendSession(uint32_t cid, uint64_t generation,
-                           std::shared_ptr<const std::string> text) override;
+                           Payload text) override;
       void closeSession(uint32_t cid, uint64_t generation) override;
       void sendStats(JsonObject result) override;
 

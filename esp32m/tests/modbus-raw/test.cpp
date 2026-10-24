@@ -28,6 +28,18 @@ mb_communication_info_t restored{};
 std::mutex uartMutex;
 struct Capture : esp32m::modbus::Observer {
   std::vector<esp32m::modbus::Transaction> results;
+  std::vector<std::pair<bool, uint8_t>> prepared;
+  void prepareTransaction(bool raw, uint8_t address) override {
+    // Preparation may allocate diagnostic storage, so another task must be
+    // able to obtain UART ownership before the request begins.
+    auto competingTask = std::async(std::launch::async, [] {
+      if (!uartMutex.try_lock()) return false;
+      uartMutex.unlock();
+      return true;
+    });
+    assert(competingTask.get());
+    prepared.emplace_back(raw, address);
+  }
   void onTransaction(const esp32m::modbus::Transaction& t) override { results.push_back(t); }
 } capture;
 void event(const std::string& name) { events.push_back(name); }
@@ -37,6 +49,7 @@ bool complete(const uint8_t* bytes, size_t size, void*) {
 }
 void reset() {
   capture.results.clear();
+  capture.prepared.clear();
   fail.clear(); writes = requests = 0; events.clear(); fragments.clear();
   requestResults.clear(); requestTimes.clear(); checkQuietLock = false;
   quietLockChecks = 0; quantizedDelay = false;
@@ -166,6 +179,8 @@ int main() {
   };
   reset(); fragments = {{0xFE}, {0x00, 0xEB}, {0x54}, {0x39}};
   assert(exchange() == ESP_OK && size == 5 && writes == 1);
+  assert(capture.prepared.size() == 1 && capture.prepared[0].first &&
+         capture.prepared[0].second == 0);
   assert(capture.results.size() == 1 && capture.results[0].raw);
   assert(capture.results[0].outcome == esp32m::modbus::Outcome::Success);
   assert(capture.results[0].durationUs == 5000); // Excludes both 150 ms guards.
@@ -180,6 +195,8 @@ int main() {
   reset(); checkQuietLock = true;
   auto started = now;
   assert(master.request(5, esp32m::modbus::ReadHolding, 0, 1, &data, false, 100) == ESP_OK);
+  assert(capture.prepared.size() == 1 && !capture.prepared[0].first &&
+         capture.prepared[0].second == 5);
   assert(requests == 1 && requestTimes[0] - started == 100000 && quietLockChecks == 1);
   assert(capture.results.size() == 1 && capture.results[0].address == 5);
   assert(!capture.results[0].raw && capture.results[0].durationUs == 0);
@@ -191,6 +208,7 @@ int main() {
   assert(master.request(5, esp32m::modbus::ReadHolding, 0, 1, &data, true, 100) == ESP_OK);
   assert(requests == 2 && quietLockChecks == 2);
   assert(capture.results.size() == 2);
+  assert(capture.prepared.size() == 1); // Retry shares its prepared peer.
   assert(capture.results[0].outcome == esp32m::modbus::Outcome::Timeout);
   assert(capture.results[1].outcome == esp32m::modbus::Outcome::Success);
   assert(requestTimes[1] - requestTimes[0] >= 100000);
@@ -279,6 +297,7 @@ int main() {
   assert(master.request(5, esp32m::modbus::ReadHolding, 0, 1, nullptr, false) == ESP_ERR_INVALID_ARG);
   assert(requests == 0);
   assert(capture.results.empty()); // Invalid API input is not bus traffic.
+  assert(capture.prepared.empty());
   reset(); requestResults = {ESP_FAIL, ESP_OK};
   assert(master.request(1, esp32m::modbus::WriteRegister, 0x2000, 1, &data, false) == ESP_FAIL);
   assert(requests == 1 && events.empty());

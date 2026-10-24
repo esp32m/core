@@ -80,6 +80,15 @@ assert.match(view.text, /RS485|Recent health/);
 assert.match(view.text, /50\.00%/); // Per-address failure isn't masked by aggregate.
 assert.match(view.text, /Raw protocols/);
 assert.match(view.text, /100\.00%/);
+const completeState = state;
+state = {...state, peers: [{...state.peers[0], recent: null, recentAvailable: false}]};
+view = render();
+assert.match(view.text, /per-address history is incomplete/);
+assert.match(view.text, /Unavailable/);
+assert(!view.text.includes('50.00%')); // Never turn a partial peer window into a score.
+assert.match(view.text, /80\.00%/); // Exact lifetime data remains useful.
+state = completeState;
+view = render();
 await view.nodes.find(n => n.type === 'Button').props.onClick();
 assert.deepEqual(requests, ['reset']); assert.equal(refreshes, 1);
 resetSucceeds = false;

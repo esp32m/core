@@ -669,8 +669,9 @@ namespace esp32m {
     }
 
     esp_err_t Httpd::sendTo(uint32_t cid, const char* text) {
-      return sendSession(cid, sessionGeneration(cid),
-                         std::make_shared<const std::string>(text ? text : ""));
+      const auto generation = sessionGeneration(cid);
+      if (!generation) return ESP_ERR_INVALID_STATE;
+      return sendSession(cid, generation, Payload::copy(text));
     }
 
     void Httpd::closeSession(uint32_t cid, uint64_t generation) {
@@ -723,8 +724,12 @@ namespace esp32m {
     }
 
     esp_err_t Httpd::sendSession(uint32_t cid, uint64_t generation,
-                                std::shared_ptr<const std::string> text) {
-      if (!_server || !text || !sessionAlive(cid, generation))
+                                Payload text) {
+      if (!text) {
+        closeSession(cid, generation);
+        return ESP_ERR_NO_MEM;
+      }
+      if (!_server || !sessionAlive(cid, generation))
         return ESP_ERR_INVALID_STATE;
 
       struct WorkItem {
@@ -732,12 +737,14 @@ namespace esp32m {
         httpd_handle_t server;
         uint32_t fd;
         uint64_t generation;
-        std::shared_ptr<const std::string> payload;
+        Payload payload;
         size_t charge;
       };
       // Conservative charging includes string capacity and work metadata for
       // every destination, even when the immutable body is physically shared.
-      size_t charge = sizeof(WorkItem) + text->capacity() + 1 + 64;
+      // Reject oversized bodies without letting size arithmetic wrap.
+      size_t charge = text.size() > 32 * 1024 ? 32 * 1024 + 1
+          : sizeof(WorkItem) + text.capacity() + 1 + 64;
       bool admitted;
       {
         std::lock_guard<std::mutex> lock(_sendMutex);
@@ -774,8 +781,8 @@ namespace esp32m {
         // a reused FD cannot receive a predecessor's queued output.
         if (owner->sessionAlive(w->fd, w->generation)) {
           httpd_ws_frame_t packet = {};
-          packet.payload = (uint8_t*)w->payload->data();
-          packet.len = w->payload->size();
+          packet.payload = (uint8_t*)w->payload.data();
+          packet.len = w->payload.size();
           packet.type = HTTPD_WS_TYPE_TEXT;
           failed = httpd_ws_send_frame_async(w->server, w->fd, &packet) != ESP_OK;
         }

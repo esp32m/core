@@ -19,7 +19,7 @@ const production = ['include/esp32m/dev/bfs.hpp', 'src/dev/bfs.cpp']
     return source.slice(start);
   }).join('\n');
 const uiSource = readFileSync(path.join(core, 'src/ui/ui.cpp'), 'utf8');
-const serializerStart = uiSource.indexOf('    std::string makeResponse(');
+const serializerStart = uiSource.indexOf('    Payload makeResponse(');
 const serializerEnd = uiSource.indexOf('    class Rb', serializerStart);
 if (serializerStart < 0 || serializerEnd < 0)
   throw new Error('Could not locate production UI response serializer.');

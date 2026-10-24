@@ -9,6 +9,7 @@
 #include "esp32m/events.hpp"
 #include "esp32m/net/captive_dns.hpp"
 #include "esp32m/net/interfaces.hpp"
+#include "esp32m/net/wifi/roaming.hpp"
 #include "esp32m/sleep.hpp"
 
 namespace esp32m {
@@ -264,16 +265,23 @@ namespace esp32m {
 
       std::unique_ptr<JsonDocument> _delayedConfig;
       uint8_t _lastBssid[6] = {};
-      bool _roaming = false;
       int8_t _rssiThreshold = -75;  // dBm; 0 = disabled
+      wifi::RoamingPolicy _roaming;
+      bool _roamScan = false;
+      uint32_t _roamScanStarted = 0;
+      uint8_t _roamScanSsid[33] = {};
+      wifi_scan_config_t _roamScanConfig = {};
 
       Wifi();
       esp_err_t init();
       esp_err_t mode(wifi_mode_t prev, wifi_mode_t next);
       void checkScan();
+      void checkRoaming();
+      void finishRoamingScan();
+      bool roamTo(const wifi_ap_record_t& target);
       esp_err_t checkNameChanged();
       void run();
-      bool tryConnect(ApInfo* ap, bool noBssid);
+      bool tryConnect(ApInfo* ap, bool noBssid, bool remember = true);
       bool tryConnect();
       ApInfo* addOrUpdateAp(ApInfo* ap);
       ApInfo* addOrUpdateAp(JsonArrayConst source, bool& changed);
